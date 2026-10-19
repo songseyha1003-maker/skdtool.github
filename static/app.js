@@ -337,7 +337,12 @@ function getMediaFileName(f) {
 
 function getMediaFilePath(f) {
     if (!f) return null;
-    return f.filepath || f.path || null;
+    if (typeof f === 'string') return f;
+    let p = f.filepath || f.path || f.local_path || f.file_path || null;
+    if (!p && f.video_url && typeof f.video_url === 'string' && f.video_url.startsWith('/media/')) {
+        p = decodeURIComponent(f.video_url.substring(7));
+    }
+    return p;
 }
 
 async function extractFilesFromDataTransfer(dt) {
@@ -10292,13 +10297,15 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
         let taskId = null;
         try {
             let res;
-            if (filePath) {
+            const isBlob = (file instanceof Blob || file instanceof File);
+            if (filePath || !isBlob) {
                 res = await fetch("/api/projects/auto-dub-video", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        filepath: filePath,
+                        filepath: filePath || (file && (file.filepath || file.path || file.video_url)) || fileName,
                         filename: fileName,
+                        title: fileName,
                         drama_mode: dramaMode,
                         source_lang: activeSourceLang,
                         voice_override: activeVoiceOverride,
@@ -10309,7 +10316,8 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                 });
             } else {
                 const formData = new FormData();
-                formData.append("file", file);
+                formData.append("file", file, fileName);
+                formData.append("filename", fileName);
                 formData.append("drama_mode", dramaMode);
                 formData.append("source_lang", activeSourceLang);
                 formData.append("voice_override", activeVoiceOverride);
@@ -10331,12 +10339,14 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
             const data = await res.json();
             if (!data.success || !data.task_id) {
                 logStudioError(`Ep ${epNum}/${totalBatchCount}`, `Episode ${epNum} upload rejected: ${data.error || 'Server error'}`, data.error, "Check file integrity or server status.");
+                await new Promise(r => setTimeout(r, 1500));
                 continue;
             }
             taskId = data.task_id;
             activeDubbingTaskId = taskId;
         } catch (uploadErr) {
             logStudioError(`Ep ${epNum}/${totalBatchCount}`, `Episode ${epNum} network/upload error: ${uploadErr.message}`, uploadErr, "Check network connection or local server status.");
+            await new Promise(r => setTimeout(r, 1500));
             continue;
         }
 
@@ -10450,7 +10460,7 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
         appendLiveTerminalLine(`Export Mode: "${outputMode.toUpperCase()}" ➜ Concat/Merging all ${completedProjects.length} episodes into One Full Video...`, "[Full Movie Merge]", "info");
         updateExportProgressUI(96, totalElapsedSeconds, 30, `Merging ${completedProjects.length} episodes into Full Movie...`);
 
-        const videoPaths = completedProjects.map(p => p.output_video_file || p.output_file || p.video_file).filter(Boolean);
+        const videoPaths = completedProjects.map(p => p.output_video_file || p.output_file).filter(Boolean);
         let seriesTitle = "Drama_Series";
         if (files && files[0]) {
             const f0Name = getMediaFileName(files[0]);

@@ -15,7 +15,7 @@ import urllib.error
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
-CURRENT_VERSION = "1.0.7"
+CURRENT_VERSION = "1.0.8"
 APP_NAME = "SN TOOL - STUDIO PRO"
 
 def parse_version_tuple(ver_str: str) -> Tuple[int, ...]:
@@ -128,7 +128,9 @@ def check_for_updates(github_token: str = None) -> Dict[str, Any]:
             if data and "version" in data:
                 remote_ver = str(data["version"]).strip()
                 has_up = is_newer_version(remote_ver, local_ver)
-                dl_url = data.get("download_url") or cfg.get("direct_download_url") or ""
+                dl_url = data.get("download_url") or ""
+                if not dl_url or "/folders/" in dl_url:
+                    dl_url = cfg.get("direct_download_url") or cfg.get("google_drive_zip_id") or dl_url
                 return {
                     "success": True,
                     "has_update": has_up,
@@ -151,7 +153,9 @@ def check_for_updates(github_token: str = None) -> Dict[str, Any]:
             if data and "version" in data:
                 remote_ver = str(data["version"]).strip()
                 has_up = is_newer_version(remote_ver, local_ver)
-                dl_url = data.get("download_url") or cfg.get("direct_download_url") or ""
+                dl_url = data.get("download_url") or ""
+                if not dl_url or "/folders/" in dl_url:
+                    dl_url = cfg.get("direct_download_url") or cfg.get("google_drive_zip_id") or dl_url
                 return {
                     "success": True,
                     "has_update": has_up,

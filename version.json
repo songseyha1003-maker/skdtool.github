@@ -1,10 +1,9 @@
 {
-  "version": "1.0.7",
+  "version": "1.0.8",
   "app_name": "SN TOOL - STUDIO PRO",
-  "release_date": "2026-10-17",
-  "title": "SN TOOL STUDIO PRO - Official Update v1.0.7",
-  "release_notes": "• 📡 Over-The-Air (OTA) Remote License Extension: Extend client licenses remotely without changing or re-entering keys\n• 👑 English Admin Control Center: Modernized isolated dashboard on Port 8888 with streamlined key generation\n• 💎 Nisay Cloud AI Gateway Monitor: Live real-time token tracking and automated quota monitoring\n• 🛡️ Enhanced Military-Grade Protection: Compiled bytecode distribution with zero raw source code exposure\n• ⚡ Low-RAM 4GB Turbo Engine & Neural Khmer Dubbing (Piseth & Sreymom): Full HD 1080p lossless export",
-  "download_url": "https://github.com/ksuyvisal-a11y/SN/releases/latest/download/SN_TOOL_Setup.exe",
-  "github_repo": "ksuyvisal-a11y/SN",
+  "release_date": "2026-10-19",
+  "title": "SN TOOL STUDIO PRO - Official Update v1.0.8 (Drama Batch Dubbing Fix)",
+  "release_notes": "• 🎬 Drama Series Batch Dubbing Fix: Full support for 80+ episodes without upload rejection or file handle timeouts\n• 🎙️ Neural Khmer Voice Synchronization: Guaranteed Piseth & Sreymom Khmer audio in full movie merges\n• ⚡ Resilient Multi-Location Path Resolver: Auto-detects video files across all disk and export directories\n• 📡 Google Drive Auto-Update Mirror: Seamless 1-click in-app update delivery",
+  "download_url": "https://drive.google.com/drive/folders/1d1OhBZRLjz-JgEJo0ccfOpsWtoTxWbrN",
   "channel": "stable"
 }

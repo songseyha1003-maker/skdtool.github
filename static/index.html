@@ -1561,8 +1561,8 @@
         </footer>
 
         <!-- Hidden Inputs for File/Folder Dialogs -->
-        <input type="file" id="batch-files-input" multiple accept="video/*,.mp4,.mkv,.mov,.avi,.webm,.flv,.ts,.m4v" style="display:none;" onchange="handleSelectedFiles(this.files); this.value=''">
-        <input type="file" id="batch-folder-input" webkitdirectory directory multiple style="display:none;" onchange="handleSelectedFiles(this.files); this.value=''">
+        <input type="file" id="batch-files-input" multiple accept="video/*,.mp4,.mkv,.mov,.avi,.webm,.flv,.ts,.m4v" style="display:none;" onclick="this.value=''" onchange="handleSelectedFiles(this.files)">
+        <input type="file" id="batch-folder-input" webkitdirectory directory multiple style="display:none;" onclick="this.value=''" onchange="handleSelectedFiles(this.files)">
 
         <!-- ====================================================================
              MODALS (Exact Match to Images 3, 4 & Power Tools)

@@ -2848,10 +2848,11 @@ def auto_dub_video_endpoint():
         project_title = None
     elif request.is_json:
         data = request.get_json(force=True) or {}
-        saved_video_path = data.get("filepath")
+        saved_video_path = data.get("filepath") or data.get("path") or data.get("local_path") or data.get("file")
         project_title = data.get("title")
+        if not original_filename or original_filename == "drama_video.mp4":
+            original_filename = data.get("filename") or data.get("name") or (Path(saved_video_path).name if saved_video_path else "drama_video.mp4")
         if saved_video_path:
-            original_filename = data.get("filename") or Path(saved_video_path).name
             mode = data.get("drama_mode", mode)
             source_lang = data.get("source_lang", source_lang)
             voice_override = data.get("voice_override", voice_override)
@@ -2865,9 +2866,11 @@ def auto_dub_video_endpoint():
                     overlay_config = json.loads(overlay_config)
                 except Exception:
                     pass
-    elif request.form.get("filepath"):
-        saved_video_path = request.form.get("filepath")
-        original_filename = request.form.get("filename") or Path(saved_video_path).name
+    elif request.form.get("filepath") or request.form.get("path") or request.form.get("file"):
+        saved_video_path = request.form.get("filepath") or request.form.get("path") or request.form.get("file")
+        if str(saved_video_path) == "[object Object]":
+            saved_video_path = None
+        original_filename = request.form.get("filename") or request.form.get("name") or (Path(saved_video_path).name if saved_video_path else "drama_video.mp4")
         project_title = request.form.get("title")
         raw_oc = request.form.get("overlay_config")
         if raw_oc:
@@ -2877,6 +2880,8 @@ def auto_dub_video_endpoint():
                 pass
     else:
         project_title = request.form.get("title")
+        if request.form.get("filename"):
+            original_filename = request.form.get("filename")
 
     # Support direct logo_file upload in form data
     if "logo_file" in request.files and request.files["logo_file"].filename:
@@ -2915,8 +2920,80 @@ def auto_dub_video_endpoint():
         else:
             voice_override = cfg.get("khmer_voice", "multi")
 
+    # Intelligent Multi-Location Path Resolution
+    resolved_path = None
+    if saved_video_path and str(saved_video_path) != "[object Object]":
+        clean_vp = str(saved_video_path).strip()
+        if clean_vp.startswith("/media/"):
+            clean_vp = clean_vp[7:]
+        import urllib.parse
+        clean_vp = urllib.parse.unquote(clean_vp)
+
+        p = Path(clean_vp)
+        if p.exists() and p.is_file():
+            resolved_path = str(p.resolve())
+        else:
+            p_base = (BASE_DIR / clean_vp).resolve()
+            if p_base.exists() and p_base.is_file():
+                resolved_path = str(p_base)
+            else:
+                f_target_name = Path(original_filename or clean_vp).name
+                for cand_dir in [
+                    Path("data/uploads"),
+                    Path("data/uploads/batch_temp"),
+                    Path("data/exports"),
+                    Path("data/uploads/downloads"),
+                ]:
+                    cand_p = (cand_dir / f_target_name).resolve()
+                    if cand_p.exists() and cand_p.is_file():
+                        resolved_path = str(cand_p)
+                        break
+
+                if not resolved_path and f_target_name:
+                    for root_str in ("D:/SN_Dramas", "C:/SN_Dramas"):
+                        root_p = Path(root_str)
+                        if root_p.exists():
+                            try:
+                                for match in root_p.rglob(f_target_name):
+                                    if match.is_file() and match.stat().st_size > 50000:
+                                        resolved_path = str(match.resolve())
+                                        break
+                                if resolved_path:
+                                    break
+                            except Exception:
+                                pass
+
+    if not resolved_path and original_filename and original_filename != "drama_video.mp4":
+        f_target_name = Path(original_filename).name
+        for cand_dir in [
+            Path("data/uploads"),
+            Path("data/uploads/batch_temp"),
+            Path("data/exports"),
+            Path("data/uploads/downloads"),
+        ]:
+            cand_p = (cand_dir / f_target_name).resolve()
+            if cand_p.exists() and cand_p.is_file():
+                resolved_path = str(cand_p)
+                break
+        if not resolved_path:
+            for root_str in ("D:/SN_Dramas", "C:/SN_Dramas"):
+                root_p = Path(root_str)
+                if root_p.exists():
+                    try:
+                        for match in root_p.rglob(f_target_name):
+                            if match.is_file() and match.stat().st_size > 50000:
+                                resolved_path = str(match.resolve())
+                                break
+                        if resolved_path:
+                            break
+                    except Exception:
+                        pass
+
+    if resolved_path:
+        saved_video_path = resolved_path
+
     if not saved_video_path or not Path(saved_video_path).exists():
-        return jsonify({"success": False, "error": "No valid video file uploaded or provided."}), 400
+        return jsonify({"success": False, "error": f"No valid video file uploaded or provided: {original_filename}"}), 400
 
     task_id = str(uuid.uuid4())[:8]
     video_auto_tasks[task_id] = {
