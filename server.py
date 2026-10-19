@@ -1240,22 +1240,15 @@ def update_check_endpoint():
 
 @app.route("/api/update/apply", methods=["POST"])
 def update_apply_endpoint():
-    """Apply update via git pull or zip download."""
+    """Apply update via Google Drive Cloud direct zip download (100% resilient)."""
     data = request.get_json(silent=True) or {}
-    mode = data.get("mode", "auto")
     download_url = data.get("download_url", "")
-    
-    # Check if running in a git repo
-    is_git = (APP_DIR / ".git").exists()
-    if is_git and mode in ("git", "auto"):
-        res = apply_git_pull_update(APP_DIR)
-        return jsonify(res)
-    else:
-        if not download_url:
-            chk = check_for_updates()
-            download_url = chk.get("download_url")
-        res = apply_zip_download_update(download_url, APP_DIR)
-        return jsonify(res)
+    if not download_url:
+        chk = check_for_updates()
+        download_url = chk.get("download_url") or "https://drive.usercontent.google.com/download?id=1x_k269mEwMPH01tx8o6N67QEtLz7jlUo&export=download&confirm=t"
+    res = apply_zip_download_update(download_url, APP_DIR)
+    return jsonify(res)
+
 
 
 # ==========================================================================
@@ -3352,19 +3345,14 @@ def check_update_api():
 @app.route("/api/update/apply", methods=["POST"])
 def apply_update_api():
     try:
-        from update import apply_git_pull_update, apply_zip_download_update
+        from update import apply_zip_download_update, check_for_updates
         data = request.get_json(force=True) or {}
         download_url = data.get("download_url", "")
-
-        git_dir = APP_DIR / ".git"
-        if git_dir.exists():
-            res = apply_git_pull_update(APP_DIR)
-            return jsonify(res)
-        elif download_url:
-            res = apply_zip_download_update(download_url, APP_DIR)
-            return jsonify(res)
-        else:
-            return jsonify({"success": False, "error": "No update package URL found."}), 400
+        if not download_url:
+            chk = check_for_updates()
+            download_url = chk.get("download_url") or "https://drive.usercontent.google.com/download?id=1x_k269mEwMPH01tx8o6N67QEtLz7jlUo&export=download&confirm=t"
+        res = apply_zip_download_update(download_url, APP_DIR)
+        return jsonify(res)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 

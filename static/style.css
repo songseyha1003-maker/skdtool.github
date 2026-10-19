@@ -13579,6 +13579,638 @@ body.license-locked #tab-content-power {
     gap: 2px;
 }
 
+/* ==========================================================================
+   🎬 SN TOOL STUDIO PRO — CAPCUT DESKTOP SOFTWARE UPDATE DIALOG
+   Sleek, Modern, Luxury Obsidian & Warm Gold Aesthetic
+   Modeled after CapCut Desktop / PC: Radar Rings, Feature Cards & Pill CTA
+   ========================================================================== */
+
+#modal-update {
+    backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    background: rgba(3, 4, 7, 0.9);
+    z-index: 9999999 !important;
+}
+
+.capcut-update-card {
+    position: relative;
+    width: 530px;
+    max-width: 94vw;
+    background: radial-gradient(circle at 50% -10%, rgba(250, 204, 21, 0.18) 0%, rgba(18, 15, 10, 0.98) 55%), #0c0a07;
+    border: 1px solid rgba(250, 204, 21, 0.28);
+    border-radius: 24px;
+    box-shadow: 0 35px 90px rgba(0, 0, 0, 0.95), 0 0 60px rgba(250, 204, 21, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    animation: capcutZoomIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes capcutZoomIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.93) translateY(12px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Luxury top gold beam */
+.capcut-update-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 15%;
+    right: 15%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #fbbf24, #f59e0b, transparent);
+    z-index: 2;
+}
+
+/* Header */
+.capcut-update-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 22px 10px 22px;
+    border-bottom: 1px solid rgba(250, 204, 21, 0.1);
+}
+
+.capcut-update-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.capcut-brand-logo {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.5));
+}
+
+.capcut-brand-title {
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    color: #facc15;
+    text-transform: uppercase;
+    font-family: 'Inter', sans-serif;
+}
+
+.capcut-pro-tag {
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(250, 204, 21, 0.16);
+    border: 1px solid rgba(250, 204, 21, 0.4);
+    color: #fde047;
+    font-family: 'Inter', sans-serif;
+}
+
+.capcut-close-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+
+.capcut-close-btn:hover {
+    background: rgba(250, 204, 21, 0.15);
+    border-color: rgba(250, 204, 21, 0.4);
+    color: #facc15;
+    transform: rotate(90deg);
+}
+
+/* Body */
+.capcut-update-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 22px 26px 24px 26px;
+    gap: 12px;
+}
+
+/* Concentric Radar Rings & Emblem */
+.capcut-radar-container {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2px;
+}
+
+.capcut-radar-wave {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(250, 204, 21, 0.28);
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+.capcut-radar-wave.wave-1 {
+    width: 78px;
+    height: 78px;
+    animation: capcutWavePulse 3s infinite ease-out;
+}
+
+.capcut-radar-wave.wave-2 {
+    width: 90px;
+    height: 90px;
+    animation: capcutWavePulse 3s infinite ease-out 1.2s;
+    opacity: 0;
+}
+
+.capcut-radar-wave.update {
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+@keyframes capcutWavePulse {
+    0% {
+        transform: scale(0.85);
+        opacity: 0.8;
+    }
+    50% {
+        opacity: 0.35;
+    }
+    100% {
+        transform: scale(1.15);
+        opacity: 0;
+    }
+}
+
+.capcut-emblem {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+}
+
+.capcut-emblem.gold {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+    box-shadow: 0 10px 30px -4px rgba(245, 158, 11, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    color: #0c0a07;
+    font-size: 1.85rem;
+}
+
+.capcut-emblem.update {
+    background: linear-gradient(135deg, #f59e0b 0%, #eab308 50%, #ca8a04 100%);
+    box-shadow: 0 10px 30px -4px rgba(234, 179, 8, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    color: #0c0a07;
+    font-size: 1.65rem;
+}
+
+/* Status Pill */
+.capcut-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 14px;
+    border-radius: 9999px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid rgba(250, 204, 21, 0.35);
+    color: #fde047;
+    font-family: 'Inter', sans-serif;
+}
+
+.capcut-status-badge.update-badge {
+    background: rgba(245, 158, 11, 0.16);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: #fbbf24;
+}
+
+.capcut-main-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.3px;
+}
+
+.capcut-subtitle {
+    font-size: 0.82rem;
+    color: #94a3b8;
+    margin: 0;
+    line-height: 1.5;
+    max-width: 420px;
+    font-family: 'Inter', sans-serif;
+}
+
+/* WHAT'S NEW Feature Highlights List (CapCut Desktop signature changelog layout) */
+.capcut-whats-new-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-height: 230px;
+    overflow-y: auto;
+    padding-right: 4px;
+    margin-top: 2px;
+}
+
+.capcut-whats-new-list::-webkit-scrollbar {
+    width: 4px;
+}
+.capcut-whats-new-list::-webkit-scrollbar-thumb {
+    background: rgba(250, 204, 21, 0.35);
+    border-radius: 10px;
+}
+
+.capcut-whats-new-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(250, 204, 21, 0.16);
+    border-radius: 14px;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    text-align: left;
+}
+
+.capcut-whats-new-item:hover {
+    background: rgba(250, 204, 21, 0.06);
+    border-color: rgba(250, 204, 21, 0.38);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.capcut-wn-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid rgba(250, 204, 21, 0.3);
+    color: #facc15;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.capcut-wn-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow: hidden;
+}
+
+.capcut-wn-title {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #f8fafc;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: -0.2px;
+}
+
+.capcut-wn-desc {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    line-height: 1.45;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Specs Footer Strip */
+.capcut-specs-strip {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 8px 14px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    margin-top: 2px;
+}
+
+.capcut-spec-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-family: 'Inter', sans-serif;
+}
+
+.capcut-spec-label {
+    color: #64748b;
+    font-weight: 500;
+}
+
+.capcut-spec-value {
+    color: #cbd5e1;
+    font-weight: 700;
+}
+
+.capcut-spec-value.gold {
+    color: #facc15;
+}
+
+.capcut-spec-value.green {
+    color: #34d399;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.capcut-spec-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 6px #34d399;
+    display: inline-block;
+}
+
+/* Version Bridge (New Update View) */
+.capcut-version-bridge {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(250, 204, 21, 0.2);
+    border-radius: 14px;
+}
+
+.capcut-v-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.capcut-v-box.highlight {
+    text-align: center;
+}
+
+.capcut-v-lbl {
+    font-size: 0.66rem;
+    color: #64748b;
+    text-transform: uppercase;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+}
+
+.capcut-v-val {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #e2e8f0;
+    font-family: 'Inter', monospace, sans-serif;
+}
+
+.capcut-v-val.gold {
+    color: #facc15;
+    text-shadow: 0 0 10px rgba(250, 204, 21, 0.4);
+}
+
+.capcut-v-arrow {
+    color: #facc15;
+    font-size: 0.85rem;
+    padding: 5px 10px;
+    background: rgba(250, 204, 21, 0.1);
+    border-radius: 100px;
+    border: 1px solid rgba(250, 204, 21, 0.25);
+}
+
+.capcut-v-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    font-size: 0.7rem;
+    color: #94a3b8;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Notes Panel */
+.capcut-notes-panel {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(250, 204, 21, 0.2);
+    border-radius: 14px;
+    overflow: hidden;
+    text-align: left;
+    margin-top: 4px;
+}
+
+.capcut-notes-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: rgba(250, 204, 21, 0.08);
+    border-bottom: 1px solid rgba(250, 204, 21, 0.12);
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #fde047;
+    letter-spacing: 0.5px;
+    font-family: 'Inter', sans-serif;
+}
+
+.capcut-notes-tag {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.capcut-notes-content {
+    padding: 14px 16px;
+    font-size: 0.8rem;
+    color: #e2e8f0;
+    line-height: 1.7;
+    max-height: 170px;
+    overflow-y: auto;
+    font-family: 'Inter', sans-serif;
+    white-space: pre-line;
+}
+
+.capcut-notes-content::-webkit-scrollbar {
+    width: 4px;
+}
+.capcut-notes-content::-webkit-scrollbar-thumb {
+    background: rgba(250, 204, 21, 0.35);
+    border-radius: 10px;
+}
+
+/* Progress Panel */
+.capcut-progress-panel {
+    width: 100%;
+    padding: 12px 14px;
+    background: rgba(250, 204, 21, 0.06);
+    border: 1px solid rgba(250, 204, 21, 0.25);
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+}
+
+.capcut-prog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: #e2e8f0;
+    font-family: 'Inter', sans-serif;
+}
+
+.capcut-prog-pct {
+    color: #facc15;
+    font-weight: 800;
+}
+
+.capcut-prog-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 100px;
+    overflow: hidden;
+    position: relative;
+}
+
+.capcut-prog-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #f59e0b, #facc15, #fde047);
+    border-radius: 100px;
+    transition: width 0.3s ease;
+    box-shadow: 0 0 12px rgba(250, 204, 21, 0.6);
+    position: relative;
+    overflow: hidden;
+}
+
+.capcut-prog-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0; right: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+    animation: goldShine 1.5s infinite;
+}
+
+@keyframes goldShine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* CapCut Pill Buttons */
+.capcut-actions {
+    width: 100%;
+    display: flex;
+    margin-top: 4px;
+}
+
+.capcut-actions.single {
+    justify-content: center;
+}
+
+.capcut-actions.dual {
+    gap: 12px;
+}
+
+.capcut-pill-btn {
+    height: 42px;
+    border-radius: 9999px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.84rem;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
+    text-decoration: none;
+}
+
+.capcut-actions.single .capcut-pill-btn {
+    width: 220px;
+}
+
+.capcut-actions.dual .capcut-btn-ghost {
+    flex: 1;
+}
+
+.capcut-actions.dual .capcut-btn-gold {
+    flex: 1.6;
+}
+
+.capcut-btn-gold {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 45%, #d97706 100%);
+    border: none;
+    color: #0c0a07;
+    box-shadow: 0 4px 20px rgba(245, 158, 11, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.capcut-btn-gold:hover:not(:disabled) {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 28px rgba(245, 158, 11, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    filter: brightness(1.06);
+}
+
+.capcut-btn-gold:active:not(:disabled) {
+    transform: translateY(0) scale(0.99);
+}
+
+.capcut-btn-ghost {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+}
+
+.capcut-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(250, 204, 21, 0.35);
+    color: #facc15;
+    transform: translateY(-1px);
+}
+
+
 
 
 

@@ -15,8 +15,9 @@ import urllib.error
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
-CURRENT_VERSION = "1.0.8"
+CURRENT_VERSION = "1.0.9"
 APP_NAME = "SN TOOL - STUDIO PRO"
+DEFAULT_UPDATE_ZIP_URL = "https://drive.usercontent.google.com/download?id=1x_k269mEwMPH01tx8o6N67QEtLz7jlUo&export=download&confirm=t"
 
 def parse_version_tuple(ver_str: str) -> Tuple[int, ...]:
     """Parse '1.0.7' into (1, 0, 7) tuple for accurate comparison."""
@@ -178,7 +179,7 @@ def check_for_updates(github_token: str = None) -> Dict[str, Any]:
         "latest_version": local_ver,
         "title": "SN TOOL STUDIO PRO",
         "release_notes": "You are currently running the official release of SN TOOL STUDIO PRO.",
-        "download_url": "",
+        "download_url": DEFAULT_UPDATE_ZIP_URL,
         "channel": "stable"
     }
 
@@ -213,6 +214,9 @@ def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any
     and execute detached PowerShell updater script to extract directly over app_dir.
     License key and user configs are strictly preserved!
     """
+    if not download_url:
+        cfg = get_update_config()
+        download_url = cfg.get("direct_download_url") or cfg.get("google_drive_zip_id") or DEFAULT_UPDATE_ZIP_URL
     if not download_url:
         return {"success": False, "error": "No download URL provided for update."}
 

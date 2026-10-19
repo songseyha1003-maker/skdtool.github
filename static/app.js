@@ -11134,47 +11134,58 @@ async function checkForAppUpdates(manual = false) {
         }
 
         _latestUpdateInfo = data;
-        const curEl = document.getElementById('update-curr-ver');
-        const latEl = document.getElementById('update-latest-ver');
-        const notesEl = document.getElementById('update-release-notes');
-        const btnUpdate = document.getElementById('btn-do-update');
-        const progContainer = document.getElementById('update-progress-container');
-
-        const curVer = data.current_version || '1.0.7';
+        const curVer = data.current_version || '1.0.8';
         const latVer = data.latest_version || curVer;
 
-        if (curEl) curEl.textContent = `v${curVer}`;
-        if (latEl) latEl.textContent = `v${latVer}`;
+        const curVerVal = document.getElementById('update-cur-ver-val');
+        if (curVerVal) curVerVal.textContent = `v${curVer}`;
+        const latVerEl = document.getElementById('update-latest-ver');
+        if (latVerEl) latVerEl.textContent = `v${latVer}`;
+        const latTitleEl = document.getElementById('update-lat-title');
+        if (latTitleEl) latTitleEl.textContent = latVer;
+        const notesVer = document.getElementById('update-notes-ver');
+        if (notesVer) notesVer.textContent = latVer;
+        const headerVer = document.getElementById('update-header-ver');
+        if (headerVer) headerVer.textContent = latVer;
+        const specVer = document.getElementById('update-spec-ver');
+        if (specVer) specVer.textContent = `v${latVer}`;
+
         const settingsVer = document.getElementById('settings-version-tag');
         if (settingsVer && curVer) settingsVer.textContent = `v${curVer}`;
         const splashVer = document.getElementById('splash-version-tag');
         if (splashVer && curVer) splashVer.textContent = `v${curVer}`;
-        if (notesEl) notesEl.textContent = data.release_notes || "Performance enhancements and bug fixes";
+
+        const notesEl = document.getElementById('update-release-notes');
+        const customNotesPanel = document.getElementById('update-custom-notes-panel');
+        if (notesEl && data.release_notes && data.release_notes.length > 20) {
+            notesEl.textContent = data.release_notes;
+        }
+        if (customNotesPanel) customNotesPanel.style.display = 'block';
+
+        const progContainer = document.getElementById('update-progress-container');
         if (progContainer) progContainer.style.display = 'none';
 
+        const btnUpdate = document.getElementById('btn-do-update');
+        const btnText = document.getElementById('btn-do-update-text');
+        const badgeText = document.getElementById('update-badge-text');
+        const subtitle = document.getElementById('update-subtitle');
+
+        if (btnUpdate) btnUpdate.disabled = false;
+
         if (data.has_update) {
-            if (btnUpdate) {
-                btnUpdate.disabled = false;
-                btnUpdate.innerHTML = `<i class="fa-solid fa-bolt"></i> Update to v${latVer}`;
-                btnUpdate.style.display = 'inline-flex';
-            }
-            const updateModal = document.getElementById('modal-update');
-            if (updateModal) {
-                updateModal.style.setProperty('display', 'flex', 'important');
-                updateModal.style.setProperty('opacity', '1', 'important');
-                updateModal.style.setProperty('pointer-events', 'auto', 'important');
-                updateModal.style.setProperty('z-index', '9999999', 'important');
-            }
+            if (badgeText) badgeText.textContent = "NEW RELEASE AVAILABLE";
+            if (subtitle) subtitle.textContent = `A new version (v${latVer}) is available with Drama Series Batch Dubbing fixes, Khmer Neural voices, and Nisay AI Cloud.`;
+            if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> <span id="btn-do-update-text">Update Now (v${latVer})</span>`;
             openModal('modal-update');
             if (manual) showToast(`New version available: v${latVer}`);
         } else {
+            // Even when currently on latest build, show the full What's New changelog so user sees all update details!
+            if (badgeText) badgeText.textContent = "LATEST OFFICIAL BUILD";
+            if (subtitle) subtitle.textContent = `Official release notes and feature highlights for SN Tool Studio Pro (v${curVer}):`;
+            if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-rotate"></i> <span id="btn-do-update-text">Reinstall / Update (v${curVer})</span>`;
             if (manual) {
-                if (btnUpdate) {
-                    btnUpdate.disabled = true;
-                    btnUpdate.innerHTML = `<i class="fa-solid fa-check"></i> v${curVer} Up to Date`;
-                }
                 openModal('modal-update');
-                showToast(`Version v${curVer} is the latest version!`);
+                showToast(`SN Tool Studio Pro v${curVer} is up to date!`);
             }
         }
     } catch (err) {
@@ -11198,24 +11209,41 @@ async function executeAppUpdate() {
     const progContainer = document.getElementById('update-progress-container');
     const statusMsg = document.getElementById('update-status-msg');
     const progressBar = document.getElementById('update-progress-bar');
+    const progressPct = document.getElementById('update-progress-pct');
 
     if (btnUpdate) btnUpdate.disabled = true;
     if (progContainer) progContainer.style.display = 'flex';
-    if (statusMsg) statusMsg.textContent = "Downloading update package...";
-    if (progressBar) progressBar.style.width = "45%";
+    if (statusMsg) statusMsg.textContent = "Downloading update package from Google Drive Cloud...";
+    if (progressBar) progressBar.style.width = "35%";
+    if (progressPct) progressPct.textContent = "35%";
 
     try {
+        // Step progress simulation while downloading
+        const simInterval = setInterval(() => {
+            if (progressBar) {
+                const currentW = parseInt(progressBar.style.width) || 35;
+                if (currentW < 85) {
+                    progressBar.style.width = (currentW + 12) + "%";
+                    if (progressPct) progressPct.textContent = (currentW + 12) + "%";
+                }
+            }
+        }, 600);
+
+        const fallbackUrl = "https://drive.usercontent.google.com/download?id=1x_k269mEwMPH01tx8o6N67QEtLz7jlUo&export=download&confirm=t";
+        const dlUrl = (_latestUpdateInfo && _latestUpdateInfo.download_url) ? _latestUpdateInfo.download_url : fallbackUrl;
         const res = await fetch('/api/update/apply', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                download_url: _latestUpdateInfo.download_url || ""
+                download_url: dlUrl
             })
         });
+        clearInterval(simInterval);
         const data = await res.json();
         if (data.success) {
             if (progressBar) progressBar.style.width = "100%";
-            if (statusMsg) statusMsg.textContent = data.message || "Update successful! Restarting...";
+            if (progressPct) progressPct.textContent = "100%";
+            if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Update successful! Restarting to new version...';
             showToast("Update successful!");
             setTimeout(() => {
                 window.location.reload();

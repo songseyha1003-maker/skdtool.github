@@ -4,7 +4,7 @@
   "cloud_only": true,
   "stt_engine": "nisay-transcribe",
   "translation_engine": "gemini-3.8-flash-high",
-  "nisay_api_key": "",
+  "nisay_api_key": "nisay-int-rs-3c868abbf01d499f8a8778e0c200d0cc",
   "groq_api_key": "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",
   "groq_keys": [
     "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",

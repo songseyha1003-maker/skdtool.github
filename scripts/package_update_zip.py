@@ -16,7 +16,8 @@ CLIENT_RUNTIME_PY = [
 
 CLIENT_ROOT_FILES = [
     "version.json", "icon.ico", "license_config.json", "custom_keys.json",
-    "START_SN_TOOL.bat", "SN_TOOL.bat", "Khmer_Drama_Studio_Launcher.bat", "CREATE_DESKTOP_SHORTCUT.bat"
+    "START_SN_TOOL.bat", "SN_TOOL.bat", "Khmer_Drama_Studio_Launcher.bat", "CREATE_DESKTOP_SHORTCUT.bat",
+    "1_CLICK_CLIENT_UPDATER.bat"
 ]
 
 def package_update_zip():
@@ -77,10 +78,11 @@ def package_update_zip():
                             pass
                     zf.write(full_p, str(rel_p).replace('\\', '/'))
                     
-        # 5. Add only essential scripts needed for shortcut creation (exclude all 100+ dev test scripts)
-        shortcut_ps1 = base_dir / "scripts" / "create_shortcut.ps1"
-        if shortcut_ps1.exists():
-            zf.write(shortcut_ps1, "scripts/create_shortcut.ps1")
+        # 5. Add only essential scripts needed by client runtime
+        for s_name in ["create_shortcut.ps1", "update_client.py", "client_updater.ps1"]:
+            s_file = base_dir / "scripts" / s_name
+            if s_file.exists():
+                zf.write(s_file, f"scripts/{s_name}")
 
     # Replace target zip
     try:
