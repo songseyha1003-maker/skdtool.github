@@ -14,6 +14,110 @@ def run_step(cmd_list, desc):
     else:
         print(f"[OK] {desc} completed successfully.")
 
+def get_github_token() -> str:
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        return token
+    try:
+        proc = subprocess.run(
+            ["git", "credential", "fill"],
+            input="url=https://github.com/ksuyvisal-a11y/SN.git\n",
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        for line in proc.stdout.splitlines():
+            if line.startswith("password="):
+                return line.split("password=", 1)[1].strip()
+    except Exception:
+        pass
+    return ""
+
+def upload_release_asset(upload_url: str, file_path: Path, token: str):
+    import urllib.request
+    file_size = file_path.stat().st_size
+    url = upload_url.split("{")[0] + f"?name={file_path.name}"
+    content_type = "application/zip" if file_path.name.endswith(".zip") else "application/octet-stream"
+    with open(file_path, "rb") as f:
+        data = f.read()
+    req = urllib.request.Request(url, data=data, method="POST")
+    req.add_header("Authorization", f"token {token}")
+    req.add_header("Content-Type", content_type)
+    req.add_header("Content-Length", str(file_size))
+    req.add_header("User-Agent", "SN-Tool-AutoPublisher/1.0")
+    with urllib.request.urlopen(req, timeout=300) as resp:
+        return resp.status in (200, 201)
+
+def auto_publish_github_release(new_ver: str, vdata: dict, target_installer: Path, backup_zip: Path):
+    import urllib.request
+    token = get_github_token()
+    if not token:
+        print("\n[!] មិនមាន GitHub Token ទេ សូមធ្វើការ Upload ដោយដៃតាម Browser។")
+        return False
+    print(f"\n[*] កំពុង Publish Version v{new_ver} ទៅកាន់ GitHub Releases ដោយស្វ័យប្រវត្តិ...")
+    headers = {
+        "Authorization": f"token {token}",
+        "User-Agent": "SN-Tool-AutoPublisher/1.0",
+        "Accept": "application/vnd.github.v3+json",
+        "Content-Type": "application/json"
+    }
+    tag_name = f"v{new_ver}"
+    # 1. Check if release exists
+    rel_data = None
+    try:
+        check_req = urllib.request.Request(
+            f"https://api.github.com/repos/ksuyvisal-a11y/SN/releases/tags/{tag_name}",
+            headers=headers
+        )
+        with urllib.request.urlopen(check_req) as resp:
+            rel_data = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        pass
+
+    # 2. If not exists, create release
+    if not rel_data:
+        try:
+            create_payload = {
+                "tag_name": tag_name,
+                "target_commitish": "main",
+                "name": f"SN TOOL STUDIO PRO - Official Update v{new_ver}",
+                "body": vdata.get("release_notes", f"Official Release v{new_ver}"),
+                "draft": False,
+                "prerelease": False
+            }
+            create_req = urllib.request.Request(
+                "https://api.github.com/repos/ksuyvisal-a11y/SN/releases",
+                data=json.dumps(create_payload).encode("utf-8"),
+                headers=headers,
+                method="POST"
+            )
+            with urllib.request.urlopen(create_req) as resp:
+                rel_data = json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            print(f"[!] Warning creating GitHub release: {e}")
+            return False
+
+    upload_url = rel_data.get("upload_url", "")
+    if not upload_url:
+        return False
+
+    existing_assets = [a.get("name") for a in rel_data.get("assets", [])]
+    for asset_file in [backup_zip, target_installer]:
+        if asset_file and asset_file.exists():
+            if asset_file.name in existing_assets:
+                print(f"[OK] {asset_file.name} មានរួចហើយនៅលើ GitHub Release។")
+                continue
+            print(f"[*] កំពុង Upload {asset_file.name} ({asset_file.stat().st_size / (1024*1024):.2f} MB)...")
+            try:
+                upload_release_asset(upload_url, asset_file, token)
+                print(f"[OK] Upload {asset_file.name} ជោគជ័យ!")
+            except Exception as e:
+                print(f"[!] Warning uploading {asset_file.name}: {e}")
+
+    print(f"\n🎉 GitHub Release v{new_ver} ត្រូវបានផ្សព្វផ្សាយជោគជ័យ ១០០%!")
+    print(f"👉 Link: https://github.com/ksuyvisal-a11y/SN/releases/tag/v{new_ver}")
+    return True
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         try:
@@ -85,13 +189,15 @@ def main():
     if target_installer.exists():
         print(f"  💿 File តែមួយគត់សម្រាប់ Release: dist/{target_installer.name} ({target_installer.stat().st_size / (1024*1024):.2f} MB)")
 
-    print("\n-----------------------------------------------------------------")
-    print("  👉 របៀបបញ្ជូនទៅកាន់ GitHub Release (1 File ងាយស្រួលបំផុត):")
-    print("     1. បើក GitHub Release: https://github.com/ksuyvisal-a11y/SN/releases/new")
-    print(f"     2. ដាក់ Tag: v{new_ver}")
-    print(f"     3. ទម្លាក់តែ ១ File គត់គឺ '{target_installer.name}' ចូលជាការស្រេច!")
-    print("     👉 ទាំង Client ថ្មី (ដំឡើងដំបូង) និង Client ចាស់ (ចុច Check Updates) គឺដំណើរការតាម File មួយនេះទាំងអស់!")
-    print("-----------------------------------------------------------------\n")
+    backup_zip = base_dir / "SN_TOOL_UPDATE.zip"
+    published = auto_publish_github_release(new_ver, vdata, target_installer, backup_zip)
+    if not published:
+        print("\n-----------------------------------------------------------------")
+        print("  👉 របៀបបញ្ជូនទៅកាន់ GitHub Release ដោយដៃ (ប្រសិនជាចាំបាច់):")
+        print("     1. បើក GitHub Release: https://github.com/ksuyvisal-a11y/SN/releases/new")
+        print(f"     2. ដាក់ Tag: v{new_ver}")
+        print(f"     3. ទម្លាក់តែ ១ File គត់គឺ '{target_installer.name}' ចូលជាការស្រេច!")
+        print("-----------------------------------------------------------------\n")
 
     # Automatically highlight SN_TOOL_Setup.exe in Explorer
     try:
@@ -101,3 +207,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
