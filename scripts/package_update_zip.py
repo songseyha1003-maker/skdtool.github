@@ -84,6 +84,22 @@ def package_update_zip():
             if s_file.exists():
                 zf.write(s_file, f"scripts/{s_name}")
 
+        # 6. Add _internal compiled bytecode and configs for PyInstaller binary support
+        dist_internal = base_dir / "dist" / "SN_TOOL" / "_internal"
+        if dist_internal.exists():
+            for pyc_f in dist_internal.glob("*.pyc"):
+                zf.write(pyc_f, f"_internal/{pyc_f.name}")
+            int_vjson = dist_internal / "version.json"
+            if int_vjson.exists():
+                zf.write(int_vjson, "_internal/version.json")
+            int_static = dist_internal / "static"
+            if int_static.exists():
+                for root, dirs, files in os.walk(int_static):
+                    for f in files:
+                        full_p = Path(root) / f
+                        rel_p = full_p.relative_to(dist_internal)
+                        zf.write(full_p, f"_internal/{str(rel_p).replace(chr(92), '/')}")
+
     # Replace target zip
     try:
         if zip_path.exists():
