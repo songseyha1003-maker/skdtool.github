@@ -189,19 +189,26 @@ def main():
     if target_installer.exists():
         print(f"  💿 File តែមួយគត់សម្រាប់ Release: dist/{target_installer.name} ({target_installer.stat().st_size / (1024*1024):.2f} MB)")
 
-    backup_zip = base_dir / "SN_TOOL_UPDATE.zip"
-    published = auto_publish_github_release(new_ver, vdata, target_installer, backup_zip)
-    if not published:
-        print("\n-----------------------------------------------------------------")
-        print("  👉 របៀបបញ្ជូនទៅកាន់ GitHub Release ដោយដៃ (ប្រសិនជាចាំបាច់):")
-        print("     1. បើក GitHub Release: https://github.com/ksuyvisal-a11y/SN/releases/new")
-        print(f"     2. ដាក់ Tag: v{new_ver}")
-        print(f"     3. ទម្លាក់តែ ១ File គត់គឺ '{target_installer.name}' ចូលជាការស្រេច!")
-        print("-----------------------------------------------------------------\n")
+    # 4. Prepare clean Google Drive release folder (only 2 small files!)
+    gdrive_folder = base_dir / "dist" / "READY_FOR_GOOGLE_DRIVE"
+    gdrive_folder.mkdir(parents=True, exist_ok=True)
+    if (base_dir / "version.json").exists():
+        shutil.copy2(base_dir / "version.json", gdrive_folder / "version.json")
+    if (base_dir / "SN_TOOL_UPDATE.zip").exists():
+        shutil.copy2(base_dir / "SN_TOOL_UPDATE.zip", gdrive_folder / "SN_TOOL_UPDATE.zip")
 
-    # Automatically highlight SN_TOOL_Setup.exe in Explorer
+    print("\n" + "=" * 65)
+    print("  ☁️  GOOGLE DRIVE AUTO-UPDATE PACK (ទំហំតែ ~26 MB)")
+    print("=" * 65)
+    print("  👉 ដើម្បីឱ្យ User ចាស់ទាំងអស់ Auto-Update ស្វ័យប្រវត្តិតាម Cloud:")
+    print("     1. បើក Folder: dist\\READY_FOR_GOOGLE_DRIVE")
+    print("     2. អូសទម្លាក់ File ទាំង ២ ចូលក្នុង Google Drive របស់បង")
+    print("     3. ចុច SET_UPDATE_CLOUD_LINK.bat ដើម្បី Paste Link Google Drive តែម្តងគត់!")
+    print("-----------------------------------------------------------------\n")
+
+    # Automatically highlight the folder in Explorer
     try:
-        subprocess.run(f'explorer /select,"{target_installer}"', shell=True)
+        subprocess.run(f'explorer "{gdrive_folder}"', shell=True)
     except Exception:
         pass
 

@@ -11108,27 +11108,12 @@ async function checkForAppUpdates(manual = false) {
             console.warn("Local update API offline or unreachable, querying GitHub directly...", localErr);
         }
 
-        // Direct public fallback to GitHub if local server is unreachable
+        // If local update API returned result, use it directly
         if (!data || !data.success) {
-            try {
-                const ghRes = await fetch('https://raw.githubusercontent.com/ksuyvisal-a11y/SN/main/version.json?t=' + Date.now());
-                if (ghRes.ok) {
-                    const ghData = await ghRes.json();
-                    const curTag = document.getElementById('splash-version-tag')?.textContent?.replace('v', '').trim() || '1.0.7';
-                    const latVer = (ghData.version || '1.0.7').trim();
-                    data = {
-                        success: true,
-                        has_update: latVer !== curTag,
-                        current_version: curTag,
-                        latest_version: latVer,
-                        title: ghData.title || `SN TOOL v${latVer}`,
-                        release_notes: ghData.release_notes || "Performance enhancements and bug fixes",
-                        download_url: ghData.download_url || ""
-                    };
-                }
-            } catch (ghErr) {
-                console.error("Direct GitHub check failed:", ghErr);
+            if (manual) {
+                alert("Unable to connect to update server. Please verify your internet connection.");
             }
+            return;
         }
 
         if (!data || !data.success) {

@@ -1,0 +1,9 @@
+{
+  "update_channel": "stable",
+  "update_source_type": "google_drive",
+  "google_drive_folder_url": "https://drive.google.com/drive/folders/1d1OhBZRLjz-JgEJo0ccfOpsWtoTxWbrN",
+  "google_drive_folder_id": "1d1OhBZRLjz-JgEJo0ccfOpsWtoTxWbrN",
+  "google_drive_zip_id": "11dvmBUoe_9aI8cB9ZFaRlNZWDz6YELRr",
+  "direct_download_url": "https://drive.usercontent.google.com/download?id=11dvmBUoe_9aI8cB9ZFaRlNZWDz6YELRr&export=download&confirm=t",
+  "notes": "Official Google Drive Auto-Update Mirror for SN TOOL STUDIO PRO"
+}
