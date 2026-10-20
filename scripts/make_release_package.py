@@ -21,7 +21,7 @@ def get_github_token() -> str:
     try:
         proc = subprocess.run(
             ["git", "credential", "fill"],
-            input="url=https://github.com/ksuyvisal-a11y/SN.git\n",
+            input="url=https://github.com/songseyha1003-maker/skdtool.github.git\n",
             capture_output=True,
             text=True,
             timeout=5
@@ -66,7 +66,7 @@ def auto_publish_github_release(new_ver: str, vdata: dict, target_installer: Pat
     rel_data = None
     try:
         check_req = urllib.request.Request(
-            f"https://api.github.com/repos/ksuyvisal-a11y/SN/releases/tags/{tag_name}",
+            f"https://api.github.com/repos/songseyha1003-maker/skdtool.github/releases/tags/{tag_name}",
             headers=headers
         )
         with urllib.request.urlopen(check_req) as resp:
@@ -86,7 +86,7 @@ def auto_publish_github_release(new_ver: str, vdata: dict, target_installer: Pat
                 "prerelease": False
             }
             create_req = urllib.request.Request(
-                "https://api.github.com/repos/ksuyvisal-a11y/SN/releases",
+                "https://api.github.com/repos/songseyha1003-maker/skdtool.github/releases",
                 data=json.dumps(create_payload).encode("utf-8"),
                 headers=headers,
                 method="POST"
@@ -115,7 +115,7 @@ def auto_publish_github_release(new_ver: str, vdata: dict, target_installer: Pat
                 print(f"[!] Warning uploading {asset_file.name}: {e}")
 
     print(f"\n🎉 GitHub Release v{new_ver} ត្រូវបានផ្សព្វផ្សាយជោគជ័យ ១០០%!")
-    print(f"👉 Link: https://github.com/ksuyvisal-a11y/SN/releases/tag/v{new_ver}")
+    print(f"👉 Link: https://github.com/songseyha1003-maker/skdtool.github/releases/tag/v{new_ver}")
     return True
 
 def main():
@@ -155,7 +155,7 @@ def main():
     vdata["version"] = new_ver
     vdata["release_date"] = today_str
     vdata["title"] = f"SN TOOL STUDIO PRO - Official Update v{new_ver}"
-    vdata["download_url"] = "https://github.com/ksuyvisal-a11y/SN/releases/latest/download/SN_TOOL_Setup.exe"
+    vdata["download_url"] = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
     
     with open(vjson_path, "w", encoding="utf-8") as f:
         json.dump(vdata, f, indent=2, ensure_ascii=False)
