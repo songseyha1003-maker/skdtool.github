@@ -25,7 +25,7 @@ def main():
     installed_dir = Path(local_app_data) / "Programs" / "SN_TOOL"
 
     print("=" * 65)
-    print("  🚀 SN TOOL - LOCAL COMPUTER UPDATE ENGINE (v1.0.6)")
+    print("  🚀 SN TOOL - LOCAL COMPUTER UPDATE ENGINE (v1.1.0)")
     print("=" * 65)
     print(f" Source Workspace: {base_dir}")
     print(f" Installed App Dir: {installed_dir}")
@@ -74,7 +74,7 @@ def main():
     # 2. Update Version & Configs
     print("\n[*] Updating version metadata & launcher configs...")
     config_files = [
-        "version.json", "license_config.json", "icon.ico",
+        "version.json", "license_config.json", "custom_keys.json", "icon.ico",
         "START_SN_TOOL.bat", "CREATE_DESKTOP_SHORTCUT.bat",
         "create_shortcut.ps1", "SN_TOOL.bat"
     ]
@@ -84,7 +84,7 @@ def main():
             for root_d, int_d in targets:
                 shutil.copy2(src, root_d / cfg)
                 shutil.copy2(src, int_d / cfg)
-    print("  [OK] version.json (v1.0.6) and launch configs updated!")
+    print("  [OK] version.json (v1.1.0) and launch configs updated!")
 
     # 3. Update Static Assets (Web UI)
     print("\n[*] Updating Web UI static assets...")
@@ -98,7 +98,8 @@ def main():
     # 4. Update Data Files (Carefully preserving user projects & license.key!)
     print("\n[*] Updating data catalogs and story configs...")
     data_files = [
-        "story_config.json", "drama_dictionary.json", "shortmax_all_dramas.json",
+        "ai_provider_config.json", "update_config.json", "story_config.json",
+        "drama_dictionary.json", "shortmax_all_dramas.json",
         "reelshort_all_dramas.json", "ai_dramas_streams.json", "license_keys_online.json",
         "revoked_keys.json", "hongguo_catalog.db"
     ]
@@ -112,7 +113,7 @@ def main():
             if src.exists():
                 shutil.copy2(src, t_data / df)
                 shutil.copy2(src, t_int_data / df)
-    print("  [OK] Catalogs and story configs synchronized!")
+    print("  [OK] Catalogs, Nisay AI configs, and story settings synchronized!")
 
     # 5. Update Scripts and Tools
     print("\n[*] Synchronizing auxiliary scripts...")
@@ -135,15 +136,18 @@ def main():
             shutil.copy2(ws_lic, lic_file)
             print(f"\n[OK] Copied license.key from workspace: {lic_file}")
 
-    # 7. Refresh SN_TOOL.exe.bak
+    # 7. Refresh SN_TOOL.exe and SN_TOOL.exe.bak
     exe_path = installed_dir / "SN_TOOL.exe"
+    dist_exe = base_dir / "dist" / "SN_TOOL" / "SN_TOOL.exe"
+    if dist_exe.exists():
+        shutil.copy2(dist_exe, exe_path)
     exe_bak = installed_dir / "SN_TOOL.exe.bak"
     if exe_path.exists():
         shutil.copy2(exe_path, exe_bak)
         print(f"[OK] Refreshed Defender self-healing binary backup: {exe_bak.name}")
 
     print("\n" + "=" * 65)
-    print("  🎉 LOCAL COMPUTER UPDATE TO v1.0.6 COMPLETE 100%!")
+    print("  🎉 LOCAL COMPUTER UPDATE TO v1.1.0 COMPLETE 100%!")
     print("=" * 65)
 
 if __name__ == "__main__":
