@@ -138,10 +138,14 @@ def main():
 
     # 7. Refresh SN_TOOL.exe and SN_TOOL.exe.bak
     exe_path = installed_dir / "SN_TOOL.exe"
+    root_exe = base_dir / "SN_TOOL.exe"
     dist_exe = base_dir / "dist" / "SN_TOOL" / "SN_TOOL.exe"
+    src_exe = root_exe if root_exe.exists() else dist_exe
     try:
-        if dist_exe.exists():
-            shutil.copy2(dist_exe, exe_path)
+        if src_exe.exists():
+            shutil.copy2(src_exe, exe_path)
+            if dist_exe.parent.exists():
+                shutil.copy2(src_exe, dist_exe)
         exe_bak = installed_dir / "SN_TOOL.exe.bak"
         if exe_path.exists():
             shutil.copy2(exe_path, exe_bak)
