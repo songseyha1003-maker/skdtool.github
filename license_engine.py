@@ -483,7 +483,7 @@ def check_key_online(cleaned_key: str, current_hwid: str) -> Tuple[bool, str, Di
     Returns (is_valid, message, record_dict).
     """
     cfg_file = resolve_file_path("license_config.json")
-    online_url = "https://raw.githubusercontent.com/ksuyvisal-a11y/SN/main/data/license_keys_online.json"
+    online_url = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/data/license_keys_online.json"
     if cfg_file.exists():
         try:
             with open(cfg_file, "r", encoding="utf-8") as f:

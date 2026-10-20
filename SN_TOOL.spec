@@ -47,7 +47,8 @@ a = Analysis(
         'vocal_remover', 'server', 'stt_engine', 'faster_whisper',
         'huggingface_hub', 'tokenizers', 'onnxruntime', 'ctranslate2',
         'hongguo_service', 'hongguo_db', 'shortmax_service', 'reelshort_service',
-        'cryptography', 'update'
+        'cryptography', 'update', 'nisay_translate', 'nisay_transcribe',
+        'aiohttp', 'certifi', 'idna', 'yarl', 'multidict'
     ],
     hookspath=[],
     hooksconfig={},

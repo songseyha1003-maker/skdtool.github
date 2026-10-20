@@ -2,6 +2,6 @@
   "require_license": true,
   "telegram_link": "https://t.me/",
   "facebook_link": "https://facebook.com/",
-  "online_keys_url": "https://raw.githubusercontent.com/ksuyvisal-a11y/SN/main/data/license_keys_online.json",
-  "remote_revocation_url": "https://raw.githubusercontent.com/ksuyvisal-a11y/SN/main/data/revoked_keys.json"
+  "online_keys_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/data/license_keys_online.json",
+  "remote_revocation_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/data/revoked_keys.json"
 }

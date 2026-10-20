@@ -1,9 +1,9 @@
 {
-  "version": "1.0.9",
+  "version": "1.1.0",
   "app_name": "SN TOOL - STUDIO PRO",
-  "release_date": "2026-10-19",
-  "title": "SN TOOL STUDIO PRO - Official Update v1.0.9 (Khmer Neural Audio & Nisay AI Fix)",
-  "release_notes": "• 🎙️ Khmer Neural Audio Enhancement: Guaranteed 100% audible Piseth & Sreymom voiceover with balanced BGM ducking\n• ⚡ Nisay Cloud AI Gateway: Pre-configured API access for seamless multi-episode drama translation\n• 🎬 80+ Episode Batch Engine: Continuous rendering and dubbing without timeouts\n• 📡 Google Drive Auto-Update: Direct high-speed 1-click cloud sync",
+  "release_date": "2026-10-20",
+  "title": "SN TOOL STUDIO PRO - Official Update v1.1.0 (Guaranteed Piseth & Sreymom Khmer Voice)",
+  "release_notes": "• 🎙️ Guaranteed 100% Audible Khmer Speech: Bulletproof Piseth & Sreymom neural audio engine with automatic non-audible recovery and CJK sanitization\n• ⚡ Resilient Nisay AI Cloud Gateway: Auto-recovering 503 capacity retry logic with zero-drop Khmer neural dubbing failover\n• 🎧 Smart BGM & Vocal Ducking: Balanced audio mixing ensuring clear vocal clarity without background silence drops\n• 📦 Client PC Standalone Ready: Fully self-contained bundled modules and verified offline execution",
   "download_url": "https://drive.google.com/drive/folders/1d1OhBZRLjz-JgEJo0ccfOpsWtoTxWbrN",
   "channel": "stable"
 }

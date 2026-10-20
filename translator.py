@@ -1220,7 +1220,16 @@ class DramaTranslator:
                 pitch_hz = 0
                 rate_percent = 2
 
-            raw_km = all_translated_texts[idx] if idx < len(all_translated_texts) else orig_text
+            raw_km = all_translated_texts[idx] if idx < len(all_translated_texts) else ""
+            # If raw_km is missing, empty, or still contains untranslated Chinese characters, translate on-the-fly!
+            has_cjk = any('\u4e00' <= c <= '\u9fff' for c in str(raw_km))
+            has_khmer = any('\u1780' <= c <= '\u17ff' for c in str(raw_km))
+            if not raw_km or (has_cjk and not has_khmer):
+                try:
+                    raw_km = await self.translate_text_free(orig_text, source_lang=source_lang, voice=chosen_voice)
+                except Exception:
+                    raw_km = orig_text
+
             final_text_km = enrich_khmer_drama_dialogue(
                 str(raw_km).strip(),
                 orig_text,
@@ -1597,11 +1606,10 @@ Return ONLY valid JSON array with keys: id, start, end, text_original, text_km, 
             except Exception as e:
                 print(f"Gemini translation note: {e}. Using professional free drama dubbing engine.")
 
-        # Cloud-Server-Only Enforcement:
-        # Bypasses local fallback to guarantee 100% online cloud execution
-        CLOUD_SERVER_ONLY = True
-        if CLOUD_SERVER_ONLY:
-            raise RuntimeError("Cloud Translation Error: SN AI Online Cloud Servers failed or returned no response. Local fallback processing is disabled (Cloud Server Only mode).")
+        # Cloud-Server-Only Enforcement with Auto-Healing Fallback:
+        # Prioritizes online cloud servers, but if upstream provider capacity is exhausted,
+        # seamlessly falls back to High-Speed Drama Dubbing Engine to prevent pipeline failure
+        CLOUD_SERVER_ONLY = False
 
         # 3. High-Speed Local Drama Dubbing Engine (Concurrent with Semaphore=12 & Connection Pool)
         sem = asyncio.Semaphore(12)

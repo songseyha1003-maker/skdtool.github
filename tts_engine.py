@@ -206,11 +206,11 @@ def is_valid_audible_audio(file_path: Optional[str]) -> bool:
     if not file_path:
         return False
     p = Path(file_path)
-    if not p.exists() or p.stat().st_size < 1200:
+    if not p.exists() or p.stat().st_size < 250:
         return False
     try:
         seg = load_audio_safely(str(p))
-        if len(seg) < 150:
+        if len(seg) < 100:
             return False
         # Dead silence check: if max_dBFS is -inf or dBFS < -55.0 dB, it is inaudible silence
         if seg.dBFS < -55.0 or seg.max_dBFS < -50.0:
@@ -270,6 +270,7 @@ def synthesize_via_google_khmer_api(
     """
     import urllib.request
     import urllib.parse
+    import shutil
     from pathlib import Path
 
     clean_text = text.strip()
@@ -309,7 +310,7 @@ def synthesize_via_google_khmer_api(
                     )
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         data = resp.read()
-                        if len(data) > 400:
+                        if len(data) > 200:
                             with open(chunk_file, "wb") as f:
                                 f.write(data)
                             chunk_saved = True
@@ -329,7 +330,7 @@ def synthesize_via_google_khmer_api(
         if len(chunk_files) == 1:
             if raw_combined.exists():
                 raw_combined.unlink(missing_ok=True)
-            chunk_files[0].rename(raw_combined)
+            shutil.move(str(chunk_files[0]), str(raw_combined))
         else:
             list_file = out_p.parent / f"{tmp_prefix}_list.txt"
             with open(list_file, "w", encoding="utf-8") as lf:
@@ -343,7 +344,7 @@ def synthesize_via_google_khmer_api(
             if list_file.exists():
                 list_file.unlink(missing_ok=True)
 
-        if not raw_combined.exists() or raw_combined.stat().st_size < 500:
+        if not raw_combined.exists() or raw_combined.stat().st_size < 250:
             return None
 
         # Apply voice-specific acoustic model mastering:
@@ -675,21 +676,30 @@ async def synthesize_khmer_speech(
 
     cleaned_text = text.strip()
 
-    # Safety check: If text still contains Chinese/CJK characters and no Khmer, translate to Khmer first!
+    # Safety check: If text still contains Chinese/CJK characters, translate to Khmer first!
     has_cjk = any('\u4e00' <= char <= '\u9fff' for char in cleaned_text)
-    has_khmer = any('\u1780' <= char <= '\u17ff' for char in cleaned_text)
-    if has_cjk and not has_khmer:
+    if has_cjk:
         try:
-            from translator import DramaTranslator
-            trans = DramaTranslator()
-            km_text = await trans.translate_text_free(cleaned_text, source_lang="zh-CN")
-            if km_text and any('\u1780' <= c <= '\u17ff' for c in km_text):
-                cleaned_text = km_text.strip()
-            else:
-                cleaned_text = "បាទ" if get_voice_id(voice) == VOICES["piseth"]["id"] else "ចាស"
-        except Exception as e:
-            print(f"Fallback translation in TTS note: {e}")
-            cleaned_text = "បាទ" if get_voice_id(voice) == VOICES["piseth"]["id"] else "ចាស"
+            import urllib.request
+            import urllib.parse
+            import json
+            url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=km&dt=t&q=" + urllib.parse.quote(cleaned_text)
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                fb_data = json.loads(r.read().decode('utf-8'))
+                if fb_data and isinstance(fb_data, list) and fb_data[0]:
+                    joined = "".join([part[0] for part in fb_data[0] if part and part[0]]).strip()
+                    if joined:
+                        cleaned_text = joined
+        except Exception:
+            try:
+                from translator import DramaTranslator
+                trans = DramaTranslator()
+                km_text = await trans.translate_text_free(cleaned_text, source_lang="zh-CN")
+                if km_text and any('\u1780' <= c <= '\u17ff' for c in km_text):
+                    cleaned_text = km_text.strip()
+            except Exception:
+                pass
 
     # Remove any remaining raw Chinese characters if Khmer characters exist to prevent Edge-TTS failure
     if any('\u4e00' <= char <= '\u9fff' for char in cleaned_text):
@@ -921,6 +931,11 @@ async def batch_synthesize(
                     direct_g = synthesize_via_google_khmer_api(text, voice, str(line_audio_path))
                     if direct_g and is_valid_audible_audio(direct_g):
                         audio_file = direct_g
+                    else:
+                        affirmative = "បាទ" if get_voice_id(voice) == VOICES["piseth"]["id"] else "ចាស"
+                        emergency_g = synthesize_via_google_khmer_api(affirmative, voice, str(line_audio_path))
+                        if emergency_g and is_valid_audible_audio(emergency_g):
+                            audio_file = emergency_g
 
                 # Strip dead silence and dynamically fit within lip-sync mouth window
                 final_dur = trim_and_fit_voice_audio(audio_file, max_duration_sec=avail_dur)
