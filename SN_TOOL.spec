@@ -13,32 +13,42 @@ faster_whisper_dir = os.path.dirname(faster_whisper.__file__)
 faster_whisper_assets = os.path.join(faster_whisper_dir, 'assets')
 huggingface_hub_dir = os.path.dirname(huggingface_hub.__file__)
 
+raw_datas = [
+    ('icon.ico', '.'),
+    ('license_config.json', '.'),
+    ('custom_keys.json', '.'),
+    ('version.json', '.'),
+    ('static', 'static'),
+    ('scripts', 'scripts'),
+    ('data/hongguo_catalog.db', 'data'),
+    ('data/shortmax_all_dramas.json', 'data'),
+    ('data/reelshort_all_dramas.json', 'data'),
+    ('data/ai_dramas_streams.json', 'data'),
+    ('data/story_config.json', 'data'),
+    ('data/drama_dictionary.json', 'data'),
+    ('data/ai_provider_config.json', 'data'),
+    ('data/license_keys_online.json', 'data'),
+    ('data/revoked_keys.json', 'data'),
+    ('data/update_config.json', 'data'),
+    ('tools/Hongguo Downloader', 'tools/Hongguo Downloader'),
+    ('models', 'models'),
+]
+
+datas = [(str(ROOT_DIR / p), dst) for p, dst in raw_datas if (ROOT_DIR / p).exists()]
+if os.path.exists(ffmpeg_binaries_dir):
+    datas.append((ffmpeg_binaries_dir, 'imageio_ffmpeg/binaries'))
+if os.path.exists(faster_whisper_assets):
+    datas.append((faster_whisper_assets, 'faster_whisper/assets'))
+if os.path.exists(faster_whisper_dir):
+    datas.append((faster_whisper_dir, 'faster_whisper'))
+if os.path.exists(huggingface_hub_dir):
+    datas.append((huggingface_hub_dir, 'huggingface_hub'))
+
 a = Analysis(
     [str(ROOT_DIR / 'desktop_app.py')],
     pathex=[str(ROOT_DIR)],
     binaries=[],
-    datas=[
-        (str(ROOT_DIR / 'icon.ico'), '.'),
-        (str(ROOT_DIR / 'license_config.json'), '.'),
-        (str(ROOT_DIR / 'custom_keys.json'), '.'),
-        (str(ROOT_DIR / 'static'), 'static'),
-        (str(ROOT_DIR / 'scripts'), 'scripts'),
-        (str(ROOT_DIR / 'data' / 'hongguo_catalog.db'), 'data'),
-        (str(ROOT_DIR / 'data' / 'shortmax_all_dramas.json'), 'data'),
-        (str(ROOT_DIR / 'data' / 'reelshort_all_dramas.json'), 'data'),
-        (str(ROOT_DIR / 'data' / 'ai_dramas_streams.json'), 'data'),
-        (str(ROOT_DIR / 'data' / 'story_config.json'), 'data'),
-        (str(ROOT_DIR / 'data' / 'drama_dictionary.json'), 'data'),
-        (str(ROOT_DIR / 'data' / 'ai_provider_config.json'), 'data'),
-        (str(ROOT_DIR / 'data' / 'license_keys_online.json'), 'data'),
-        (str(ROOT_DIR / 'data' / 'revoked_keys.json'), 'data'),
-        (str(ROOT_DIR / 'tools' / 'Hongguo Downloader'), 'tools/Hongguo Downloader'),
-        (str(ROOT_DIR / 'models'), 'models'),
-        (ffmpeg_binaries_dir, 'imageio_ffmpeg/binaries'),
-        (faster_whisper_assets, 'faster_whisper/assets'),
-        (faster_whisper_dir, 'faster_whisper'),
-        (huggingface_hub_dir, 'huggingface_hub'),
-    ],
+    datas=datas,
     hiddenimports=[
         'edge_tts', 'pydub', 'flask', 'jinja2', 'soundfile', 'httpx',
         'webview', 'clr_loader', 'pythonnet', 'license_engine',
