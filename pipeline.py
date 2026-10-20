@@ -419,8 +419,22 @@ class ProjectManager:
 
         processed_dialogues = await batch_synthesize(
             dialogue_items=project.get("dialogues", []),
-            output_dir=str(voice_out_dir)
+            output_dir=str(voice_out_dir),
+            default_voice=project.get("voice_override", "piseth")
         )
+
+        # Strictly verify and recover any synthesized voices to ensure 100% audible speech
+        from tts_engine import is_valid_audible_audio, synthesize_via_google_khmer_api
+        for idx, d in enumerate(processed_dialogues):
+            af = d.get("audio_file")
+            if not is_valid_audible_audio(af):
+                txt = (d.get("text_km") or d.get("text", "")).strip()
+                v = d.get("voice") or project.get("voice_override") or "piseth"
+                fix_out = voice_out_dir / f"line_recovered_{idx:04d}_{os.urandom(3).hex()}.mp3"
+                new_af = synthesize_via_google_khmer_api(txt, v, str(fix_out))
+                if new_af and is_valid_audible_audio(new_af):
+                    d["audio_file"] = new_af
+
         project["dialogues"] = processed_dialogues
 
         # Automatically separate vocals if not already done

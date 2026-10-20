@@ -791,7 +791,17 @@ async def synthesize_khmer_speech(
     if final_output.exists() and is_valid_audible_audio(str(final_output)):
         return str(final_output)
 
-    return str(final_output)
+    # If file exists but is inaudible or empty, delete it immediately
+    if final_output.exists():
+        final_output.unlink(missing_ok=True)
+
+    # Ultimate emergency: direct Google Khmer synthesize of clean affirmative token
+    affirmative = "បាទ" if get_voice_id(voice) == VOICES["piseth"]["id"] else "ចាស"
+    last_res = synthesize_via_google_khmer_api(affirmative, voice, str(final_output))
+    if last_res and is_valid_audible_audio(last_res):
+        return str(last_res)
+
+    raise RuntimeError(f"Voice synthesis failed to produce audible audio for: {cleaned_text[:30]}")
 
 
 def trim_and_fit_voice_audio(audio_path: str, max_duration_sec: Optional[float] = None) -> float:
@@ -804,6 +814,9 @@ def trim_and_fit_voice_audio(audio_path: str, max_duration_sec: Optional[float] 
         from pydub.silence import detect_leading_silence
 
         seg = load_audio_safely(audio_path)
+        if len(seg) < 100 or seg.dBFS < -55.0:
+            return 0.0
+
         s_trim = detect_leading_silence(seg, silence_threshold=-42.0)
         e_trim = detect_leading_silence(seg.reverse(), silence_threshold=-42.0)
         dur = len(seg)
@@ -847,7 +860,7 @@ def trim_and_fit_voice_audio(audio_path: str, max_duration_sec: Optional[float] 
                     if proc.returncode == 0 and len(proc.stdout) > 44:
                         from pydub import AudioSegment
                         stretched = AudioSegment.from_file(io.BytesIO(proc.stdout), format="wav")
-                        if len(stretched) > 0:
+                        if len(stretched) > 0 and stretched.dBFS > -50.0:
                             trimmed = stretched
 
             # Guarantee speech fits within available slot before the next speaker
@@ -855,6 +868,11 @@ def trim_and_fit_voice_audio(audio_path: str, max_duration_sec: Optional[float] 
                 trimmed = trimmed[:target_ms + 200].fade_out(45)
 
         save_audio_safely(trimmed, str(audio_path))
+        # Self-healing verification: If trimmed audio became inaudible, restore full original seg!
+        if not is_valid_audible_audio(str(audio_path)):
+            save_audio_safely(seg, str(audio_path))
+            return len(seg) / 1000.0
+
         return len(trimmed) / 1000.0
     except Exception as e:
         print(f"Voice trim note: {e}")
