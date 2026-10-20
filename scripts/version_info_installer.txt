@@ -1,0 +1,35 @@
+# UTF-8
+# Version Information for SN TOOL Setup Installer
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 0, 9, 0),
+    prodvers=(1, 0, 9, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          u'040904B0',
+          [
+            StringStruct(u'CompanyName', u'SN Tool Studio Cambodia'),
+            StringStruct(u'FileDescription', u'SN TOOL STUDIO PRO - Official Setup Installer'),
+            StringStruct(u'FileVersion', u'1.0.9.0'),
+            StringStruct(u'InternalName', u'SN_TOOL_Setup'),
+            StringStruct(u'LegalCopyright', u'Copyright © 2026 SN Tool Cambodia. All rights reserved.'),
+            StringStruct(u'OriginalFilename', u'SN_TOOL_Setup.exe'),
+            StringStruct(u'ProductName', u'SN TOOL - STUDIO PRO'),
+            StringStruct(u'ProductVersion', u'1.0.9.0'),
+            StringStruct(u'Comments', u'AI Drama Dubbing Studio Pro with Khmer Neural Voiceover')
+          ]
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)

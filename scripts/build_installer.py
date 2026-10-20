@@ -34,6 +34,7 @@ def build_installer():
         f"--add-data={payload_zip};.",
         f"--add-data={icon_file};.",
         f"--add-data={base_dir / 'static' / 'logo.png'};.",
+        f"--version-file={base_dir / 'scripts' / 'version_info_installer.txt'}",
         "--noupx",
         "--uac-admin",
         "--distpath", str(output_dir),

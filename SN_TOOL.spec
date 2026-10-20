@@ -77,6 +77,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=[icon_path] if icon_path else None,
+    version=str(ROOT_DIR / 'scripts' / 'version_info_app.txt'),
 )
 coll = COLLECT(
     exe,
