@@ -15,7 +15,7 @@ import urllib.error
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
-CURRENT_VERSION = "1.0.9"
+CURRENT_VERSION = "1.1.0"
 APP_NAME = "SN TOOL - STUDIO PRO"
 DEFAULT_UPDATE_ZIP_URL = "https://drive.usercontent.google.com/download?id=1x_k269mEwMPH01tx8o6N67QEtLz7jlUo&export=download&confirm=t"
 
