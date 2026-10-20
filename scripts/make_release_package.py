@@ -134,7 +134,7 @@ def main():
     print("  🚀 SN TOOL - 1-CLICK UPDATE & RELEASE CREATOR (Khmer Edition)")
     print("=" * 65)
 
-    current_ver = "1.0.7"
+    current_ver = "1.1.0"
     vdata = {}
     if vjson_path.exists():
         try:
