@@ -11229,7 +11229,7 @@ async function executeAppUpdate() {
             }
         }, 600);
 
-        const fallbackUrl = "https://drive.usercontent.google.com/download?id=1x_k269mEwMPH01tx8o6N67QEtLz7jlUo&export=download&confirm=t";
+        const fallbackUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip";
         const dlUrl = (_latestUpdateInfo && _latestUpdateInfo.download_url) ? _latestUpdateInfo.download_url : fallbackUrl;
         const res = await fetch('/api/update/apply', {
             method: 'POST',

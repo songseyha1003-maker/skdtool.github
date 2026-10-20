@@ -17,7 +17,7 @@ from typing import Dict, Any, Tuple
 
 CURRENT_VERSION = "1.1.0"
 APP_NAME = "SN TOOL - STUDIO PRO"
-DEFAULT_UPDATE_ZIP_URL = "https://drive.usercontent.google.com/download?id=1x_k269mEwMPH01tx8o6N67QEtLz7jlUo&export=download&confirm=t"
+DEFAULT_UPDATE_ZIP_URL = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
 
 def parse_version_tuple(ver_str: str) -> Tuple[int, ...]:
     """Parse '1.0.7' into (1, 0, 7) tuple for accurate comparison."""

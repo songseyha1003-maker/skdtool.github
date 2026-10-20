@@ -1,11 +1,10 @@
 {
   "update_channel": "stable",
-  "update_source_type": "google_drive",
+  "update_source_type": "cloud_cdn",
   "google_drive_folder_url": "https://drive.google.com/drive/folders/1d1OhBZRLjz-JgEJo0ccfOpsWtoTxWbrN",
   "google_drive_folder_id": "1d1OhBZRLjz-JgEJo0ccfOpsWtoTxWbrN",
-  "google_drive_version_id": "11GNvpH0pw6GkhVSjT-3MBmEd3m4o5ezN",
-  "google_drive_zip_id": "1x_k269mEwMPH01tx8o6N67QEtLz7jlUo",
-  "direct_download_url": "https://drive.usercontent.google.com/download?id=1x_k269mEwMPH01tx8o6N67QEtLz7jlUo&export=download&confirm=t",
-  "custom_manifest_url": "https://drive.usercontent.google.com/download?id=11GNvpH0pw6GkhVSjT-3MBmEd3m4o5ezN&export=download&confirm=t",
-  "notes": "Official Google Drive Auto-Update Mirror for SN TOOL STUDIO PRO"
+  "direct_download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
+  "github_update_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
+  "custom_manifest_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/version.json",
+  "notes": "Official 24/7 High-Speed Auto-Update CDN for SN TOOL STUDIO PRO v1.1.0"
 }

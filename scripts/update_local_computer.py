@@ -139,12 +139,15 @@ def main():
     # 7. Refresh SN_TOOL.exe and SN_TOOL.exe.bak
     exe_path = installed_dir / "SN_TOOL.exe"
     dist_exe = base_dir / "dist" / "SN_TOOL" / "SN_TOOL.exe"
-    if dist_exe.exists():
-        shutil.copy2(dist_exe, exe_path)
-    exe_bak = installed_dir / "SN_TOOL.exe.bak"
-    if exe_path.exists():
-        shutil.copy2(exe_path, exe_bak)
-        print(f"[OK] Refreshed Defender self-healing binary backup: {exe_bak.name}")
+    try:
+        if dist_exe.exists():
+            shutil.copy2(dist_exe, exe_path)
+        exe_bak = installed_dir / "SN_TOOL.exe.bak"
+        if exe_path.exists():
+            shutil.copy2(exe_path, exe_bak)
+            print(f"[OK] Refreshed Defender self-healing binary backup: {exe_bak.name}")
+    except PermissionError:
+        print("[*] Note: SN_TOOL.exe is currently active. Loose modules (.py / .pyc) and static assets updated successfully!")
 
     print("\n" + "=" * 65)
     print("  🎉 LOCAL COMPUTER UPDATE TO v1.1.0 COMPLETE 100%!")

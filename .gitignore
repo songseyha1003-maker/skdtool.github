@@ -35,6 +35,7 @@ models/
 *.sqlite
 *.sqlite3
 *.zip
+!SN_TOOL_UPDATE.zip
 
 # Environments
 .env
