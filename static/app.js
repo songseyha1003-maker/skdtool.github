@@ -11221,7 +11221,7 @@ async function checkForAppUpdates(manual = false) {
         const notesVer = document.getElementById('update-notes-ver');
         if (notesVer) notesVer.textContent = latVer;
         const headerVer = document.getElementById('update-header-ver');
-        if (headerVer) headerVer.textContent = curVer;
+        if (headerVer) headerVer.textContent = latVer;
         const specVer = document.getElementById('update-spec-ver');
         if (specVer) specVer.textContent = data.has_update ? `v${curVer} → v${latVer}` : `v${curVer}`;
 
