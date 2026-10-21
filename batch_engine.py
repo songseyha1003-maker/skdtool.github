@@ -36,12 +36,21 @@ EXPORTS_DIR = Path("data/exports")
 EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def resolve_drama_export_directories(in_path: str, drama_title: str) -> List[Path]:
+def resolve_drama_export_directories(in_path: str, drama_title: str, custom_export_dir: Optional[str] = None) -> List[Path]:
     """
     Resolves the single dedicated unified folder for this drama series.
-    Guarantees that ALL episodes (EP_01, EP_02... EP_80) are placed together inside
-    ONE single 'Dubbed_Khmer' folder, NEVER creating separate folders for each episode.
+    Prioritizes user-selected custom_export_dir if provided, otherwise places
+    inside authentic drama folder 'Dubbed_Khmer' or SN_Dramas root.
     """
+    # 0. User-selected custom export folder takes absolute #1 priority!
+    if custom_export_dir and str(custom_export_dir).strip():
+        try:
+            p_cust = Path(str(custom_export_dir).strip()).resolve()
+            p_cust.mkdir(parents=True, exist_ok=True)
+            return [p_cust]
+        except Exception as ce:
+            print(f"[Export Folder] Custom folder note ({custom_export_dir}): {ce}")
+
     # 1. Detect if in_path belongs to an existing drama series folder
     try:
         p_in = Path(in_path).resolve()
@@ -101,7 +110,8 @@ class BatchDubbingManager:
         aspect_ratio: str = "16:9",
         burn_subtitles: bool = False,
         separate_bgm: bool = True,
-        overlay_config: Optional[Dict[str, Any]] = None
+        overlay_config: Optional[Dict[str, Any]] = None,
+        custom_export_dir: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Add multiple video/audio files to the automated batch queue."""
         added_items = []
@@ -121,6 +131,7 @@ class BatchDubbingManager:
                 "burn_subtitles": burn_subtitles,
                 "separate_bgm": separate_bgm,
                 "overlay_config": overlay_config,
+                "custom_export_dir": custom_export_dir,
                 "status": "pending",  # pending, processing, completed, failed
                 "step": "Waiting to start",  # transcribing, translating, synthesizing, rendering, done
                 "progress": 0,
@@ -334,7 +345,8 @@ class BatchDubbingManager:
         )
 
         # 6. Render and Save all drama files in ONE UNIFIED FOLDER
-        target_dirs = resolve_drama_export_directories(in_path, drama_title)
+        custom_export_dir = item.get("custom_export_dir")
+        target_dirs = resolve_drama_export_directories(in_path, drama_title, custom_export_dir=custom_export_dir)
         primary_dir = target_dirs[0]
         out_filename = f"Dubbed_{p_in.stem}.mp4"
         final_video_path = primary_dir / out_filename

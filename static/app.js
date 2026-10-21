@@ -3285,9 +3285,73 @@ let exportJobTimer = null;
 let exportPercent = 0;
 let exportElapsedSec = 0;
 let currentExportOutputMode = 'separate'; // 'separate' | 'full' | 'both'
+let currentCustomExportFolder = localStorage.getItem('sn_custom_export_dir') || "";
 
 let stagedVideoSiblings = null;
 let stagedVideoFolderTitle = "";
+
+function updateExportLocationUI() {
+    const pathTextElem = document.getElementById('export-output-path-text');
+    const badgeElem = document.getElementById('export-path-badge');
+    const resetBtn = document.getElementById('btn-reset-export-folder');
+
+    if (!pathTextElem) return;
+
+    if (currentCustomExportFolder && currentCustomExportFolder.trim()) {
+        const cleanPath = currentCustomExportFolder.trim();
+        pathTextElem.innerHTML = `<span style="color: #facc15; font-weight: 600;">📁 ${cleanPath}</span>`;
+        pathTextElem.title = `ទីតាំងផ្ទាល់ខ្លួន (Custom Folder): ${cleanPath}`;
+        if (badgeElem) {
+            badgeElem.className = 'export-path-badge custom';
+            badgeElem.textContent = 'ជ្រើសរើស (Custom)';
+        }
+        if (resetBtn) resetBtn.style.display = 'inline-flex';
+    } else {
+        pathTextElem.innerHTML = `Saved in <strong>SN TOOL</strong> folder next to source video`;
+        pathTextElem.title = `Saved next to source video in Dubbed_Khmer (ស្វ័យប្រវត្តិតាមវីដេអូដើម)`;
+        if (badgeElem) {
+            badgeElem.className = 'export-path-badge auto';
+            badgeElem.textContent = 'ស្វ័យប្រវត្តិ (Auto)';
+        }
+        if (resetBtn) resetBtn.style.display = 'none';
+    }
+}
+
+async function browseExportFolder(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    try {
+        const res = await fetch('/api/system/select-folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                initial_dir: currentCustomExportFolder || ""
+            })
+        });
+        const data = await res.json();
+        if (data && data.success && data.path) {
+            currentCustomExportFolder = data.path;
+            localStorage.setItem('sn_custom_export_dir', currentCustomExportFolder);
+            updateExportLocationUI();
+            showToast(`បានជ្រើសរើសទីតាំងរក្សាទុក: ${data.path}`);
+        }
+    } catch (e) {
+        console.warn("Folder picker note:", e);
+    }
+}
+
+function resetExportFolderToDefault(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    currentCustomExportFolder = "";
+    localStorage.removeItem('sn_custom_export_dir');
+    updateExportLocationUI();
+    showToast("បានកំណត់ទីតាំងឡើងវិញទៅ Folder ដើម (ស្វ័យប្រវត្តិ)");
+}
 
 function openExportOptionsModal() {
     const epCountElem = document.getElementById('export-output-ep-count');
@@ -3361,6 +3425,7 @@ function openExportOptionsModal() {
         return;
     }
 
+    updateExportLocationUI();
     selectExportOutputMode(currentExportOutputMode || 'separate');
     openModal('modal-export-options');
 }
@@ -9930,7 +9995,8 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                     voice_override: activeVoiceOverride,
                     aspect_ratio: activeAspectRatio,
                     burn_subtitles: activeBurnSubs,
-                    overlay_config: overlayConfig
+                    overlay_config: overlayConfig,
+                    custom_export_dir: currentCustomExportFolder || undefined
                 })
             });
         } else {
@@ -9945,6 +10011,9 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
             formData.append("aspect_ratio", activeAspectRatio);
             formData.append("burn_subtitles", activeBurnSubs);
             formData.append("overlay_config", JSON.stringify(overlayConfig));
+            if (currentCustomExportFolder) {
+                formData.append("custom_export_dir", currentCustomExportFolder);
+            }
             if (currentOverlayAssets.logo instanceof File) {
                 formData.append("logo_file", currentOverlayAssets.logo);
             }
@@ -10311,7 +10380,8 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                         voice_override: activeVoiceOverride,
                         aspect_ratio: activeAspectRatio,
                         burn_subtitles: activeBurnSubs,
-                        overlay_config: batchOverlayConfig
+                        overlay_config: batchOverlayConfig,
+                        custom_export_dir: currentCustomExportFolder || undefined
                     })
                 });
             } else {
@@ -10324,6 +10394,9 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                 formData.append("aspect_ratio", activeAspectRatio);
                 formData.append("burn_subtitles", activeBurnSubs);
                 formData.append("overlay_config", JSON.stringify(batchOverlayConfig));
+                if (currentCustomExportFolder) {
+                    formData.append("custom_export_dir", currentCustomExportFolder);
+                }
                 if (currentOverlayAssets.logo instanceof File) {
                     formData.append("logo_file", currentOverlayAssets.logo);
                 }
@@ -10474,7 +10547,8 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     video_paths: videoPaths,
-                    series_title: seriesTitle
+                    series_title: seriesTitle,
+                    custom_export_dir: currentCustomExportFolder || undefined
                 })
             });
             const mData = await mRes.json();
@@ -10544,14 +10618,17 @@ function showDubbingSuccessNotification(data) {
     if (existing) existing.remove();
 
     const isBatch = data && data.batch_count;
+    const proj = data && data.project;
+    const finalDir = (proj && (proj.final_exported_dir || (proj.final_exported_video_path ? proj.final_exported_video_path.replace(/[\\/][^\\/]+$/, '') : ''))) || (data && data.final_exported_dir) || currentCustomExportFolder || 'data/exports';
+
     const bannerMsg = isBatch
-        ? `All ${data.batch_count} episodes rendered 100% with Piseth & Sreymom voices into Exports folder!`
-        : `Video rendered 100% with Piseth & Sreymom voices into Exports folder!`;
+        ? `All ${data.batch_count} episodes rendered 100% with Piseth & Sreymom voices into folder!`
+        : `Video rendered 100% with Piseth & Sreymom voices into folder!`;
 
     // Stream directly into Studio Processing & Activity Console as requested by user
     if (typeof appendLiveTerminalLine === 'function') {
         appendLiveTerminalLine(bannerMsg, "[Render 100%]", "success");
-        appendLiveTerminalLine("Files saved in: data/exports (100% Complete)", "[Export Done]", "success");
+        appendLiveTerminalLine(`Files saved in: ${finalDir} (100% Complete)`, "[Export Done]", "success");
     }
 
     // Set console progress to 100%
@@ -10574,14 +10651,15 @@ function showDubbingSuccessNotification(data) {
 
 async function openExportFolderDirect(targetPath) {
     try {
+        const pathToOpen = targetPath || currentCustomExportFolder || '';
         const res = await fetch('/api/projects/open-folder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: targetPath || '' })
+            body: JSON.stringify({ path: pathToOpen })
         });
         const data = await res.json();
         if (data.success) {
-            showToast("Opened Exports folder in Windows Explorer");
+            showToast(`Opened folder: ${data.opened_path || pathToOpen || 'Exports'}`);
         } else {
             showToast(`${data.error || 'Cannot open folder'}`);
         }

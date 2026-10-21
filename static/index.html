@@ -2474,10 +2474,30 @@
                         </div>
                     </div>
 
-                    <!-- Location Hint -->
-                    <div class="export-output-location-row">
-                        <i class="fa-solid fa-folder-open" style="color: #facc15;"></i>
-                        <span>Saved in <strong>SN TOOL</strong> folder next to source video</span>
+                    <!-- Interactive Save Location Selector -->
+                    <div class="export-output-location-card" id="export-output-location-card">
+                        <div class="export-loc-main" onclick="browseExportFolder()" title="ចុចដើម្បីរើសទីតាំងរក្សាទុកវីដេអូ (Click to choose save folder)">
+                            <div class="export-loc-icon-wrap">
+                                <i class="fa-solid fa-folder-open"></i>
+                            </div>
+                            <div class="export-loc-text-col">
+                                <div class="export-loc-header">
+                                    <span class="export-loc-title">ទីតាំងរក្សាទុក (Save Location):</span>
+                                    <span class="export-path-badge auto" id="export-path-badge">ស្វ័យប្រវត្តិ (Auto)</span>
+                                </div>
+                                <div class="export-loc-path-val" id="export-output-path-text" title="Saved in SN TOOL folder next to source video">
+                                    Saved in <strong>SN TOOL</strong> folder next to source video
+                                </div>
+                            </div>
+                        </div>
+                        <div class="export-loc-actions">
+                            <button type="button" class="export-loc-reset-btn" id="btn-reset-export-folder" onclick="resetExportFolderToDefault(event)" title="កំណត់ឡើងវិញទៅកាន់ Folder ដើម (Reset to default)" style="display: none;">
+                                <i class="fa-solid fa-rotate-left"></i>
+                            </button>
+                            <button type="button" class="export-loc-change-btn" id="btn-browse-export-folder" onclick="browseExportFolder(event)" title="ជ្រើសរើស Folder នៅលើកុំព្យូទ័រ (Browse Folder)">
+                                <i class="fa-solid fa-folder-tree"></i> រើសទីតាំង (Browse)
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Footer Action Buttons -->

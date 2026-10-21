@@ -485,7 +485,8 @@ class ProjectManager:
         burn_subtitles: bool = False,
         aspect_ratio: str = "16:9",
         watermark_text: Optional[str] = None,
-        overlay_config: Optional[Dict[str, Any]] = None
+        overlay_config: Optional[Dict[str, Any]] = None,
+        custom_export_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         project = self.load_project(project_id)
         if not project:
@@ -526,7 +527,7 @@ class ProjectManager:
             from batch_engine import resolve_drama_export_directories
             import re
             clean_title = project.get("title") or Path(video_in).stem
-            dest_dirs = resolve_drama_export_directories(video_in, clean_title)
+            dest_dirs = resolve_drama_export_directories(video_in, clean_title, custom_export_dir=custom_export_dir)
             
             # Format clean output stem avoiding 'Dubbed_Dubbed_' or raw prefixes
             title_stem = project.get("title") or Path(video_in).stem
@@ -535,10 +536,15 @@ class ProjectManager:
             clean_stem = re.sub(r'_\d{9,12}$', '', clean_stem)
             out_stem = f"Dubbed_{clean_stem}"
             
+            saved_paths = []
             for d in dest_dirs:
                 dest_file = d / f"{out_stem}.mp4"
                 if Path(output_video_path).resolve() != dest_file.resolve():
                     shutil.copy2(str(output_video_path), str(dest_file))
+                saved_paths.append(str(dest_file))
+            if saved_paths:
+                project["final_exported_video_path"] = saved_paths[0]
+                project["final_exported_dir"] = str(Path(saved_paths[0]).parent)
         except Exception as e:
             print(f"Unified drama folder export note: {e}")
 
@@ -555,7 +561,8 @@ class ProjectManager:
         aspect_ratio: str = "16:9",
         burn_subtitles: bool = False,
         overlay_config: Optional[Dict[str, Any]] = None,
-        progress_callback = None
+        progress_callback = None,
+        custom_export_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Complete 1-Click Automated Video Dubbing Pipeline:
@@ -827,7 +834,8 @@ class ProjectManager:
             project_id=proj_id,
             burn_subtitles=burn_subtitles,
             aspect_ratio=aspect_ratio,
-            overlay_config=overlay_config
+            overlay_config=overlay_config,
+            custom_export_dir=custom_export_dir
         )
         gc.collect()
 

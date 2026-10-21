@@ -620,13 +620,15 @@ def render_video_endpoint(project_id):
     watermark = request.args.get("watermark") or data.get("watermark") or ""
     overlay_config = data.get("overlay_config")
     
+    custom_export_dir = request.args.get("custom_export_dir") or data.get("custom_export_dir")
     try:
         updated_project = pm.render_project_video_final(
             project_id=project_id,
             burn_subtitles=burn_sub,
             aspect_ratio=aspect_ratio,
             watermark_text=watermark,
-            overlay_config=overlay_config
+            overlay_config=overlay_config,
+            custom_export_dir=custom_export_dir
         )
         play_windows_completion_sound()
         return jsonify({
@@ -676,6 +678,8 @@ def batch_upload_endpoint():
             f.save(str(dest))
             saved_paths.append(str(dest))
 
+    custom_export_dir = request.form.get("custom_export_dir") or request.args.get("custom_export_dir")
+
     # Add to queue and trigger worker
     added_items = batch_manager.add_files_to_queue(
         file_paths=saved_paths,
@@ -684,7 +688,8 @@ def batch_upload_endpoint():
         aspect_ratio=aspect_ratio,
         burn_subtitles=burn_subtitles,
         separate_bgm=separate_bgm,
-        overlay_config=overlay_config
+        overlay_config=overlay_config,
+        custom_export_dir=custom_export_dir
     )
     batch_manager.start_batch_processing()
 
@@ -2822,6 +2827,7 @@ def auto_dub_video_endpoint():
     saved_video_path = None
     original_filename = "drama_video.mp4"
     overlay_config = None
+    custom_export_dir = None
 
     if "file" in request.files and request.files["file"].filename:
         file = request.files["file"]
@@ -2832,6 +2838,7 @@ def auto_dub_video_endpoint():
         dest = upload_dir / unique_name
         file.save(str(dest))
         saved_video_path = str(dest)
+        custom_export_dir = request.form.get("custom_export_dir")
         raw_oc = request.form.get("overlay_config")
         if raw_oc:
             try:
@@ -2843,6 +2850,7 @@ def auto_dub_video_endpoint():
         data = request.get_json(force=True) or {}
         saved_video_path = data.get("filepath") or data.get("path") or data.get("local_path") or data.get("file")
         project_title = data.get("title")
+        custom_export_dir = data.get("custom_export_dir")
         if not original_filename or original_filename == "drama_video.mp4":
             original_filename = data.get("filename") or data.get("name") or (Path(saved_video_path).name if saved_video_path else "drama_video.mp4")
         if saved_video_path:
@@ -2865,6 +2873,7 @@ def auto_dub_video_endpoint():
             saved_video_path = None
         original_filename = request.form.get("filename") or request.form.get("name") or (Path(saved_video_path).name if saved_video_path else "drama_video.mp4")
         project_title = request.form.get("title")
+        custom_export_dir = request.form.get("custom_export_dir")
         raw_oc = request.form.get("overlay_config")
         if raw_oc:
             try:
@@ -2873,8 +2882,12 @@ def auto_dub_video_endpoint():
                 pass
     else:
         project_title = request.form.get("title")
+        custom_export_dir = request.form.get("custom_export_dir")
         if request.form.get("filename"):
             original_filename = request.form.get("filename")
+
+    if not custom_export_dir:
+        custom_export_dir = request.args.get("custom_export_dir")
 
     # Support direct logo_file upload in form data
     if "logo_file" in request.files and request.files["logo_file"].filename:
@@ -3006,7 +3019,7 @@ def auto_dub_video_endpoint():
         "error_tag": None
     }
 
-    def _worker(t_id: str, v_path: str, m: str, sl: str, vo: str, ar: str, bs: bool, oc: dict, p_title: str = None):
+    def _worker(t_id: str, v_path: str, m: str, sl: str, vo: str, ar: str, bs: bool, oc: dict, p_title: str = None, cust_dir: str = None):
         current_stage = "1/7 Audio Extraction"
         def _clean_branding(text: str) -> str:
             if not text:
@@ -3049,7 +3062,8 @@ def auto_dub_video_endpoint():
                     aspect_ratio=ar,
                     burn_subtitles=bs,
                     overlay_config=oc,
-                    progress_callback=_prog_cb
+                    progress_callback=_prog_cb,
+                    custom_export_dir=cust_dir
                 ))
             finally:
                 loop.close()
@@ -3083,7 +3097,7 @@ def auto_dub_video_endpoint():
 
     threading.Thread(
         target=_worker,
-        args=(task_id, saved_video_path, mode, source_lang, voice_override, aspect_ratio, burn_subtitles, overlay_config, project_title),
+        args=(task_id, saved_video_path, mode, source_lang, voice_override, aspect_ratio, burn_subtitles, overlay_config, project_title, custom_export_dir),
         daemon=True
     ).start()
 
@@ -3128,6 +3142,8 @@ def auto_dub_status_endpoint(task_id):
         out_aud = proj.get("mixed_audio_file") or ""
         resp["video_url"] = f"/media/{out_vid.replace(chr(92), '/')}" if out_vid else ""
         resp["mixed_audio_url"] = f"/media/{out_aud.replace(chr(92), '/')}" if out_aud else ""
+        resp["final_exported_video_path"] = proj.get("final_exported_video_path") or out_vid
+        resp["final_exported_dir"] = proj.get("final_exported_dir") or (str(Path(out_vid).parent) if out_vid else "")
 
     return jsonify(resp)
 
@@ -3167,7 +3183,11 @@ def merge_episodes_endpoint():
         clean_title = "Drama_Series"
 
     output_filename = f"Dubbed_{clean_title}_Full_Movie.mp4"
-    out_file = Path("data/exports") / output_filename
+    custom_export_dir = data.get("custom_export_dir")
+    if custom_export_dir and Path(custom_export_dir).exists():
+        out_file = Path(custom_export_dir) / output_filename
+    else:
+        out_file = Path("data/exports") / output_filename
 
     if not video_paths:
         return jsonify({"success": False, "error": "No video paths provided"}), 400

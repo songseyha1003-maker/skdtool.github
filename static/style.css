@@ -9192,6 +9192,153 @@ select, option, optgroup {
     font-weight: 900;
 }
 
+.export-output-location-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(250, 204, 21, 0.25);
+    border-radius: 8px;
+    padding: 8px 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.export-output-location-card:hover {
+    border-color: rgba(250, 204, 21, 0.55);
+    background: rgba(20, 29, 52, 0.85);
+}
+
+.export-loc-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.export-loc-icon-wrap {
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    background: rgba(250, 204, 21, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #facc15;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.export-loc-text-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.export-loc-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+}
+
+.export-loc-title {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.export-path-badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.export-path-badge.auto {
+    background: rgba(148, 163, 184, 0.15);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.export-path-badge.custom {
+    background: rgba(250, 204, 21, 0.18);
+    color: #facc15;
+    border: 1px solid rgba(250, 204, 21, 0.4);
+}
+
+.export-loc-path-val {
+    font-size: 0.78rem;
+    color: #e2e8f0;
+    font-family: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 270px;
+}
+
+.export-loc-path-val strong {
+    color: #facc15;
+}
+
+.export-loc-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.export-loc-change-btn {
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.22), rgba(234, 179, 8, 0.12));
+    border: 1px solid rgba(250, 204, 21, 0.45);
+    color: #facc15;
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.export-loc-change-btn:hover {
+    background: #facc15;
+    color: #0b0d13;
+    border-color: #facc15;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(250, 204, 21, 0.3);
+}
+
+.export-loc-reset-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #94a3b8;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.export-loc-reset-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
 .export-output-location-row {
     display: flex;
     align-items: center;
