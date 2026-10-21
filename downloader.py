@@ -1268,7 +1268,9 @@ def download_m3u8_stream_turbo(stream_url: str, dest_file: Path, timeout_sec: in
                 'progress_hooks': [live_hook] if progress_callback else [],
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([stream_url])
+                with ThreadPoolExecutor(max_workers=1) as ydl_pool:
+                    ydl_fut = ydl_pool.submit(ydl.download, [stream_url])
+                    ydl_fut.result(timeout=min(timeout_sec, 85))
 
             cand_files = [c for c in isolated_temp.glob(f"{dest_file.stem}*") if c.is_file() and c.stat().st_size > 100000 and not any(x in c.name for x in [".part", ".ytdl", ".tmp"])]
             if cand_files:
