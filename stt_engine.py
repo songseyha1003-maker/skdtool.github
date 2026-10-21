@@ -45,9 +45,9 @@ except Exception:
         FFMPEG_EXE = "ffmpeg"
 
 try:
-    from faster_whisper import WhisperModel
-    FASTER_WHISPER_AVAILABLE = True
-except ImportError:
+    import importlib.util
+    FASTER_WHISPER_AVAILABLE = importlib.util.find_spec("faster_whisper") is not None
+except Exception:
     FASTER_WHISPER_AVAILABLE = False
 
 try:
@@ -500,6 +500,7 @@ class SpeechToTextEngine:
             model_to_load = local_path or target_model
 
             try:
+                from faster_whisper import WhisperModel
                 self._model = WhisperModel(model_to_load, device=device, compute_type=compute_type, cpu_threads=threads)
             except Exception as e:
                 print(f"Faster-whisper model load note ({model_to_load}): {e}")
