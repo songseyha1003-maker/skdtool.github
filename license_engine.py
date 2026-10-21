@@ -602,6 +602,7 @@ def revoke_license_key(target_key: str, reason: str = "Banned by Admin") -> Tupl
 
     try:
         sync_online_keys()
+        push_online_registry_async()
     except Exception:
         pass
 
@@ -647,6 +648,7 @@ def unrevoke_license_key(target_key: str) -> Tuple[bool, str]:
 
     try:
         sync_online_keys()
+        push_online_registry_async()
     except Exception:
         pass
 
@@ -705,6 +707,7 @@ def delete_license_key_record(target_key: str) -> Tuple[bool, str]:
 
     try:
         sync_online_keys()
+        push_online_registry_async()
     except Exception:
         pass
 
