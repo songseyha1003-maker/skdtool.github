@@ -1,5 +1,5 @@
 # 🎬 មគ្គុទ្ទេសក៍ណែនាំប្រើប្រាស់ SN TOOL - STUDIO PRO
-> **កំណែ (Version):** v1.1.0  
+> **កំណែ (Version):** v1.1.3  
 > **ឯកសារផ្លូវការ (Official User Manual & Client Guide)**  
 > **ភាសា:** ភាសាខ្មែរ (Khmer) & English
 
