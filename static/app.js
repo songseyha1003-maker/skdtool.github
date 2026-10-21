@@ -3292,27 +3292,18 @@ let stagedVideoFolderTitle = "";
 
 function updateExportLocationUI() {
     const pathTextElem = document.getElementById('export-output-path-text');
-    const badgeElem = document.getElementById('export-path-badge');
     const resetBtn = document.getElementById('btn-reset-export-folder');
 
     if (!pathTextElem) return;
 
     if (currentCustomExportFolder && currentCustomExportFolder.trim()) {
         const cleanPath = currentCustomExportFolder.trim();
-        pathTextElem.innerHTML = `<span style="color: #facc15; font-weight: 600;">📁 ${cleanPath}</span>`;
-        pathTextElem.title = `ទីតាំងផ្ទាល់ខ្លួន (Custom Folder): ${cleanPath}`;
-        if (badgeElem) {
-            badgeElem.className = 'export-path-badge custom';
-            badgeElem.textContent = 'ជ្រើសរើស (Custom)';
-        }
+        pathTextElem.innerHTML = `Saved in <strong>${cleanPath}</strong>`;
+        pathTextElem.title = `Saved in: ${cleanPath}`;
         if (resetBtn) resetBtn.style.display = 'inline-flex';
     } else {
         pathTextElem.innerHTML = `Saved in <strong>SN TOOL</strong> folder next to source video`;
-        pathTextElem.title = `Saved next to source video in Dubbed_Khmer (ស្វ័យប្រវត្តិតាមវីដេអូដើម)`;
-        if (badgeElem) {
-            badgeElem.className = 'export-path-badge auto';
-            badgeElem.textContent = 'ស្វ័យប្រវត្តិ (Auto)';
-        }
+        pathTextElem.title = `Saved in SN TOOL folder next to source video`;
         if (resetBtn) resetBtn.style.display = 'none';
     }
 }
