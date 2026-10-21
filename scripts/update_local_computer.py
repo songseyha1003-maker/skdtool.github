@@ -125,6 +125,26 @@ def main():
                 if src.exists():
                     shutil.copy2(src, target_scripts / sname)
 
+    # 5.1 Synchronize dist/ADMIN_KEY_GENERATOR
+    admin_dist = base_dir / "dist" / "ADMIN_KEY_GENERATOR"
+    if admin_dist.exists():
+        print("\n[*] Synchronizing dist/ADMIN_KEY_GENERATOR modules & admin UI...")
+        for a_target in [admin_dist, admin_dist / "_internal"]:
+            a_target.mkdir(parents=True, exist_ok=True)
+            for m in ["admin_dashboard.py", "ADMIN_KEY_GENERATOR.py", "license_engine.py"]:
+                src = base_dir / m
+                if src.exists():
+                    shutil.copy2(src, a_target / m)
+            for cfg in ["license_config.json", "custom_keys.json"]:
+                src = base_dir / cfg
+                if src.exists():
+                    shutil.copy2(src, a_target / cfg)
+            s_admin = a_target / "static"
+            s_admin.mkdir(parents=True, exist_ok=True)
+            if (base_dir / "static" / "admin.html").exists():
+                shutil.copy2(base_dir / "static" / "admin.html", s_admin / "admin.html")
+        print("  [OK] dist/ADMIN_KEY_GENERATOR synchronized!")
+
     # 6. Verify and preserve license.key
     lic_file = installed_dir / "license.key"
     if lic_file.exists():
