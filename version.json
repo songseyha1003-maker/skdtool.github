@@ -1,9 +1,9 @@
 {
-  "version": "1.1.0",
+  "version": "1.0.7",
   "app_name": "SN TOOL - STUDIO PRO",
-  "release_date": "2026-10-20",
-  "title": "SN TOOL STUDIO PRO - Official Update v1.1.0 (Guaranteed Piseth & Sreymom Khmer Voice)",
-  "release_notes": "• 🎙️ Guaranteed 100% Audible Khmer Speech: Bulletproof Piseth & Sreymom neural audio engine with automatic non-audible recovery and CJK sanitization\n• ⚡ Resilient Nisay AI Cloud Gateway: Auto-recovering 503 capacity retry logic with zero-drop Khmer neural dubbing failover\n• 🎧 Smart BGM & Vocal Ducking: Balanced audio mixing ensuring clear vocal clarity without background silence drops\n• 📦 Client PC Standalone Ready: Fully self-contained bundled modules and verified offline execution",
+  "release_date": "2026-10-18",
+  "title": "SN TOOL STUDIO PRO - Official Release v1.0.7",
+  "release_notes": "Official Release v1.0.7",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }

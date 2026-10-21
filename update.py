@@ -15,7 +15,7 @@ import urllib.error
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
-CURRENT_VERSION = "1.1.0"
+CURRENT_VERSION = "1.0.7"
 APP_NAME = "SN TOOL - STUDIO PRO"
 DEFAULT_UPDATE_ZIP_URL = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
 
@@ -146,30 +146,42 @@ def check_for_updates(github_token: str = None) -> Dict[str, Any]:
         except Exception:
             pass
 
-    # 2. Try direct custom manifest URL
+    # 2. Try direct custom manifest URL (with local data/cloud_manifest.json resilience)
+    data = None
     if cloud_manifest_url and cloud_manifest_url.startswith("http"):
         try:
             direct_url = resolve_gdrive_direct_url(cloud_manifest_url)
             data = fetch_json_from_url(direct_url)
-            if data and "version" in data:
-                remote_ver = str(data["version"]).strip()
-                has_up = is_newer_version(remote_ver, local_ver)
-                dl_url = data.get("download_url") or ""
-                if not dl_url or "/folders/" in dl_url:
-                    dl_url = cfg.get("direct_download_url") or cfg.get("google_drive_zip_id") or dl_url
-                return {
-                    "success": True,
-                    "has_update": has_up,
-                    "current_version": local_ver,
-                    "latest_version": remote_ver,
-                    "title": data.get("title", f"SN TOOL v{remote_ver}"),
-                    "release_notes": data.get("release_notes", "Continuous performance optimizations and security improvements."),
-                    "download_url": resolve_gdrive_direct_url(dl_url),
-                    "release_date": data.get("release_date", ""),
-                    "channel": data.get("channel", "stable")
-                }
         except Exception:
-            pass
+            data = None
+
+    if not data or "version" not in data:
+        base_dir = Path(__file__).resolve().parent
+        local_cloud_m = base_dir / "data" / "cloud_manifest.json"
+        if local_cloud_m.exists():
+            try:
+                with open(local_cloud_m, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = None
+
+    if data and "version" in data:
+        remote_ver = str(data["version"]).strip()
+        has_up = is_newer_version(remote_ver, local_ver)
+        dl_url = data.get("download_url") or ""
+        if not dl_url or "/folders/" in dl_url:
+            dl_url = cfg.get("direct_download_url") or cfg.get("google_drive_zip_id") or dl_url
+        return {
+            "success": True,
+            "has_update": has_up,
+            "current_version": local_ver,
+            "latest_version": remote_ver,
+            "title": data.get("title", f"SN TOOL v{remote_ver}"),
+            "release_notes": data.get("release_notes", "Continuous performance optimizations and security improvements."),
+            "download_url": resolve_gdrive_direct_url(dl_url),
+            "release_date": data.get("release_date", ""),
+            "channel": data.get("channel", "stable")
+        }
 
     # 3. Default Up-to-date response (graceful offline / standalone mode)
     return {

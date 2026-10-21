@@ -11221,14 +11221,12 @@ async function checkForAppUpdates(manual = false) {
         const notesVer = document.getElementById('update-notes-ver');
         if (notesVer) notesVer.textContent = latVer;
         const headerVer = document.getElementById('update-header-ver');
-        if (headerVer) headerVer.textContent = latVer;
+        if (headerVer) headerVer.textContent = curVer;
         const specVer = document.getElementById('update-spec-ver');
-        if (specVer) specVer.textContent = `v${latVer}`;
+        if (specVer) specVer.textContent = data.has_update ? `v${curVer} → v${latVer}` : `v${curVer}`;
 
         const settingsVer = document.getElementById('settings-version-tag');
         if (settingsVer && curVer) settingsVer.textContent = `v${curVer}`;
-        const splashVer = document.getElementById('splash-version-tag');
-        if (splashVer && curVer) splashVer.textContent = `v${curVer}`;
         const licEngineVer = document.getElementById('settings-lic-engine-version');
         if (licEngineVer && curVer) licEngineVer.textContent = `SN AI Engine v${curVer}`;
         const gateVer = document.getElementById('gate-security-version');
@@ -11360,8 +11358,6 @@ function initStudioSplashScreen() {
         if (data && data.current_version) {
             const curVer = data.current_version;
             window._currentAppVersion = curVer;
-            const tag = document.querySelector('.splash-edition-chip') || document.getElementById('splash-version-tag');
-            if (tag) tag.textContent = 'v' + curVer;
             const settingsTag = document.getElementById('settings-version-tag');
             if (settingsTag) settingsTag.textContent = 'v' + curVer;
             const licEngineVer = document.getElementById('settings-lic-engine-version');
