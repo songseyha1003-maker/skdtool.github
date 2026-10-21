@@ -11438,6 +11438,10 @@ function initStudioSplashScreen() {
                     if (window._isDeviceActivated) {
                         document.body.classList.remove('license-locked');
                         if (gateModal) gateModal.classList.remove('active');
+                        // Auto check for updates 2 seconds after startup
+                        setTimeout(() => {
+                            try { checkForAppUpdates(false); } catch (e) {}
+                        }, 2000);
                     } else {
                         document.body.classList.add('license-locked');
                         if (gateModal) gateModal.classList.add('active');

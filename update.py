@@ -95,14 +95,21 @@ def resolve_gdrive_direct_url(url_or_id: str) -> str:
     return clean
 
 def fetch_json_from_url(url: str, timeout: int = 6) -> Dict[str, Any]:
-    """Fetch and parse JSON from direct HTTP URL."""
+    """Fetch and parse JSON from direct HTTP URL with zero-caching assurance."""
     if not url:
         return {}
+    target_url = url
+    if "githubusercontent.com" in target_url or "github.com" in target_url:
+        sep = "&" if "?" in target_url else "?"
+        target_url = f"{target_url}{sep}_cb={int(time.time())}"
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*"
+        "Accept": "application/json, text/plain, */*",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache"
     }
-    req = urllib.request.Request(url, headers=headers)
+    req = urllib.request.Request(target_url, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         if resp.status == 200:
             raw = resp.read().decode("utf-8", errors="ignore")
@@ -270,13 +277,26 @@ Remove-Item -Force $MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue
             ps1_content = f"""
 Start-Sleep -Seconds 2
 Stop-Process -Name "SN_TOOL" -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 1
+Start-Sleep -Seconds 2
+
 # Backup existing license.key before extracting
 $licBackup = $null
 if (Test-Path "{app_dir}\\license.key") {{
     $licBackup = [System.IO.File]::ReadAllBytes("{app_dir}\\license.key")
 }}
-Expand-Archive -Path "{dest_file}" -DestinationPath "{app_dir}" -Force
+
+# Retry extraction to prevent file lock collision
+$extracted = $false
+for ($i = 0; $i -lt 5; $i++) {{
+    try {{
+        Expand-Archive -Path "{dest_file}" -DestinationPath "{app_dir}" -Force
+        $extracted = $true
+        break
+    }} catch {{
+        Start-Sleep -Seconds 2
+    }}
+}}
+
 if ($licBackup -ne $null) {{
     [System.IO.File]::WriteAllBytes("{app_dir}\\license.key", $licBackup)
 }}

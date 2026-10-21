@@ -146,7 +146,8 @@ data_dst.mkdir(parents=True, exist_ok=True)
 data_files = [
     "hongguo_catalog.db", "story_config.json", "drama_dictionary.json",
     "shortmax_all_dramas.json", "reelshort_all_dramas.json", "ai_dramas_streams.json",
-    "ai_provider_config.json", "license_keys_online.json", "revoked_keys.json"
+    "ai_provider_config.json", "license_keys_online.json", "revoked_keys.json",
+    "cloud_manifest.json", "update_config.json"
 ]
 for fname in data_files:
     src = base_dir / "data" / fname
