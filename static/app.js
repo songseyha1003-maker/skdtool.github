@@ -6001,7 +6001,13 @@ function openSettingsSubpage(key) {
     if (subStory) subStory.style.display = 'none';
     if (subGuide) subGuide.style.display = 'none';
 
-    if (key === 'license' && subLic) subLic.style.display = 'flex';
+    if (key === 'license') {
+        if (subLic) subLic.style.display = 'flex';
+        const licEngineVerElem = document.getElementById('settings-lic-engine-version');
+        if (licEngineVerElem && window._currentAppVersion) {
+            licEngineVerElem.textContent = `SN AI Engine v${window._currentAppVersion}`;
+        }
+    }
     if (key === 'guide' && subGuide) subGuide.style.display = 'flex';
 }
 
@@ -10714,9 +10720,16 @@ async function checkDeviceLicenseStatus() {
 
         if (data.telegram_link) window._adminTelegramLink = data.telegram_link;
         if (data.facebook_link) window._adminFacebookLink = data.facebook_link;
-        const gateVerElem = document.getElementById('gate-security-version');
-        if (gateVerElem && data.app_version) {
-            gateVerElem.textContent = `SN TOOL Security Engine • v${data.app_version}`;
+        if (data.app_version) {
+            window._currentAppVersion = data.app_version;
+            const gateVerElem = document.getElementById('gate-security-version');
+            if (gateVerElem) gateVerElem.textContent = `SN TOOL Security Engine • v${data.app_version}`;
+            const licEngineVerElem = document.getElementById('settings-lic-engine-version');
+            if (licEngineVerElem) licEngineVerElem.textContent = `SN AI Engine v${data.app_version}`;
+            const splashVer = document.getElementById('splash-version-tag');
+            if (splashVer) splashVer.textContent = `v${data.app_version}`;
+            const specVer = document.getElementById('update-spec-ver');
+            if (specVer) specVer.textContent = `v${data.app_version}`;
         }
 
         if (data.is_banned) {
@@ -11195,8 +11208,9 @@ async function checkForAppUpdates(manual = false) {
         }
 
         _latestUpdateInfo = data;
-        const curVer = data.current_version || '1.0.8';
+        const curVer = data.current_version || '1.1.0';
         const latVer = data.latest_version || curVer;
+        window._currentAppVersion = curVer;
 
         const curVerVal = document.getElementById('update-cur-ver-val');
         if (curVerVal) curVerVal.textContent = `v${curVer}`;
@@ -11215,6 +11229,10 @@ async function checkForAppUpdates(manual = false) {
         if (settingsVer && curVer) settingsVer.textContent = `v${curVer}`;
         const splashVer = document.getElementById('splash-version-tag');
         if (splashVer && curVer) splashVer.textContent = `v${curVer}`;
+        const licEngineVer = document.getElementById('settings-lic-engine-version');
+        if (licEngineVer && curVer) licEngineVer.textContent = `SN AI Engine v${curVer}`;
+        const gateVer = document.getElementById('gate-security-version');
+        if (gateVer && curVer) gateVer.textContent = `SN TOOL Security Engine • v${curVer}`;
 
         const notesEl = document.getElementById('update-release-notes');
         const customNotesPanel = document.getElementById('update-custom-notes-panel');
@@ -11337,13 +11355,19 @@ function initStudioSplashScreen() {
     // Immediately trigger license status verification in the background
     checkDeviceLicenseStatus().catch(err => console.error("Initial license check error:", err));
 
-    // Dynamically synchronize splash edition chip with real version
+    // Dynamically synchronize splash edition chip and license cards with real version
     fetch('/api/update/check').then(r => r.json()).then(data => {
         if (data && data.current_version) {
+            const curVer = data.current_version;
+            window._currentAppVersion = curVer;
             const tag = document.querySelector('.splash-edition-chip') || document.getElementById('splash-version-tag');
-            if (tag) tag.textContent = 'v' + data.current_version;
+            if (tag) tag.textContent = 'v' + curVer;
             const settingsTag = document.getElementById('settings-version-tag');
-            if (settingsTag) settingsTag.textContent = 'v' + data.current_version;
+            if (settingsTag) settingsTag.textContent = 'v' + curVer;
+            const licEngineVer = document.getElementById('settings-lic-engine-version');
+            if (licEngineVer) licEngineVer.textContent = `SN AI Engine v${curVer}`;
+            const gateVer = document.getElementById('gate-security-version');
+            if (gateVer) gateVer.textContent = `SN TOOL Security Engine • v${curVer}`;
         }
     }).catch(() => {});
 

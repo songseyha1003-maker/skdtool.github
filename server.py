@@ -1171,7 +1171,7 @@ def license_status_endpoint():
         from update import get_local_version
         info["app_version"] = get_local_version()
     except Exception:
-        info["app_version"] = "1.0.7"
+        info["app_version"] = "1.1.0"
 
     cfg_path = get_data_file("license_config.json")
     if cfg_path.exists():
@@ -1183,6 +1183,17 @@ def license_status_endpoint():
         except Exception:
             pass
     return jsonify(info)
+
+
+@app.route("/api/version", methods=["GET"])
+def api_version_endpoint():
+    """Return dynamic local app version."""
+    try:
+        from update import get_local_version
+        v = get_local_version()
+    except Exception:
+        v = "1.1.0"
+    return jsonify({"version": v, "success": True})
 
 
 _FAILED_ACTIVATION_ATTEMPTS = {}
