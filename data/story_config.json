@@ -2,7 +2,7 @@
   "khmer_voice": "piseth",
   "auto_multi_voice": false,
   "source_lang": "auto",
-  "whisper_model": "",
+  "whisper_model": "medium",
   "aspect_ratio": "9:16",
   "subtitle_mode": "none",
   "dubbing_mode": "smart_bgm",

@@ -1,1 +1,16 @@
-{}
+{
+  "SN-7D-5110-3693-679C-578382": {
+    "license_key": "SN-7D-5110-3693-679C-578382",
+    "client_name": "SAL",
+    "plan": "PRO 10D",
+    "duration_days": 17,
+    "created_at": "2026-10-19 13:20:00",
+    "expires_at": "2026-11-06",
+    "expiry_timestamp": 1793923199,
+    "bound_hwid": "E53CEFB948DFC356",
+    "raw_payload": "SN:7D:5110:3693:679C",
+    "signature": "578382",
+    "status": "ACTIVE",
+    "last_renewed": "2026-10-21 16:55:13"
+  }
+}
