@@ -84,10 +84,8 @@ def package_update_zip():
             if s_file.exists():
                 zf.write(s_file, f"scripts/{s_name}")
 
-        # 6. Add compiled SN_TOOL.exe binary so in-app update replaces the executable directly
-        dist_exe = base_dir / "dist" / "SN_TOOL" / "SN_TOOL.exe"
-        if dist_exe.exists():
-            zf.write(dist_exe, "SN_TOOL.exe")
+        # 6. Exclude SN_TOOL.exe binary from update zip so Expand-Archive NEVER collides
+        # with the active running executable on client machines. (All runtime logic is in .py / _internal/*.pyc)
 
         # 7. Add _internal compiled bytecode and configs for PyInstaller binary support
         dist_internal = base_dir / "dist" / "SN_TOOL" / "_internal"

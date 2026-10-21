@@ -276,7 +276,8 @@ Remove-Item -Force $MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue
             restart_target = f'"{exe_file}"' if exe_file.exists() else f'"{run_bat}"'
             ps1_content = f"""
 Start-Sleep -Seconds 2
-Stop-Process -Name "SN_TOOL" -Force -ErrorAction SilentlyContinue
+Get-Process | Where-Object {{ $_.Path -like "{app_dir}*" }} | Stop-Process -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
 # Backup existing license.key before extracting
@@ -287,9 +288,9 @@ if (Test-Path "{app_dir}\\license.key") {{
 
 # Retry extraction to prevent file lock collision
 $extracted = $false
-for ($i = 0; $i -lt 5; $i++) {{
+for ($i = 0; $i -lt 8; $i++) {{
     try {{
-        Expand-Archive -Path "{dest_file}" -DestinationPath "{app_dir}" -Force
+        Expand-Archive -Path "{dest_file}" -DestinationPath "{app_dir}" -Force -ErrorAction Stop
         $extracted = $true
         break
     }} catch {{
