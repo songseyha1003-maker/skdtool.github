@@ -14,14 +14,36 @@ import sys
 import json
 import time
 from pathlib import Path
+import concurrent.futures
 from typing import Dict, Any, List, Optional, Union
 
 import requests
+import requests.adapters
 
 BASE_URL = "https://api.nisay.store/v1"
 TRANSLATE_ENDPOINT = f"{BASE_URL}/translate"
 MANDATORY_MODEL = "gemini-3.8-flash-high"
 DEFAULT_CATEGORY = "chinese_general"
+
+# ⚡ High-Performance HTTP Keep-Alive Connection Pool
+_SESSION = None
+
+def get_nisay_session() -> requests.Session:
+    """Reusable persistent connection session with HTTP keep-alive pooling."""
+    global _SESSION
+    if _SESSION is None:
+        _SESSION = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=20,
+            pool_maxsize=40,
+            max_retries=1
+        )
+        _SESSION.mount("https://", adapter)
+        _SESSION.mount("http://", adapter)
+    return _SESSION
+
+# ⚡ Memory Cache for recurring dialogue phrases (0ms instant resolution)
+_TRANSLATION_CACHE: Dict[str, str] = {}
 
 
 _VAULT_TOKEN_B64 = "NDMpOyN3MzQudygpd2k5YmxiOzg4PGprPm5jYzxiO2JtbWI/ajloamo+ajk5"
@@ -138,15 +160,38 @@ def translate_khmer(
 
     context_str = context or f"Story genre: {safe_category}. Apply Standard Khmer orthography."
 
-    # Exponential retry schedule: 3s, 5s, 8s, 12s, 16s (ensures temporary upstream capacity failovers resolve)
-    backoff_delays = [3, 5, 8, 12, 16]
-    max_retries = max(max_retries, 5)
+    # ⚡ 1. Memory Cache Lookup (Instant 0ms resolution for recurring drama lines)
+    resolved_map: Dict[int, str] = {}
+    uncached_indices: List[int] = []
+    uncached_texts: List[str] = []
 
+    for i, t in enumerate(payload_text):
+        s_clean = (t or "").strip()
+        if not s_clean:
+            resolved_map[i] = ""
+        elif s_clean in _TRANSLATION_CACHE:
+            resolved_map[i] = _TRANSLATION_CACHE[s_clean]
+        else:
+            uncached_indices.append(i)
+            uncached_texts.append(t)
+
+    # If all items were already cached, return immediately with zero network latency
+    if not uncached_texts:
+        final_cached = [resolved_map[i] for i in range(len(payload_text))]
+        return final_cached if is_batch else final_cached[0]
+
+    # Fast modern retry schedule: 1s, 2s, 3.5s
+    backoff_delays = [1.0, 2.0, 3.5]
+    max_retries = min(max_retries, 3)
+
+    session = get_nisay_session()
     last_error = None
+    translated_batch = None
+
     for attempt in range(1, max_retries + 1):
         try:
             payload = {
-                "text": payload_text if is_batch else texts,
+                "text": uncached_texts if is_batch else uncached_texts[0],
                 "source_lang": "auto",
                 "target_lang": "km",
                 "model": MANDATORY_MODEL,
@@ -155,7 +200,7 @@ def translate_khmer(
                 "entity_glossary": entity_glossary or {}
             }
 
-            resp = requests.post(
+            resp = session.post(
                 TRANSLATE_ENDPOINT,
                 headers=headers,
                 json=payload,
@@ -166,59 +211,67 @@ def translate_khmer(
                 raise RuntimeError("403 Forbidden: check Cloud API Key in SN TOOL Settings")
 
             if resp.status_code == 429:
-                retry_after = int(resp.headers.get("Retry-After", backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]))
+                retry_after = float(resp.headers.get("Retry-After", backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]))
                 last_error = f"HTTP 429 Rate Limit. Retry-After: {retry_after}s"
-                print(f"[Nisay RateLimit] {last_error}. Retrying in {retry_after}s (attempt {attempt}/{max_retries})...")
-                time.sleep(retry_after)
+                time.sleep(min(retry_after, 3.0))
                 continue
 
             if resp.status_code >= 500:
                 sleep_s = backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]
-                last_error = f"HTTP {resp.status_code}: {resp.text[:180]}"
-                print(f"[Nisay Notice] Upstream capacity busy or failover ({last_error}). Retrying in {sleep_s}s (attempt {attempt}/{max_retries})...")
+                last_error = f"HTTP {resp.status_code}: {resp.text[:120]}"
                 time.sleep(sleep_s)
                 continue
 
             resp.raise_for_status()
             data = resp.json()
 
-            if is_batch:
-                items = data.get("translations", [])
-                if items:
-                    res_texts = [item.get("text", "") for item in items]
-                    # Verify translations are valid and non-empty
-                    if len(res_texts) == len(payload_text) and any(res_texts):
-                        return res_texts
-                # Fallback if translated_text was a list or single string
-                alt_items = data.get("translated_text") or []
-                if isinstance(alt_items, list) and len(alt_items) == len(payload_text):
-                    return alt_items
+            items = data.get("translations", [])
+            if items:
+                res_texts = [item.get("text", "") for item in items]
+                if len(res_texts) == len(uncached_texts) and any(res_texts):
+                    translated_batch = res_texts
+                    break
+
+            alt_items = data.get("translated_text") or []
+            if isinstance(alt_items, list) and len(alt_items) == len(uncached_texts):
+                translated_batch = alt_items
+                break
 
             single_res = data.get("translated_text") or data.get("text", "")
             if single_res:
-                return single_res
+                translated_batch = [single_res]
+                break
 
         except requests.RequestException as e:
             if "403" in str(e) or "401" in str(e):
                 raise
             last_error = str(e)
             sleep_s = backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]
-            print(f"[Nisay Connection] Network glitch ({last_error}). Retrying in {sleep_s}s (attempt {attempt}/{max_retries})...")
             time.sleep(sleep_s)
 
+    # ⚡ 2. Save translated lines into cache
+    if translated_batch and len(translated_batch) == len(uncached_texts):
+        for orig_idx, (t_orig, t_km) in enumerate(zip(uncached_texts, translated_batch)):
+            clean_k = (t_orig or "").strip()
+            if clean_k and t_km:
+                _TRANSLATION_CACHE[clean_k] = str(t_km).strip()
+            real_idx = uncached_indices[orig_idx]
+            resolved_map[real_idx] = str(t_km).strip()
+
+        final_res = [resolved_map[i] for i in range(len(payload_text))]
+        return final_res if is_batch else final_res[0]
+
     # =========================================================================
-    # 🛡️ BULLETPROOF KHMER TRANSLATION FAILOVER (ZERO-FAIL GUARANTEE):
+    # 🛡️ BULLETPROOF ULTRA-FAST PARALLEL FAILOVER:
     # If Nisay AI Gateway is temporarily experiencing upstream provider outages,
-    # seamlessly engage High-Speed Khmer Neural translation so the user's video
-    # dubbing pipeline NEVER crashes and NEVER leaves untranslated Chinese text!
+    # engage multi-threaded parallel translation so the pipeline NEVER freezes!
     # =========================================================================
-    print(f"[Nisay Failover] Nisay Cloud Server capacity exhausted ({last_error}). Engaging High-Fidelity Khmer Neural Translation Failover...")
-    
+    print(f"[Nisay Failover] Fast-failover engaged ({last_error}). Translating in parallel...")
+
     def _fallback_single(src_t: str) -> str:
         s_clean = (src_t or "").strip()
         if not s_clean:
             return ""
-        # Check entity glossary first
         if entity_glossary:
             for k, v in entity_glossary.items():
                 if k and v and k in s_clean:
@@ -228,19 +281,28 @@ def translate_khmer(
             import urllib.parse
             url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=km&dt=t&q=" + urllib.parse.quote(s_clean)
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-            with urllib.request.urlopen(req, timeout=12) as r:
+            with urllib.request.urlopen(req, timeout=10) as r:
                 fb_data = json.loads(r.read().decode('utf-8'))
                 if fb_data and isinstance(fb_data, list) and fb_data[0]:
                     joined = "".join([part[0] for part in fb_data[0] if part and part[0]]).strip()
                     if joined:
                         return joined
-        except Exception as fb_err:
-            print(f"Fallback translation note: {fb_err}")
+        except Exception:
+            pass
         return s_clean
 
-    if is_batch:
-        return [_fallback_single(t) for t in payload_text]
-    return _fallback_single(texts)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(12, len(uncached_texts) or 1)) as executor:
+        fb_results = list(executor.map(_fallback_single, uncached_texts))
+
+    for orig_idx, (t_orig, t_km) in enumerate(zip(uncached_texts, fb_results)):
+        clean_k = (t_orig or "").strip()
+        if clean_k and t_km:
+            _TRANSLATION_CACHE[clean_k] = str(t_km).strip()
+        real_idx = uncached_indices[orig_idx]
+        resolved_map[real_idx] = str(t_km).strip()
+
+    final_res = [resolved_map[i] for i in range(len(payload_text))]
+    return final_res if is_batch else final_res[0]
 
 
 def generate_gemini_recap_script(

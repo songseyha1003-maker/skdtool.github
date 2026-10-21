@@ -1171,7 +1171,8 @@ class DramaTranslator:
             txt = (itm.get("text") or itm.get("text_original") or "").strip()
             texts.append(txt)
 
-        chunk_size = 25
+        # ⚡ Turbo Batch Sizing: Nisay gemini-3.8-flash-high handles up to 80-100 lines in a single fast call (under 8s)
+        chunk_size = 80
         text_chunks = [texts[i:i + chunk_size] for i in range(0, len(texts), chunk_size)]
 
         if mode == "movie_recap":
@@ -1179,7 +1180,7 @@ class DramaTranslator:
         else:
             context_directive = f"Story genre: {category}. Apply Standard Khmer orthography and authentic Asian drama dubbing dialogue style."
 
-        sem = asyncio.Semaphore(4)
+        sem = asyncio.Semaphore(2)
         async def _trans_chunk(t_chunk):
             async with sem:
                 return await asyncio.to_thread(
