@@ -1,6 +1,6 @@
 ; Inno Setup 6 Script for SN TOOL - STUDIO PRO
 #define MyAppName "SN TOOL - STUDIO PRO"
-#define MyAppVersion "1.1.2"
+#define MyAppVersion "1.1.3"
 #define MyAppPublisher "SN STUDIO"
 #define MyAppExeName "SN_TOOL.exe"
 
@@ -12,9 +12,9 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\SN_TOOL
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputDir=D:\\Sal\\SN\\dist
+OutputDir=D:\\folder My Project\\SN\\dist
 OutputBaseFilename=SN_TOOL_Setup
-SetupIconFile=D:\\Sal\\SN\\icon.ico
+SetupIconFile=D:\\folder My Project\\SN\\icon.ico
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -32,7 +32,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "D:\\Sal\\SN\\dist\\SN_TOOL\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "license.key, *.bak, *.tmp, *.log"
+Source: "D:\\folder My Project\\SN\\dist\\SN_TOOL\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "license.key, *.bak, *.tmp, *.log"
 
 [Icons]
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"; WorkingDir: "{app}"; Tasks: desktopicon
