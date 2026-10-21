@@ -3326,7 +3326,7 @@ async function browseExportFolder(event) {
             currentCustomExportFolder = data.path;
             localStorage.setItem('sn_custom_export_dir', currentCustomExportFolder);
             updateExportLocationUI();
-            showToast(`បានជ្រើសរើសទីតាំងរក្សាទុក: ${data.path}`);
+            showToast(`Save location set: ${data.path}`);
         }
     } catch (e) {
         console.warn("Folder picker note:", e);
@@ -3341,7 +3341,7 @@ function resetExportFolderToDefault(event) {
     currentCustomExportFolder = "";
     localStorage.removeItem('sn_custom_export_dir');
     updateExportLocationUI();
-    showToast("បានកំណត់ទីតាំងឡើងវិញទៅ Folder ដើម (ស្វ័យប្រវត្តិ)");
+    showToast("Save location reset to default folder");
 }
 
 function openExportOptionsModal() {
