@@ -3308,6 +3308,44 @@ function updateExportLocationUI() {
     }
 }
 
+async function syncDramaExportFolder(dramaTitle) {
+    if (!dramaTitle || !dramaTitle.trim()) return;
+    const cleanTitle = dramaTitle.trim()
+        .replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '')
+        .replace(/^(?:Dubbed_)+/i, '')
+        .replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+.*$/i, '')
+        .replace(/[-_]+$/, '')
+        .trim();
+    if (!cleanTitle) return;
+
+    let baseDir = currentCustomExportFolder || localStorage.getItem('sn_custom_export_dir') || "";
+    if (!baseDir) {
+        baseDir = "D:/SN_Dramas";
+    }
+
+    baseDir = baseDir.replace(/\\/g, '/').replace(/\/+$/, '');
+    const currentLeaf = baseDir.split('/').pop() || "";
+    let targetFolder = baseDir;
+    if (currentLeaf.toLowerCase() !== cleanTitle.toLowerCase() && currentLeaf.toLowerCase() !== "dubbed_khmer") {
+        targetFolder = `${baseDir}/${cleanTitle}`;
+    }
+
+    currentCustomExportFolder = targetFolder;
+    localStorage.setItem('sn_custom_export_dir', currentCustomExportFolder);
+    updateExportLocationUI();
+
+    // Auto-create folder on disk immediately!
+    try {
+        await fetch('/api/system/ensure-folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: targetFolder })
+        });
+    } catch (e) {
+        console.warn("Auto create folder note:", e);
+    }
+}
+
 async function browseExportFolder(event) {
     if (event) {
         event.stopPropagation();
@@ -3323,10 +3361,47 @@ async function browseExportFolder(event) {
         });
         const data = await res.json();
         if (data && data.success && data.path) {
-            currentCustomExportFolder = data.path;
+            let chosen = data.path.replace(/\\/g, '/').replace(/\/+$/, '');
+
+            // Detect current drama title
+            let dramaTitle = stagedVideoFolderTitle || "";
+            if (!dramaTitle && stagedBatchFiles && stagedBatchFiles.length > 0) {
+                const fName = getMediaFileName(stagedBatchFiles[0]);
+                dramaTitle = fName.replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '')
+                    .replace(/^(?:Dubbed_)+/i, '')
+                    .replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+.*$/i, '')
+                    .replace(/[-_]+$/, '')
+                    .trim();
+            } else if (!dramaTitle && stagedVideoFile) {
+                const vName = getMediaFileName(stagedVideoFile);
+                dramaTitle = vName.replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '')
+                    .replace(/^(?:Dubbed_)+/i, '')
+                    .replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+.*$/i, '')
+                    .replace(/[-_]+$/, '')
+                    .trim();
+            }
+
+            const chosenLeaf = chosen.split('/').pop() || "";
+            if (dramaTitle && chosenLeaf.toLowerCase() !== dramaTitle.toLowerCase() && chosenLeaf.toLowerCase() !== "dubbed_khmer") {
+                chosen = `${chosen}/${dramaTitle}`;
+            }
+
+            currentCustomExportFolder = chosen;
             localStorage.setItem('sn_custom_export_dir', currentCustomExportFolder);
+
+            // Auto-create folder on disk immediately!
+            try {
+                await fetch('/api/system/ensure-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: chosen })
+                });
+            } catch (err) {
+                console.warn("Folder create note:", err);
+            }
+
             updateExportLocationUI();
-            showToast(`Save location set: ${data.path}`);
+            showToast(`📁 បានបង្កើត Folder ដោយស្វ័យប្រវត្តិ៖ ${chosen}`);
         }
     } catch (e) {
         console.warn("Folder picker note:", e);
@@ -3368,7 +3443,7 @@ function openExportOptionsModal() {
 
         const firstFile = stagedBatchFiles[0];
         const fName = getMediaFileName(firstFile);
-        const rawName = fName.replace(/\.[^/.]+$/, '');
+        const rawName = fName.replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '');
         baseTitle = rawName.replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+/i, '').replace(/[-_]+$/, '').trim() || "Drama_Series";
 
         const cleanSeriesTitle = baseTitle.replace(/^(?:Dubbed_)+/i, '');
@@ -3376,18 +3451,22 @@ function openExportOptionsModal() {
         if (descFullElem) descFullElem.textContent = `Pre-merge ${count} episodes & dub as 1 full movie (${mergedName})`;
         if (descBothElem) descBothElem.textContent = `Separate episodes + ${mergedName}`;
 
+        syncDramaExportFolder(cleanSeriesTitle);
+
     } else if (stagedVideoFile) {
         const vName = getMediaFileName(stagedVideoFile);
         if (epCountElem) epCountElem.textContent = "1 Video (Single Episode)";
         if (epChainElem) epChainElem.textContent = vName;
 
-        const rawName = vName.replace(/\.[^/.]+$/, '');
-        baseTitle = rawName || "Video";
-        const cleanBase = baseTitle.replace(/^(?:Dubbed_)+/i, '');
+        const rawName = vName.replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '');
+        baseTitle = rawName.replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+/i, '').replace(/[-_]+$/, '').trim() || rawName || "Video";
+        const cleanBase = rawName.replace(/^(?:Dubbed_)+/i, '');
         const singleOutName = `Dubbed_${cleanBase}.mp4`;
 
         if (descFullElem) descFullElem.textContent = `Saved as: ${singleOutName}`;
         if (descBothElem) descBothElem.textContent = `Saved as: ${singleOutName}`;
+
+        syncDramaExportFolder(baseTitle);
 
         // Check if single video has sibling episodes in parent folder
         const vPath = getMediaFilePath(stagedVideoFile);
@@ -3407,6 +3486,8 @@ function openExportOptionsModal() {
                     if (epCountElem) epCountElem.textContent = `1 Video • Detected ${sibCount} episodes in "${sibData.folder_name}"`;
                     if (descFullElem) descFullElem.textContent = `Pre-merge all ${sibCount} episodes in folder into 1 full movie (${fullOutName})`;
                     if (descBothElem) descBothElem.textContent = `Dub ${sibCount} separate episodes + ${fullOutName}`;
+
+                    syncDramaExportFolder(sibData.folder_name);
                 }
             }).catch(e => console.warn("Sibling probe note:", e));
         }
@@ -3456,7 +3537,7 @@ async function confirmAndExecuteExport() {
         }
 
         const fileName = getMediaFileName(fileToDub);
-        const rawName = fileName.replace(/\.[^/.]+$/, '');
+        const rawName = fileName.replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '');
         const cleanBase = rawName.replace(/^(?:Dubbed_)+/i, '');
         const customTitle = (chosenMode === 'full') ? `Dubbed_${cleanBase}_Full_Movie` : `Dubbed_${cleanBase}`;
         startAutoDubbingPipeline(fileToDub, customTitle);

@@ -529,10 +529,11 @@ class ProjectManager:
             clean_title = project.get("title") or Path(video_in).stem
             dest_dirs = resolve_drama_export_directories(video_in, clean_title, custom_export_dir=custom_export_dir)
             
-            # Format clean output stem avoiding 'Dubbed_Dubbed_' or raw prefixes
+            # Format clean output stem avoiding 'Dubbed_Dubbed_' or repeated extensions (.mp4.mp4)
             title_stem = project.get("title") or Path(video_in).stem
             clean_stem = re.sub(r'^(?:Dubbed_)+', '', str(title_stem), flags=re.IGNORECASE)
             clean_stem = re.sub(r'^Raw_Full_Movie_', '', clean_stem, flags=re.IGNORECASE)
+            clean_stem = re.sub(r'(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$', '', clean_stem, flags=re.IGNORECASE)
             clean_stem = re.sub(r'_\d{9,12}$', '', clean_stem)
             out_stem = f"Dubbed_{clean_stem}"
             
@@ -542,6 +543,19 @@ class ProjectManager:
                 if Path(output_video_path).resolve() != dest_file.resolve():
                     shutil.copy2(str(output_video_path), str(dest_file))
                 saved_paths.append(str(dest_file))
+
+                # Also automatically generate and export matching .srt subtitle file into folder!
+                try:
+                    dialogues = project.get("dialogues", [])
+                    if dialogues:
+                        from translator import format_srt_content
+                        srt_content = format_srt_content(dialogues)
+                        srt_file = d / f"{out_stem}.srt"
+                        with open(srt_file, "w", encoding="utf-8") as sf:
+                            sf.write(srt_content)
+                except Exception as se:
+                    print(f"Subtitle export note: {se}")
+
             if saved_paths:
                 project["final_exported_video_path"] = saved_paths[0]
                 project["final_exported_dir"] = str(Path(saved_paths[0]).parent)

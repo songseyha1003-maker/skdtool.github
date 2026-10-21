@@ -41,11 +41,32 @@ def resolve_drama_export_directories(in_path: str, drama_title: str, custom_expo
     Resolves the single dedicated unified folder for this drama series.
     Prioritizes user-selected custom_export_dir if provided, otherwise places
     inside authentic drama folder 'Dubbed_Khmer' or SN_Dramas root.
+    Guarantees a dedicated drama folder is ALWAYS created on disk, even for a single episode.
     """
+    # Extract clean series name (strip episode suffixes like EP_01, Episode 12, etc.)
+    raw_title = str(drama_title or "").strip()
+    raw_title = re.sub(r'(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$', '', raw_title, flags=re.IGNORECASE)
+    clean_series = re.sub(r'(?i)^(Dubbed_)?(EP|Episode|Part|第)?[\s_\-]*\d+.*$', '', raw_title).strip('_ ')
+    if not clean_series or len(clean_series) < 2:
+        try:
+            p_in = Path(in_path).resolve()
+            if p_in.parent.name.lower() not in ("batch_temp", "uploads", "cache", "temp", "exports", "sn_dramas", "downloads"):
+                clean_series = p_in.parent.name
+        except Exception:
+            pass
+    if not clean_series:
+        clean_series = "Drama_Series"
+
+    safe_title = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', str(clean_series)).strip('_ ') or "Drama_Series"
+
     # 0. User-selected custom export folder takes absolute #1 priority!
     if custom_export_dir and str(custom_export_dir).strip():
         try:
             p_cust = Path(str(custom_export_dir).strip()).resolve()
+            # If p_cust is a parent directory (doesn't already end with safe_title or 'dubbed_khmer'),
+            # automatically create the dedicated drama folder inside it!
+            if safe_title and p_cust.name.lower() not in (safe_title.lower(), "dubbed_khmer"):
+                p_cust = p_cust / safe_title
             p_cust.mkdir(parents=True, exist_ok=True)
             return [p_cust]
         except Exception as ce:
@@ -64,22 +85,7 @@ def resolve_drama_export_directories(in_path: str, drama_title: str, custom_expo
     except Exception:
         pass
 
-    # 2. Extract clean series name (strip episode suffixes like EP_01, Episode 12, etc.)
-    raw_title = str(drama_title or "").strip()
-    clean_series = re.sub(r'(?i)^(Dubbed_)?(EP|Episode|Part|第)?[\s_\-]*\d+.*$', '', raw_title).strip('_ ')
-    if not clean_series or len(clean_series) < 2:
-        try:
-            p_in = Path(in_path).resolve()
-            if p_in.parent.name.lower() not in ("batch_temp", "uploads", "cache", "temp"):
-                clean_series = p_in.parent.name
-        except Exception:
-            pass
-    if not clean_series:
-        clean_series = "Drama_Series"
-
-    safe_title = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', str(clean_series)).strip('_ ') or "Drama_Series"
-
-    # 3. Dedicated unified series folder in SN_Dramas (D:/SN_Dramas/<Series_Title>/Dubbed_Khmer)
+    # 2. Dedicated unified series folder in SN_Dramas (D:/SN_Dramas/<Series_Title>/Dubbed_Khmer)
     for root_str in ("D:/SN_Dramas", "C:/SN_Dramas"):
         root_p = Path(root_str)
         if root_p.exists():

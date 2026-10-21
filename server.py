@@ -2247,6 +2247,21 @@ def system_select_folder_endpoint():
     return jsonify({"success": False, "cancelled": True})
 
 
+@app.route("/api/system/ensure-folder", methods=["POST"])
+def system_ensure_folder_endpoint():
+    """Ensure directory exists on disk and return resolved path."""
+    data = request.get_json(silent=True) or {}
+    raw_path = data.get("path", "").strip()
+    if not raw_path:
+        return jsonify({"success": False, "error": "No path provided"}), 400
+    try:
+        p = Path(raw_path).resolve()
+        p.mkdir(parents=True, exist_ok=True)
+        return jsonify({"success": True, "path": str(p).replace("\\", "/")})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/system/select-media-files", methods=["POST", "GET"])
 def system_select_media_files_endpoint():
     """Pop native Windows file picker dialog allowing multi-select of video files."""
@@ -3195,8 +3210,12 @@ def merge_episodes_endpoint():
 
     output_filename = f"Dubbed_{clean_title}_Full_Movie.mp4"
     custom_export_dir = data.get("custom_export_dir")
-    if custom_export_dir and Path(custom_export_dir).exists():
-        out_file = Path(custom_export_dir) / output_filename
+    if custom_export_dir:
+        p_c = Path(custom_export_dir).resolve()
+        if clean_title and p_c.name.lower() not in (clean_title.lower(), "dubbed_khmer"):
+            p_c = p_c / clean_title
+        p_c.mkdir(parents=True, exist_ok=True)
+        out_file = p_c / output_filename
     else:
         out_file = Path("data/exports") / output_filename
 
