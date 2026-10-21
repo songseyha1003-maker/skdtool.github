@@ -11251,7 +11251,15 @@ async function checkForAppUpdates(manual = false) {
 
         if (data.has_update) {
             if (badgeText) badgeText.textContent = "NEW RELEASE AVAILABLE";
-            if (subtitle) subtitle.textContent = `A new version (v${latVer}) is available with Drama Series Batch Dubbing fixes, Khmer Neural voices, and Nisay AI Cloud.`;
+            if (subtitle) {
+                if (data.subtitle && data.subtitle.trim().length > 0) {
+                    subtitle.textContent = data.subtitle;
+                } else if (data.description && data.description.trim().length > 0) {
+                    subtitle.textContent = data.description;
+                } else {
+                    subtitle.textContent = `A new version (v${latVer}) is available with the latest neural engine upgrades and performance improvements.`;
+                }
+            }
             if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> <span id="btn-do-update-text">Update Now (v${latVer})</span>`;
             openModal('modal-update');
             if (manual) showToast(`New version available: v${latVer}`);
