@@ -760,16 +760,16 @@ class ProjectManager:
 
         last_update_time = [0.0]
         def on_tts_progress(completed: int, total: int, item: Dict[str, Any]):
-            # Progress smoothly spans 76% to 87%
-            pct = 76 + int((completed / max(1, total)) * 11)
+            # Progress smoothly spans 72% to 88%
+            pct = 72 + int((completed / max(1, total)) * 16)
             now = time.time()
-            if completed == total or completed % 3 == 0 or (now - last_update_time[0]) >= 1.0:
+            if completed == total or completed % 2 == 0 or (now - last_update_time[0]) >= 0.5:
                 last_update_time[0] = now
                 pct_str = f"{int((completed / max(1, total)) * 100)}%"
-                msg = f"5/7 Synthesizing neural voice ({completed}/{total} lines - {pct_str})..."
+                msg = f"5/7 Synthesizing voice ({completed}/{total} lines - {pct_str})..."
                 update_prog(pct, msg, msg)
 
-        update_prog(76, f"5/7 Synthesizing neural voice ({voice_label}) 0/{total_d} lines...", f"Synthesizing neural voice ({voice_label})...")
+        update_prog(72, f"5/7 Synthesizing neural voice ({voice_label}) 0/{total_d} lines...", f"Synthesizing neural voice ({voice_label})...")
         synthesized = await batch_synthesize(
             translated,
             output_dir=str(voice_out_dir),

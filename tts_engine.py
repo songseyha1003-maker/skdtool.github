@@ -892,7 +892,7 @@ async def batch_synthesize(
     """
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
-    semaphore = asyncio.Semaphore(2)
+    semaphore = asyncio.Semaphore(6)
 
     total_items = len(dialogue_items)
     completed_count = 0
