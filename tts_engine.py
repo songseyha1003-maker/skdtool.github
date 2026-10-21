@@ -827,15 +827,16 @@ def trim_and_fit_voice_audio(audio_path: str, max_duration_sec: Optional[float] 
         else:
             trimmed = seg
 
-        # Dynamic Lip-Sync & Time Compression:
-        # If speech is longer than available slot before next dialogue line:
+        # Dynamic Lip-Sync & Natural Time Alignment (Zero Dropped Words Guarantee):
+        # If speech is longer than the actor's mouth time window, adaptively time-compress
+        # up to 1.35x without pitch distortion, ensuring ALL words and syllables are 100% spoken!
         if max_duration_sec is not None and max_duration_sec > 0.35:
             target_ms = int(max_duration_sec * 1000)
             cur_ms = len(trimmed)
             if cur_ms > target_ms:
-                # Speed ratio capped at 1.22x for natural, relaxed human speech (neither rushed nor dragging)
-                speed = min(1.22, cur_ms / max(300, target_ms - 50))
-                if speed >= 1.04:
+                # Dynamic speed ratio up to 1.35x for crystal-clear, natural human speech
+                speed = min(1.35, max(1.0, cur_ms / max(300, target_ms)))
+                if speed >= 1.05:
                     import io
                     wav_io = io.BytesIO()
                     trimmed.export(wav_io, format="wav")
@@ -863,9 +864,10 @@ def trim_and_fit_voice_audio(audio_path: str, max_duration_sec: Optional[float] 
                         if len(stretched) > 0 and stretched.dBFS > -50.0:
                             trimmed = stretched
 
-            # Guarantee speech fits within available slot before the next speaker
-            if len(trimmed) > target_ms + 250:
-                trimmed = trimmed[:target_ms + 200].fade_out(45)
+            # Strict Zero-Cutoff Rule: NEVER hard-slice or truncate words!
+            # Every single Khmer word and phrase must be completely audible.
+            if len(trimmed) > 80:
+                trimmed = trimmed.fade_out(25)
 
         save_audio_safely(trimmed, str(audio_path))
         # Self-healing verification: If trimmed audio became inaudible, restore full original seg!
