@@ -1347,7 +1347,7 @@ def downloader_drama_detail_endpoint(drama_id):
             "stats": drama_downloader.stats
         })
 
-    episodes = get_drama_episodes(drama)
+    episodes = get_drama_episodes(drama, resolve_streams=False)
     drama_downloader.current_drama = drama
     drama_downloader.episodes = episodes
     drama_downloader.stats["total"] = len(episodes)

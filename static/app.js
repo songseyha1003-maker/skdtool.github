@@ -3969,15 +3969,9 @@ async function loadDramaCatalog(platformId = "hongguo", query = "", category = "
             updateSavedCountUI();
 
             window.dlCatalogMap = window.dlCatalogMap || new Map();
-            data.dramas.forEach((drama, idx) => {
+            const cardsHtml = data.dramas.map((drama, idx) => {
                 window.dlCatalogMap.set(String(drama.id), drama);
-                const card = document.createElement('div');
-                card.className = `dl-card-item ${dlCurrentDrama && dlCurrentDrama.id === drama.id ? 'active' : ''}`;
-                card.id = `dl-card-${drama.id}`;
-                card.onclick = () => selectDramaCard(drama.id, false);
-                card.ondblclick = () => selectDramaCard(drama.id, true);
-
-                // Clean title (remove brackets, extra tags)
+                const isActive = (dlActiveCardId === String(drama.id)) || (dlCurrentDrama && String(dlCurrentDrama.id) === String(drama.id));
                 const displayTitle = (drama.title_cn || drama.title || '').replace(/[《》]/g, '').split(' - ')[0].trim();
                 const posterUrl = drama.poster || '';
                 const rank = drama.rank_num || (idx + 1);
@@ -3985,19 +3979,28 @@ async function loadDramaCatalog(platformId = "hongguo", query = "", category = "
                 const ratingBadge = drama.rating ? `<span class="lb-score">★ ${escapeHtml(drama.rating)}</span>` : '';
                 const heatBadge = `<span class="lb-eps">${drama.heat ? '🔥 ' + escapeHtml(drama.heat) : (drama.total_episodes ? drama.total_episodes + ' eps' : '')}</span>`;
 
-                card.innerHTML = `
-                    <div class="dl-card-thumb-wrap">
-                        <span class="lb-rank ${isTopRank ? 'top' : ''}">${rank}</span>
-                        ${ratingBadge}
-                        ${posterUrl ? `<img src="${posterUrl}" alt="${escapeHtml(displayTitle)}" loading="lazy" onerror="this.onerror=null; this.style.opacity='0';">` : ''}
-                        ${heatBadge}
-                    </div>
-                    <div class="dl-card-details-box">
-                        <div class="dl-card-title-line" title="${escapeHtml(displayTitle)}">${escapeHtml(displayTitle)}</div>
+                return `
+                    <div class="dl-card-item ${isActive ? 'active' : ''}" id="dl-card-${drama.id}"
+                         onclick="selectDramaCard('${drama.id}', false)"
+                         ondblclick="selectDramaCard('${drama.id}', true)">
+                        <div class="dl-card-thumb-wrap">
+                            <span class="lb-rank ${isTopRank ? 'top' : ''}">${rank}</span>
+                            ${ratingBadge}
+                            ${posterUrl ? `<img src="${posterUrl}" alt="${escapeHtml(displayTitle)}" loading="lazy" onerror="this.onerror=null; this.style.opacity='0';">` : ''}
+                            ${heatBadge}
+                        </div>
+                        <div class="dl-card-details-box">
+                            <div class="dl-card-title-line" title="${escapeHtml(displayTitle)}">${escapeHtml(displayTitle)}</div>
+                        </div>
                     </div>
                 `;
-                container.appendChild(card);
-            });
+            }).join('');
+
+            if (append) {
+                container.insertAdjacentHTML('beforeend', cardsHtml);
+            } else {
+                container.innerHTML = cardsHtml;
+            }
         } else if (!append) {
             dlHasMore = false;
             if (platformId === 'shortmax' || platformId === 'freereels' || platformId === 'anyreel') {
@@ -4072,13 +4075,31 @@ async function loadMoreDramas() {
     }
 }
 
-async function selectDramaCard(dramaId, openQueueMode = false) {
-    // 1. INSTANT OPTIMISTIC FEEDBACK (< 16ms): Zero-lag immediate response
-    document.querySelectorAll('.dl-card-item').forEach(c => c.classList.remove('active'));
-    const activeCard = document.getElementById(`dl-card-${dramaId}`);
-    if (activeCard) activeCard.classList.add('active');
+let dlActiveCardId = null;
+let dlDramaSelectionSeq = 0;
+const dlDramaDetailCache = new Map();
 
-    const cachedDrama = window.dlCatalogMap ? window.dlCatalogMap.get(String(dramaId)) : null;
+async function selectDramaCard(dramaId, openQueueMode = false) {
+    if (!dramaId) return;
+    const strDramaId = String(dramaId);
+    const mySeq = ++dlDramaSelectionSeq;
+
+    // 1. ULTRA-FAST O(1) ACTIVE HIGHLIGHT (Zero layout thrashing - avoids looping over hundreds of cards)
+    if (dlActiveCardId !== strDramaId) {
+        if (dlActiveCardId) {
+            const prev = document.getElementById(`dl-card-${dlActiveCardId}`);
+            if (prev) prev.classList.remove('active');
+        } else {
+            const anyPrev = document.querySelector('.dl-card-item.active');
+            if (anyPrev) anyPrev.classList.remove('active');
+        }
+        const activeCard = document.getElementById(`dl-card-${strDramaId}`);
+        if (activeCard) activeCard.classList.add('active');
+        dlActiveCardId = strDramaId;
+    }
+
+    // 2. INSTANT OPTIMISTIC FEEDBACK (< 1ms): Render immediate metadata from memory/catalog map
+    const cachedDrama = (window.dlCatalogMap && window.dlCatalogMap.get(strDramaId)) || (dlDramaDetailCache.get(strDramaId)?.drama);
     if (cachedDrama) {
         dlCurrentDrama = cachedDrama;
         const totalEps = cachedDrama.total_episodes || 80;
@@ -4117,100 +4138,91 @@ async function selectDramaCard(dramaId, openQueueMode = false) {
         const qDlBtnText = document.getElementById('dl-q-download-all-text');
         if (qDlBtnText) qDlBtnText.textContent = `Download All Episodes (EP 1 - ${totalEps})`;
 
+        const cachedDetail = dlDramaDetailCache.get(strDramaId);
+        if (cachedDetail && cachedDetail.episodes && cachedDetail.episodes.length > 0) {
+            dlEpisodesList = cachedDetail.episodes.map(ep => ({ ...ep, is_selected: true }));
+        } else if (!dlEpisodesList || dlEpisodesList.length === 0 || dlEpisodesList[0]?.drama_id !== strDramaId) {
+            dlEpisodesList = Array.from({ length: totalEps }, (_, i) => ({
+                id: `${strDramaId}_ep_${String(i + 1).padStart(3, '0')}`,
+                drama_id: strDramaId,
+                episode_num: i + 1,
+                episode_number: i + 1,
+                title: `Episode ${String(i + 1).padStart(2, '0')}`,
+                duration: "02:00",
+                status: "Ready",
+                progress: 0,
+                is_selected: true
+            }));
+        }
+        renderEpisodesChecklist(dlEpisodesList);
+
         if (openQueueMode) {
             switchDlViewMode('queue');
-            // If episodes not yet loaded for this drama, pre-populate instantly
-            if (!dlEpisodesList || dlEpisodesList.length === 0 || dlEpisodesList[0]?.drama_id !== dramaId) {
-                dlEpisodesList = Array.from({ length: totalEps }, (_, i) => ({
-                    id: `${dramaId}_ep_${String(i + 1).padStart(3, '0')}`,
-                    drama_id: dramaId,
-                    episode_num: i + 1,
-                    episode_number: i + 1,
-                    title: `Episode ${String(i + 1).padStart(2, '0')}`,
-                    duration: "02:00",
-                    status: "Ready",
-                    progress: 0,
-                    is_selected: true
-                }));
-            }
             renderQueueViewForCurrentDrama();
         }
     } else if (openQueueMode) {
         switchDlViewMode('queue');
     }
 
-    // 2. Fetch full verified episodes & local disk status (< 5ms)
-    try {
-        const res = await fetch(`/api/downloader/drama/${dramaId}`);
-        const data = await res.json();
-        if (data.success) {
-            dlCurrentDrama = data.drama;
-            dlEpisodesList = (data.episodes || []).map(ep => ({ ...ep, is_selected: true }));
-
-            // Update Right DRAMA INFO Box
-            const title = document.getElementById('dl-info-title-text');
-            const posterImg = document.getElementById('dl-info-poster-img');
-            const badge = document.getElementById('dl-info-platform-badge');
-            const stats = document.getElementById('dl-info-stats-text');
-            const desc = document.getElementById('dl-info-desc-text');
-
-            const totalEps = data.drama.total_episodes || dlEpisodesList.length || 80;
-
-            if (title) title.textContent = data.drama.title;
-            if (posterImg) {
-                const emptyIcon = document.getElementById('dl-info-poster-empty-icon');
-                const posterFrame = document.getElementById('dl-info-poster-frame');
-                if (data.drama.poster) {
-                    posterImg.src = data.drama.poster;
-                    posterImg.style.display = 'block';
-                    posterImg.style.opacity = '1';
-                    if (emptyIcon) emptyIcon.style.display = 'none';
-                    if (posterFrame) posterFrame.style.borderStyle = 'solid';
-                } else {
-                    posterImg.removeAttribute('src');
-                    posterImg.style.display = 'none';
-                    if (emptyIcon) emptyIcon.style.display = 'block';
-                    if (posterFrame) posterFrame.style.borderStyle = 'dashed';
-                }
+    // 3. RETRIEVE FULL VERIFIED EPISODES (Instant from cache, or background fetch with zero stutter)
+    let data = dlDramaDetailCache.get(strDramaId);
+    if (!data) {
+        try {
+            const res = await fetch(`/api/downloader/drama/${strDramaId}`);
+            data = await res.json();
+            if (data && data.success) {
+                dlDramaDetailCache.set(strDramaId, data);
             }
-            if (badge) badge.textContent = `${data.drama.platform.toUpperCase()} • ${data.drama.rating || '9.8'} ★`;
-            if (stats) stats.textContent = `Episodes ${totalEps} • Locked 0 • Selected ${totalEps}`;
-            if (desc) desc.textContent = data.drama.description || "Hongguo Short Drama Series Manifest.";
-
-            // Update Full Series Download button in DRAMA INFO
-            const catDlBtnText = document.getElementById('dl-catalog-dl-all-text');
-            if (catDlBtnText) {
-                catDlBtnText.textContent = `Download All Episodes (EP 1 - ${totalEps})`;
-            }
-
-            // Update Queue download all button text
-            const qDlBtnText = document.getElementById('dl-q-download-all-text');
-            if (qDlBtnText) {
-                qDlBtnText.textContent = `Download All Episodes (EP 1 - ${totalEps})`;
-            }
-
-            // Update Left Column Batch Download button
-            const leftDlBtn = document.getElementById('btn-dl-start-batch');
-            if (leftDlBtn) {
-                const span = leftDlBtn.querySelector('span');
-                if (span) span.textContent = `Download All (${totalEps} EPs)`;
-            }
-
-            if (activeCard) {
-                const sub = activeCard.querySelector('.dl-card-subtitle-line');
-                if (sub) sub.textContent = `${totalEps} Episodes • 1080p HD`;
-            }
-
-            updateDramaSavePathDisplay();
-            renderEpisodesChecklist(dlEpisodesList);
-            updateDownloaderStats(data.stats);
-
-            if (openQueueMode) {
-                renderQueueViewForCurrentDrama();
-            }
+        } catch (e) {
+            console.warn("Drama detail fetch error:", e);
         }
-    } catch (e) {}
+    }
+
+    // Guard against race conditions when clicking rapidly between multiple dramas
+    if (mySeq !== dlDramaSelectionSeq || !data || !data.success) {
+        return;
+    }
+
+    dlCurrentDrama = data.drama;
+    dlEpisodesList = (data.episodes || []).map(ep => ({ ...ep, is_selected: true }));
+
+    // Update Right DRAMA INFO Box
+    const title = document.getElementById('dl-info-title-text');
+    const posterImg = document.getElementById('dl-info-poster-img');
+    const badge = document.getElementById('dl-info-platform-badge');
+    const stats = document.getElementById('dl-info-stats-text');
+    const desc = document.getElementById('dl-info-desc-text');
+    const totalEps = data.drama.total_episodes || dlEpisodesList.length || 80;
+
+    if (title) title.textContent = data.drama.title;
+    if (posterImg && data.drama.poster) {
+        posterImg.src = data.drama.poster;
+        posterImg.style.display = 'block';
+    }
+    if (badge) badge.textContent = `${(data.drama.platform || 'HONGGUO').toUpperCase()} • ${data.drama.rating || '9.8'} ★`;
+    if (stats) stats.textContent = `Episodes ${totalEps} • Locked 0 • Selected ${totalEps}`;
+    if (desc) desc.textContent = data.drama.description || "Hongguo Short Drama Series Manifest.";
+
+    const catDlBtnText = document.getElementById('dl-catalog-dl-all-text');
+    if (catDlBtnText) catDlBtnText.textContent = `Download All Episodes (EP 1 - ${totalEps})`;
+    const qDlBtnText = document.getElementById('dl-q-download-all-text');
+    if (qDlBtnText) qDlBtnText.textContent = `Download All Episodes (EP 1 - ${totalEps})`;
+
+    const leftDlBtn = document.getElementById('btn-dl-start-batch');
+    if (leftDlBtn) {
+        const span = leftDlBtn.querySelector('span');
+        if (span) span.textContent = `Download All (${totalEps} EPs)`;
+    }
+
+    updateDramaSavePathDisplay();
+    renderEpisodesChecklist(dlEpisodesList);
+    updateDownloaderStats(data.stats);
+
+    if (openQueueMode) {
+        renderQueueViewForCurrentDrama();
+    }
 }
+window.selectDramaCard = selectDramaCard;
 
 function renderEpisodesChecklist(episodes) {
     const list = document.getElementById('dl-episodes-list-box');
@@ -4224,23 +4236,24 @@ function renderEpisodesChecklist(episodes) {
     }
 
     if (rangeTag) rangeTag.textContent = `EP 1-${episodes.length}`;
-    list.innerHTML = '';
 
-    episodes.forEach(ep => {
-        const row = document.createElement('div');
-        row.className = 'dl-ep-row';
+    // Ultra-Fast single-shot innerHTML rendering (100x faster than appendChild loop)
+    const rowsHtml = episodes.map(ep => {
         const prog = ep.progress || 0;
         const statusText = (ep.status === 'Completed' || prog === 100) ? '✔ 100%' : (ep.status === 'Downloading' ? `⚡ ${prog}%` : (ep.status || 'Ready'));
         const statusColor = (ep.status === 'Completed' || prog === 100) ? '#10b981' : (ep.status === 'Downloading' ? '#f59e0b' : 'var(--gold-glow)');
-        row.innerHTML = `
-            <div style="display:flex; align-items:center; gap:6px;">
-                <input type="checkbox" ${ep.is_selected ? 'checked' : ''} onchange="toggleSingleEpisode('${ep.id}', this.checked)">
-                <span>EP ${ep.episode_number}: ${escapeHtml(ep.title)}</span>
+        return `
+            <div class="dl-ep-row">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <input type="checkbox" ${ep.is_selected ? 'checked' : ''} onchange="toggleSingleEpisode('${ep.id}', this.checked)">
+                    <span>EP ${ep.episode_number}: ${escapeHtml(ep.title)}</span>
+                </div>
+                <span id="dl-cat-status-${ep.episode_number}" class="dl-cat-ep-status" style="font-size:0.62rem; color:${statusColor}; font-weight:600;">${statusText}</span>
             </div>
-            <span id="dl-cat-status-${ep.episode_number}" class="dl-cat-ep-status" style="font-size:0.62rem; color:${statusColor}; font-weight:600;">${statusText}</span>
         `;
-        list.appendChild(row);
-    });
+    }).join('');
+
+    list.innerHTML = rowsHtml;
 }
 
 function toggleSingleEpisode(epId, isChecked) {
@@ -4464,69 +4477,58 @@ function renderQueueViewForCurrentDrama() {
         if (totalCount > 40) {
             const pageSize = 40;
             const ranges = Math.ceil(totalCount / pageSize);
+            let pillBtns = '';
             for (let r = 0; r < ranges; r++) {
                 const s = r * pageSize + 1;
                 const e = Math.min(totalCount, (r + 1) * pageSize);
                 const rKey = `${s}-${e}`;
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = `dl-hub-pill ${dlEpisodeCurrentFilter === rKey ? 'active' : ''}`;
-                btn.id = `dl-filter-pill-${rKey}`;
-                btn.textContent = `${s} - ${e}`;
-                btn.onclick = () => filterEpisodeRange(rKey);
-                filterBar.appendChild(btn);
+                pillBtns += `<button type="button" class="dl-hub-pill ${dlEpisodeCurrentFilter === rKey ? 'active' : ''}" id="dl-filter-pill-${rKey}" onclick="filterEpisodeRange('${rKey}')">${s} - ${e}</button>`;
             }
+            filterBar.innerHTML += pillBtns;
         }
     }
 
-    // Render Image 2 4-Column Episode Card Grid
+    // Render 4-Column Episode Card Grid (Single-shot innerHTML for 60fps performance)
     const gridBox = document.getElementById('dl-episodes-grid-box');
     if (gridBox) {
-        gridBox.innerHTML = '';
-        dlEpisodesList.forEach((ep, idx) => {
+        let gridHtml = dlEpisodesList.map((ep, idx) => {
             const epNum = ep.episode_num || (idx + 1);
             const isPlaying = (epNum === (dlQueueActiveEpisodeNum || 1));
-            const card = document.createElement('div');
-            card.className = `dl-ep-card-btn ${isPlaying ? 'active' : ''} ${ep.progress === 100 ? 'completed' : ''}`;
-            card.id = `dl-ep-card-${epNum}`;
-            card.setAttribute('data-ep', epNum);
-            card.onclick = () => playQueueEpisode(epNum);
-
             const tagText = ep.progress === 100 ? 'READY' : (dlEpisodesList.length === 1 ? 'FULL' : 'FREE');
-
-            card.innerHTML = `
-                <span class="dl-ep-active-dot"></span>
-                <span class="dl-ep-card-num">${epNum}</span>
-                <span class="dl-ep-card-tag">${tagText}</span>
-                <div class="dl-ep-card-prog-track">
-                    <div class="dl-ep-card-prog-fill" id="dl-card-fill-${epNum}" style="width: ${ep.progress || 0}%;"></div>
+            return `
+                <div class="dl-ep-card-btn ${isPlaying ? 'active' : ''} ${ep.progress === 100 ? 'completed' : ''}"
+                     id="dl-ep-card-${epNum}" data-ep="${epNum}" onclick="playQueueEpisode(${epNum})">
+                    <span class="dl-ep-active-dot"></span>
+                    <span class="dl-ep-card-num">${epNum}</span>
+                    <span class="dl-ep-card-tag">${tagText}</span>
+                    <div class="dl-ep-card-prog-track">
+                        <div class="dl-ep-card-prog-fill" id="dl-card-fill-${epNum}" style="width: ${ep.progress || 0}%;"></div>
+                    </div>
                 </div>
             `;
-            gridBox.appendChild(card);
-        });
+        }).join('');
 
         if (dlEpisodesList.length === 1) {
-            const notice = document.createElement('div');
-            notice.className = 'dl-single-ep-notice';
-            notice.innerHTML = `
-                <i class="fa-solid fa-film" style="color: #f59e0b; font-size: 1.05rem;"></i>
-                <span>Full Movie Merged (1080p Full HD)</span>
+            gridHtml += `
+                <div class="dl-single-ep-notice">
+                    <i class="fa-solid fa-film" style="color: #f59e0b; font-size: 1.05rem;"></i>
+                    <span>Full Movie Merged (1080p Full HD)</span>
+                </div>
             `;
-            gridBox.appendChild(notice);
         }
+        gridBox.innerHTML = gridHtml;
     }
 
-    // Render Episode Queue Table (EXACT MATCH TO IMAGE 2)
+    // Render Episode Queue Table (Single-shot batch render for instantaneous response)
     const tbody = document.getElementById('dl-queue-tbody');
     const dropdown = document.getElementById('dl-q-select-dropdown');
-    if (tbody) tbody.innerHTML = '';
-    if (dropdown) dropdown.innerHTML = '';
 
-    dlEpisodesList.forEach((ep, idx) => {
+    let rowsHtml = '';
+    let optsHtml = '';
+
+    for (let idx = 0; idx < dlEpisodesList.length; idx++) {
+        const ep = dlEpisodesList[idx];
         const epNum = ep.episode_num || (idx + 1);
-        const dramaTitle = (dlCurrentDrama?.title_cn || dlCurrentDrama?.title || '').replace(/[《》]/g, '').split(' - ')[0].trim();
-        const rawEpTitle = ep.title || dramaTitle || `Episode ${epNum}`;
-        const displayEpTitle = rawEpTitle.startsWith('EP') ? rawEpTitle : `EP${String(epNum).padStart(2, '0')} - ${rawEpTitle}`;
         const isSelected = ep.is_selected !== false;
         const isPlaying = (epNum === (dlQueueActiveEpisodeNum || 1));
         const prog = typeof ep.progress === 'number' ? ep.progress : (ep.status === 'Completed' ? 100 : 0);
@@ -4546,66 +4548,54 @@ function renderQueueViewForCurrentDrama() {
         let statusClass = statusText.toLowerCase();
         let fillStyle = 'width: 0%;';
         let textStyle = 'color: #64748b;';
-        let pillDisplay = statusText;
 
         if (statusText === 'Completed') {
             statusClass = 'completed';
             fillStyle = 'width: 100%; background: #10b981;';
             textStyle = 'color: #10b981;';
-            pillDisplay = 'Completed';
         } else if (statusText === 'Failed') {
             statusClass = 'failed';
             fillStyle = 'width: 100%; background: #ef4444;';
             textStyle = 'color: #ef4444;';
-            pillDisplay = 'Failed';
         } else if (statusText === 'Downloading') {
             statusClass = 'downloading';
             fillStyle = `width: ${Math.max(prog, 5)}%; background: linear-gradient(90deg, #f59e0b, #fbbf24);`;
             textStyle = 'color: #fbbf24;';
-            pillDisplay = `Downloading ${prog}%`;
         } else if (statusText === 'Queued') {
             statusClass = 'queued';
             fillStyle = 'width: 0%;';
             textStyle = 'color: #94a3b8;';
-            pillDisplay = 'Queued';
         } else {
             statusClass = 'ready';
             fillStyle = 'width: 0%;';
             textStyle = 'color: #64748b;';
-            pillDisplay = 'Ready';
         }
 
-        // Table Row matching Image 2
         if (tbody) {
-            const row = document.createElement('div');
-            row.className = `dl-q2-tr ${isPlaying ? 'active' : ''}`;
-            row.id = `dl-q-row-${epNum}`;
-            row.setAttribute('data-ep', epNum);
-            row.onclick = () => playQueueEpisode(epNum);
-
-            row.innerHTML = `
-                <div class="dl-q2-col-ep">
-                    <div class="dl-q2-capsule-toggle ${isSelected ? 'checked' : ''}" onclick="event.stopPropagation(); toggleQueueEpisodeSelect(${epNum})"></div>
-                    <span class="dl-q2-ep-badge-text">Episode ${String(epNum).padStart(2, '0')}</span>
-                </div>
-                <div class="dl-q2-prog-group">
-                    <div class="dl-q2-prog-track">
-                        <div class="dl-q2-prog-fill ${statusClass}" id="dl-q-fill-${epNum}" style="${fillStyle}"></div>
+            const statusDisplay = statusText === 'Completed' ? '✔ 100%' : (statusText === 'Failed' ? '❌ Failed' : (statusText === 'Downloading' ? `⚡ ${prog}%` : `${prog}%`));
+            rowsHtml += `
+                <div class="dl-q2-tr ${isPlaying ? 'active' : ''}" id="dl-q-row-${epNum}" data-ep="${epNum}" onclick="playQueueEpisode(${epNum})">
+                    <div class="dl-q2-col-ep">
+                        <div class="dl-q2-capsule-toggle ${isSelected ? 'checked' : ''}" onclick="event.stopPropagation(); toggleQueueEpisodeSelect(${epNum})"></div>
+                        <span class="dl-q2-ep-badge-text">Episode ${String(epNum).padStart(2, '0')}</span>
                     </div>
-                    <span class="dl-q2-prog-val ${statusClass}" id="dl-q-text-${epNum}" style="${textStyle}">${statusText === 'Completed' ? '✔ 100%' : (statusText === 'Failed' ? '❌ Failed' : (statusText === 'Downloading' ? `⚡ ${prog}%` : `${prog}%`))}</span>
+                    <div class="dl-q2-prog-group">
+                        <div class="dl-q2-prog-track">
+                            <div class="dl-q2-prog-fill ${statusClass}" id="dl-q-fill-${epNum}" style="${fillStyle}"></div>
+                        </div>
+                        <span class="dl-q2-prog-val ${statusClass}" id="dl-q-text-${epNum}" style="${textStyle}">${statusDisplay}</span>
+                    </div>
                 </div>
             `;
-            tbody.appendChild(row);
         }
 
-        // Dropdown option fallback
         if (dropdown) {
-            const opt = document.createElement('option');
-            opt.value = epNum;
-            opt.textContent = `Episode ${String(epNum).padStart(2, '0')}`;
-            dropdown.appendChild(opt);
+            optsHtml += `<option value="${epNum}">Episode ${String(epNum).padStart(2, '0')}</option>`;
         }
-    });
+    }
+
+    if (tbody) tbody.innerHTML = rowsHtml;
+    if (dropdown) dropdown.innerHTML = optsHtml;
 
     // Prepare playback for active episode paused with play button ready
     if (!dlQueueActiveEpisodeNum) {
@@ -5027,6 +5017,8 @@ function queueStopVideo() {
         if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
     }
 }
+window.playQueueEpisode = playQueueEpisode;
+window.toggleQueueEpisodeSelect = toggleQueueEpisodeSelect;
 
 function queueToggleMute() {
     const video = document.getElementById('dl-q-video-elem');

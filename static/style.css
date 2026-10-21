@@ -6962,16 +6962,14 @@ select, option, optgroup {
     transform: translateY(-1px);
 }
 
-/* Individual Card (Modern Glassmorphism Elevated Poster Card) */
+/* Individual Card (Modern Glassmorphism Elevated Poster Card with GPU Acceleration) */
 .dl-card-item {
-    background: rgba(18, 23, 36, 0.35);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(18, 23, 36, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
     padding: 5px;
     cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -6979,25 +6977,26 @@ select, option, optgroup {
     width: 100%;
     max-width: 100%;
     margin: 0;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    will-change: transform;
+    transform: translateZ(0);
 }
 
 .dl-card-item:hover {
-    transform: translateY(-5px) scale(1.02);
-    background: rgba(24, 31, 50, 0.65);
+    transform: translateY(-4px);
+    background: rgba(24, 31, 50, 0.85);
     border-color: rgba(250, 204, 21, 0.45);
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 25px rgba(250, 204, 21, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(250, 204, 21, 0.2);
 }
 
 .dl-card-item:active {
-    transform: scale(0.97) translateY(-2px);
-    transition: transform 0.05s ease;
+    transform: scale(0.98);
 }
 
 .dl-card-item.active {
-    background: rgba(28, 36, 58, 0.7);
+    background: rgba(28, 36, 58, 0.9);
     border-color: #facc15;
-    box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.6), 0 10px 25px rgba(245, 158, 11, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.8), 0 8px 20px rgba(245, 158, 11, 0.35);
 }
 
 .dl-card-thumb-wrap {
@@ -7040,9 +7039,7 @@ select, option, optgroup {
     align-items: center;
     justify-content: center;
     border-radius: 4px;
-    background: rgba(15, 23, 42, 0.8);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(15, 23, 42, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.16);
     color: #fff;
     font-weight: 800;
@@ -7066,9 +7063,7 @@ select, option, optgroup {
     font-size: 9.5px;
     font-weight: 700;
     color: #fde047;
-    background: rgba(10, 14, 24, 0.75);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(10, 14, 24, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.14);
     padding: 2px 6px;
     border-radius: 4px;
@@ -7084,9 +7079,7 @@ select, option, optgroup {
     font-size: 9.5px;
     font-weight: 700;
     color: #ffffff;
-    background: rgba(10, 14, 24, 0.7);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    background: rgba(10, 14, 24, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 1px 5px;
     border-radius: 4px;
@@ -7296,13 +7289,12 @@ select, option, optgroup {
     border-radius: 6px;
     font-size: 0.7rem;
     color: #94a3b8;
-    transition: all 0.15s ease;
+    transition: background 0.12s ease, color 0.12s ease;
 }
 
 .dl-ep-row:hover {
     background: rgba(255, 255, 255, 0.06);
     color: #ffffff;
-    transform: translateX(2px);
 }
 
 /* Activity Log Section */
