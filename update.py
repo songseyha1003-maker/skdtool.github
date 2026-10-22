@@ -329,7 +329,7 @@ Remove-Item -Force $MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue
             subprocess.Popen(
                 ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1_file)],
                 cwd=str(app_dir),
-                creationflags=0x00000008 | 0x08000000
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | 0x08000000
             )
 
         return {

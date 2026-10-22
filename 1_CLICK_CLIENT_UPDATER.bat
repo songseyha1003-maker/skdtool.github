@@ -12,38 +12,21 @@ echo ========================================================================
 echo.
 
 echo [*] កំពុងបិទ Process ចាស់ដើម្បីការពារបញ្ហា File Lock Collision...
-taskkill /f /im SN_TOOL.exe /im pythonw.exe >nul 2>&1
+taskkill /f /im SN_TOOL.exe /im python.exe /im pythonw.exe >nul 2>&1
 timeout /t 1 /nobreak >nul
 
-where python >nul 2>nul
-if %ERRORLEVEL% EQU 0 (
-    if exist "scripts\update_client.py" (
-        python scripts\update_client.py
-        goto :END
-    )
-)
-
-where py >nul 2>nul
-if %ERRORLEVEL% EQU 0 (
-    if exist "scripts\update_client.py" (
-        py scripts\update_client.py
-        goto :END
-    )
-)
-
-if exist "%LOCALAPPDATA%\Programs\SN_TOOL\_internal\python.exe" (
-    if exist "scripts\update_client.py" (
-        "%LOCALAPPDATA%\Programs\SN_TOOL\_internal\python.exe" scripts\update_client.py
-        goto :END
-    )
-)
-
-if exist "scripts\client_updater.ps1" (
+if exist "%~dp0scripts\client_updater.ps1" (
     powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\client_updater.ps1"
     goto :END
 )
 
-echo [ERROR] Update scripts not found. Please verify the folder structure.
+if exist "scripts\client_updater.ps1" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\client_updater.ps1"
+    goto :END
+)
+
+echo [*] កំពុងដំណើរការ Update ផ្ទាល់ពី Cloud CDN...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/scripts/client_updater.ps1 | iex"
 
 :END
 echo.

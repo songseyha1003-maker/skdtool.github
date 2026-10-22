@@ -1,34 +1,54 @@
-# SN TOOL Studio Pro - PowerShell Client Updater (v1.1.3+)
+# SN TOOL Studio Pro - Universal PowerShell Client Updater (v1.1.3+)
 # Preserves license.key and updates all application files cleanly.
+# Can be run locally OR via 1-line web command: irm <url> | iex
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ProgressPreference = 'SilentlyContinue'
 
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.1.3+)" -ForegroundColor Cyan
-Write-Host "  4x Fast Neural Voice Synthesis & Zero-Drop Nisay Translation" -ForegroundColor Cyan
+Write-Host "  🚀 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.1.3+)" -ForegroundColor Cyan
+Write-Host "  ⚡ 4x Fast Neural Voice Synthesis & Zero-Drop Nisay Translation" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$baseDir = Resolve-Path (Join-Path $PSScriptRoot "..")
-$targetDir = $baseDir.Path
-
+# 1. Resolve Target Installation Folder
+$targetDir = ""
 $localAppData = $env:LOCALAPPDATA
-if ($localAppData) {
-    $installedDir = Join-Path $localAppData "Programs\SN_TOOL"
-    if (Test-Path (Join-Path $installedDir "version.json")) {
-        $targetDir = $installedDir
+if ($localAppData -and (Test-Path (Join-Path $localAppData "Programs\SN_TOOL\version.json"))) {
+    $targetDir = Join-Path $localAppData "Programs\SN_TOOL"
+} elseif ($PSScriptRoot) {
+    try {
+        $targetDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+    } catch {
+        $targetDir = (Get-Location).Path
+    }
+} else {
+    $candidates = @(
+        (Join-Path $localAppData "Programs\SN_TOOL"),
+        (Join-Path $env:USERPROFILE "Desktop\SN_TOOL"),
+        (Join-Path $env:USERPROFILE "Downloads\SN_TOOL"),
+        "D:\SN_TOOL",
+        (Get-Location).Path
+    )
+    foreach ($cand in $candidates) {
+        if (Test-Path (Join-Path $cand "version.json")) {
+            $targetDir = $cand
+            break
+        }
+    }
+    if (-not $targetDir) {
+        $targetDir = Join-Path $localAppData "Programs\SN_TOOL"
     }
 }
 
 Write-Host "[*] Target Installation: $targetDir" -ForegroundColor Yellow
 
-# Terminate running instances to prevent file lock
-Write-Host "[*] Closing any active SN_TOOL instances..." -ForegroundColor Yellow
-Stop-Process -Name "SN_TOOL", "pythonw" -Force -ErrorAction SilentlyContinue
+# 2. Terminate running instances to prevent file lock
+Write-Host "[*] Closing any active SN_TOOL or Python instances..." -ForegroundColor Yellow
+Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
-# Backup license.key if present
+# 3. Backup license.key if present
 $licFile = Join-Path $targetDir "license.key"
 $licBackupPath = Join-Path $env:TEMP "sn_license_backup.key"
 $licExisted = $false
@@ -43,7 +63,7 @@ if (Test-Path $licFile) {
     }
 }
 
-# Download update package
+# 4. Download update package
 $updateUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
 $tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v113.zip"
 
@@ -56,7 +76,7 @@ try {
     $wc.DownloadFile($updateUrl, $tempZip)
     if (Test-Path $tempZip) {
         $zipSize = (Get-Item $tempZip).Length
-        if ($zipSize -gt 1000000) {
+        if ($zipSize -gt 10000000) {
             $downloadOk = $true
             $mb = [math]::Round($zipSize / 1MB, 2)
             Write-Host "[OK] Downloaded v1.1.3 update package ($mb MB) successfully!" -ForegroundColor Green
@@ -79,10 +99,14 @@ if (-not $downloadOk) {
     }
 }
 
-# Extract update package with retry
+# 5. Extract update package with retry
 Write-Host "[*] Extracting update patch over installation..." -ForegroundColor Yellow
+if (-not (Test-Path $targetDir)) {
+    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+}
+
 $extracted = $false
-for ($i = 0; $i -lt 5; $i++) {
+for ($i = 0; $i -lt 8; $i++) {
     try {
         Expand-Archive -Path $tempZip -DestinationPath $targetDir -Force -ErrorAction Stop
         $extracted = $true
@@ -90,7 +114,7 @@ for ($i = 0; $i -lt 5; $i++) {
         break
     } catch {
         Write-Host "[!] Retry extracting in 2 seconds (waiting for file release)..." -ForegroundColor Yellow
-        Stop-Process -Name "SN_TOOL", "pythonw" -Force -ErrorAction SilentlyContinue
+        Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
     }
 }
@@ -100,7 +124,7 @@ if (-not $extracted) {
     Exit 1
 }
 
-# Restore license.key
+# 6. Restore license.key
 if ($licExisted -and (Test-Path $licBackupPath)) {
     try {
         Copy-Item -Path $licBackupPath -Destination $licFile -Force
@@ -111,9 +135,16 @@ if ($licExisted -and (Test-Path $licBackupPath)) {
     }
 }
 
-# Cleanup temp zip if downloaded
+# 7. Cleanup temp zip if downloaded
 if ($tempZip -ne (Join-Path $targetDir "SN_TOOL_UPDATE.zip") -and (Test-Path $tempZip)) {
     Remove-Item -Path $tempZip -Force -ErrorAction SilentlyContinue
+}
+
+# 8. Start application
+$exeFile = Join-Path $targetDir "SN_TOOL.exe"
+$batFile = Join-Path $targetDir "Khmer_Drama_Studio_Launcher.bat"
+if (-not (Test-Path $batFile)) {
+    $batFile = Join-Path $targetDir "START_SN_TOOL.bat"
 }
 
 Write-Host ""
@@ -121,3 +152,11 @@ Write-Host "====================================================================
 Write-Host "  🎉 [SUCCESS] SN TOOL STUDIO PRO has been updated to v1.1.3!" -ForegroundColor Green
 Write-Host "========================================================================" -ForegroundColor Green
 Write-Host ""
+
+if (Test-Path $exeFile) {
+    Write-Host "[*] Launching SN TOOL Studio Pro..." -ForegroundColor Cyan
+    Start-Process -FilePath $exeFile -WorkingDirectory $targetDir
+} elseif (Test-Path $batFile) {
+    Write-Host "[*] Launching SN TOOL Studio Pro..." -ForegroundColor Cyan
+    Start-Process -FilePath $batFile -WorkingDirectory $targetDir
+}
