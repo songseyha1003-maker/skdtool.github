@@ -10315,9 +10315,24 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
         let seriesTitle = "Drama_Series";
         if (files && files[0]) {
             const f0Name = getMediaFileName(files[0]);
-            seriesTitle = f0Name.replace(/\.[^/.]+$/, '').replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+/i, '').replace(/[-_]+$/, '').trim() || "Drama_Series";
+            seriesTitle = f0Name.replace(/\.[^/.]+$/, '').replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+/i, '').replace(/[-_]+$/, '').trim() || "";
             seriesTitle = seriesTitle.replace(/^(?:Dubbed_)+/i, '');
+
+            // If stripping EP_XX resulted in empty or generic title, inspect parent directory path
+            if (!seriesTitle || seriesTitle.toLowerCase() === "drama_series") {
+                const rawPath = getMediaFilePath(files[0]) || files[0]._fullPath || files[0].webkitRelativePath || "";
+                if (rawPath) {
+                    const parts = rawPath.split(/[\\/]/).filter(Boolean);
+                    if (parts.length >= 2) {
+                        const parentFolder = parts[parts.length - 2].trim();
+                        if (parentFolder && !["uploads", "cache", "temp", "batch_temp", "downloads", "data", "exports", "sn_dramas"].includes(parentFolder.toLowerCase())) {
+                            seriesTitle = parentFolder;
+                        }
+                    }
+                }
+            }
         }
+        if (!seriesTitle) seriesTitle = "Drama_Series";
 
         const videoPaths = files.map(f => getMediaFilePath(f)).filter(Boolean);
         let mergedSourcePath = null;
@@ -10337,6 +10352,9 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                 });
                 const mData = await mRes.json();
                 if (mData.success && mData.merged_path) {
+                    if (mData.series_title && mData.series_title !== "Drama_Series") {
+                        seriesTitle = mData.series_title;
+                    }
                     mergedSourcePath = mData.merged_path;
                     mergedSourceName = mData.merged_filename;
                     mergedSizeMb = mData.size_mb;

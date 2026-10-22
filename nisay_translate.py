@@ -158,7 +158,19 @@ def translate_khmer(
     is_batch = isinstance(texts, list)
     payload_text = texts if is_batch else [texts]
 
-    context_str = context or f"Story genre: {safe_category}. Apply Standard Khmer orthography."
+    DEFAULT_HIGH_FIDELITY_CONTEXT = (
+        f"Master Cambodian television drama dubbing scriptwriter (អ្នកសរសេរអត្ថបទបញ្ចូលសំឡេងរឿងភាគអាជីព). "
+        f"Genre: {safe_category}. "
+        "Translate dialogue lines into deeply emotional, authentic, captivating, natural spoken Khmer film dubbing language "
+        "(ភាសាបញ្ចូលសំឡេងរឿងភាគបែបខ្មែរ ពិរោះ រណ្តំចិត្ត ដូចរឿងភាគទូរទស្សន៍ហង្សមាស បាយ័ន ស៊ីធីអិន). "
+        "STRICT MANDATORY RULES (ហាមដាច់ខាត): "
+        "1. 100% COMPLETE DIALOGUE FIDELITY & ZERO DROPPED WORDS (បកប្រែឱ្យគ្រប់ន័យ ហាមកាត់ចោលពាក្យ ឬបាត់ន័យសាច់រឿងជាដាច់ខាត): "
+        "Translate the full thought, facts, and intent of the character. Never omit words, clauses, character names, or statements! "
+        "2. Natural spoken Khmer film dubbing (មិនប្រើភាសាសៀវភៅ ឬភាសារ៉ូបូតទេ). "
+        "3. Match character relationship tone: Husband/Wife (បង/អូន), Boss/Subordinate (លោកប្រធាន/ខ្ញុំ/ឯង), Enemies (ឯង/យើង), Elders (លោកតា/លោកយាយ/ម៉ាក់ក្មេក). "
+        "4. If batch input, return exactly 1-to-1 matching array of translations without skipping or merging any lines."
+    )
+    context_str = context or DEFAULT_HIGH_FIDELITY_CONTEXT
 
     # ⚡ 1. Memory Cache Lookup (Instant 0ms resolution for recurring drama lines)
     resolved_map: Dict[int, str] = {}
@@ -249,14 +261,21 @@ def translate_khmer(
             sleep_s = backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]
             time.sleep(sleep_s)
 
-    # ⚡ 2. Save translated lines into cache
+    # ⚡ 2. Save translated lines into cache with per-line integrity verification
     if translated_batch and len(translated_batch) == len(uncached_texts):
         for orig_idx, (t_orig, t_km) in enumerate(zip(uncached_texts, translated_batch)):
             clean_k = (t_orig or "").strip()
-            if clean_k and t_km:
-                _TRANSLATION_CACHE[clean_k] = str(t_km).strip()
+            km_val = str(t_km or "").strip()
+            has_cjk = any('\u4e00' <= c <= '\u9fff' for c in km_val)
+            has_khmer = any('\u1780' <= c <= '\u17ff' for c in km_val)
+            if not km_val or (has_cjk and not has_khmer):
+                recovered = _fallback_single(clean_k)
+                km_val = str(recovered or clean_k).strip()
+
+            if clean_k and km_val:
+                _TRANSLATION_CACHE[clean_k] = km_val
             real_idx = uncached_indices[orig_idx]
-            resolved_map[real_idx] = str(t_km).strip()
+            resolved_map[real_idx] = km_val
 
         final_res = [resolved_map[i] for i in range(len(payload_text))]
         return final_res if is_batch else final_res[0]

@@ -3273,8 +3273,8 @@ def pre_merge_raw_episodes_endpoint():
     series_title = data.get("series_title", "Drama_Series")
 
     clean_title = re.sub(r'^(?:Dubbed_)+', '', str(series_title), flags=re.IGNORECASE)
-    clean_title = re.sub(r'[^\w\-_.]', '_', clean_title).strip('_')
-    if not clean_title:
+    clean_title = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', clean_title).strip('_ ')
+    if not clean_title or clean_title.lower() in ("drama_series", "full_movie"):
         clean_title = "Drama_Series"
 
     if not video_paths:
@@ -3297,6 +3297,19 @@ def pre_merge_raw_episodes_endpoint():
 
     if not resolved_paths:
         return jsonify({"success": False, "error": "None of the episode files were found on disk"}), 404
+
+    # If series title was generic, resolve authentic drama name from the source episode folder!
+    if clean_title.lower() in ("drama_series", "full_movie", "") and resolved_paths:
+        try:
+            parent_cand = Path(resolved_paths[0]).parent
+            p_name = parent_cand.name.strip()
+            if p_name and p_name.lower() not in ("uploads", "cache", "temp", "batch_temp", "downloads", "data", "exports", "sn_dramas"):
+                clean_title = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', p_name).strip('_ ')
+        except Exception:
+            pass
+
+    if not clean_title:
+        clean_title = "Drama_Series"
 
     try:
         from video_processor import merge_videos

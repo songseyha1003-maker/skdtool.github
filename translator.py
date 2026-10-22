@@ -241,10 +241,10 @@ KHMER_DUBBING_POST_CLEANUP = [
     (r'លី\s*មីឆេន|លី\s*មូឆៀន|លី\s*ម៉ូឈៀន', 'លីមូឈៀន'),
     (r'លីន\s*ចាវ\s*ចាវ|លីន\s*ចៅ\s*ចៅ', 'លីនចាវចាវ'),
     (r'សិន\s*ម៉ាន់\s*លីង|សិន\s*ម៉ាន់\s*លីន', 'សិនម៉ាន់លីង'),
-    (r'មើលមុខឯង.*កង្វល់.*', 'មើលមុខឯងទៅ ដូចមានចារអក្សរថាល្ងង់អញ្ចឹង!'),
-    (r'តើអ្នកបានប្រើ\s*eyeliner.*|អ្នកបានប្រើ\s*eyeliner.*', 'ភ្នែកឯងស្រវាំងហើយ!'),
-    (r'តើអ្នកនឹងជូនខ្ញុំនៅឯណា\?.*|តើអ្នកនឹងជូនខ្ញុំ.*|ជូនខ្ញុំនៅឯណា.*', 'ជូនស្អីទៅ?!'),
-    (r'វាកំពុងតែមានចលនាទេ.*|កំពុងតែមានចលនា.*', 'កម្រើកហើយ!'),
+    (r'មើលមុខឯង\s*ដូចជាមានកង្វល់', 'មើលមុខឯងទៅ ដូចមានចារអក្សរថាល្ងង់អញ្ចឹង!'),
+    (r'តើអ្នកបានប្រើ\s*eyeliner|អ្នកបានប្រើ\s*eyeliner', 'ភ្នែកឯងស្រវាំងហើយ!'),
+    (r'តើអ្នកនឹងជូនខ្ញុំនៅឯណា\?|ជូនខ្ញុំនៅឯណា\?', 'ជូនស្អីទៅ?!'),
+    (r'វាកំពុងតែមានចលនាហើយ|កំពុងតែមានចលនាហើយ', 'កម្រើកហើយ!'),
     (r'ធំបន្ទាប់[។.]*', 'បន្តទៀត!'),
     (r'បងប្រុស\s*Zhong', 'បងចុង'),
     (r'Master\s*Atsushi', 'លោកគ្រូ'),
@@ -255,12 +255,12 @@ KHMER_DUBBING_POST_CLEANUP = [
     (r'(?:ធ្វើ\s*)?តេស្ត\s*(?:ឌីអិនអេ|DNA)\s*(?:ប៉ាប៉ា|ឪពុក|ម្តាយ)?(?!\s*ពិនិត្យ)', 'ធ្វើតេស្ត DNA ពិនិត្យឈាមជ័រឪពុកកូន'),
     (r'(?:ហ៊ាន\s*)?(?:សាកល្បង\s*)?មាន\s*ស្នេហា\s*ជាមួយ\s*ប្រុស\s*ផ្សេង|ម៉េចក៏ហ៊ានជេរខ្ញុំ', 'ហ៊ានលួចក្បត់ចិត្តមានប្រុសថ្មីផង?!'),
     (r'(?:ធ្វើ\s*សកម្មភាព\s*)?បោក\s*ខ្ញុំ(?:ក្បត់)?', 'លួចក្បត់ចិត្តមានប្រុសថ្មី'),
-    (r'ស្ត្រី\s*នោះ\s*ជា\s*ស្ត្រី.*គំនិត\s*អាក្រក់.*|ស្ត្រី\s*(?:ដែល\s*)?មាន\s*គំនិត\s*អាក្រក់|ស្ត្រី\s*គំនិត\s*អាក្រក់', 'មីស្រីម្នាក់នោះជាស្រីពុតត្បុតពិសពុល!'),
-    (r'គាត់ជា\s*មនុស្ស\s*ល្ងង់\s*ខ្លៅ[!?.]*|ឯង\s*បោកប្រាស់\s*ដ៏\s*ធំ|មនុស្ស\s*បោកប្រាស់\s*ដ៏\s*ធំ|បុរស\s*បោកប្រាស់\s*ដ៏\s*ធំ', 'គាត់ជាអាប្រុសសាវា!'),
+    (r'ស្ត្រី(?:នោះ)?ជាស្ត្រីគំនិតអាក្រក់|ស្ត្រីគំនិតអាក្រក់', 'មីស្រីម្នាក់នោះជាស្រីពុតត្បុតពិសពុល'),
+    (r'គាត់ជា\s*មនុស្ស\s*ល្ងង់\s*ខ្លៅ|មនុស្ស\s*បោកប្រាស់\s*ដ៏\s*ធំ|បុរស\s*បោកប្រាស់\s*ដ៏\s*ធំ', 'គាត់ជាអាប្រុសសាវា'),
     (r'ម្ចាស់ស្រី(?:ដែលបំផ្លាញអាពាហ៍ពិពាហ៍)?|ម្ចាស់ស្រីដែលបំផ្លាញគ្រួសារ', 'ស្រីកំណាន់'),
-    (r'ដេញ\s*គាត់\s*ចេញ\s*ពី\s*ផ្ទះ\s*ហើយ\s*ដេញ\s*គាត់\s*ចេញ[!?.]*', 'បណ្តេញក្បាលចេញពីផ្ទះភ្លាមទៅ!'),
-    (r'ខ្ញុំគិតថា(?:អ្នក|ឯង)មិនចង់រស់(?:នៅ|ស្រួល)?(?:ទេ)?.*', 'ខ្ញុំគិតថាឯងច្បាស់ជាមិនចង់រស់ស្រួលទេ ឯងចង់ងាប់មែនទេ?!'),
-    (r'(?:គាត់)?ច្បាស់\s*ជា\s*ច្រណែន[!?.]*', 'គាត់ច្បាស់ជាកំពុងប្រច័ណ្ឌហើយ!'),
+    (r'ដេញ\s*គាត់\s*ចេញ\s*ពី\s*ផ្ទះ\s*ហើយ\s*ដេញ\s*គាត់\s*ចេញ', 'បណ្តេញក្បាលចេញពីផ្ទះភ្លាមទៅ'),
+    (r'មិនចង់រស់(?:នៅ|ស្រួល)?ទេ', 'ចង់ងាប់មែនទេ'),
+    (r'(?:គាត់)?ច្បាស់\s*ជា\s*ច្រណែន', 'គាត់ច្បាស់ជាកំពុងប្រច័ណ្ឌហើយ'),
     (r'ជួយសង្គ្រោះម្តាយឬទារក', 'ជួយសង្គ្រោះម្តាយ ឬជួយកូន'),
     (r'បិទអាជីវកម្មរបស់គាត់ទាំងអស់', 'កម្ទេចមុខជំនួញរបស់គាត់ទាំងអស់'),
     # 6 Essential Drama Idiom Categories (បកប្រែពាក្យពិបាកៗក្នុងរឿងភាគឱ្យត្រូវន័យខ្មែរ ១០០%)
@@ -292,7 +292,7 @@ KHMER_DUBBING_POST_CLEANUP = [
     (r'ស្លាប់គភ៌ក្នុងពោះ', 'កូនស្លាប់ក្នុងពោះ'),
     (r'បិទសម្លាប់(?:មុខជំនួញ)?', 'កម្ទេចមុខជំនួញ'),
     (r'ចោរដណ្តើមទ្រព្យម្ចាស់|សត្វកុកដណ្តើមសំបុកចាប', 'ចោរដណ្តើមទ្រព្យសម្បត្តិគេ'),
-    # 1. Compact lip-sync friendly drama lines for short utterances (រក្សាប្រវែងឃ្លាឱ្យសមស្របនឹង Timecode)
+    # 1. Compact lip-sync friendly drama lines for short standalone utterances
     (r'^ដើរ[។!.]*$', 'ចេញទៅ!'),
     (r'^(?:ឆាប់)?ដើរទៅ[។!.]*$', 'ចេញទៅ!'),
     (r'^ល្អ[។!.]*$', 'ល្អ!'),
@@ -315,13 +315,9 @@ KHMER_DUBBING_POST_CLEANUP = [
     (r'^ចេញទៅ[។!.]*$', 'ចេញទៅ!'),
     (r'^ខ្ញុំជាចៅហ្វាយ[។.]*$', 'ខ្ញុំជាថៅកែ!'),
     (r'^ខ្ញុំបានដឹងពីវា[។.]*$', 'ខ្ញុំដឹងហើយ!'),
-    (r'^កុំនិយាយមិន.*$', 'កុំនិយាយផ្តេសផ្តាស!'),
-    (r'^អ្នកឯងឆ្កួតហើយមែនទេ.*$', 'ឯងឆ្កួតហើយមែនទេ?!'),
-    (r'^អ្នកឆ្កួតហើយមែនទេ.*$', 'ឯងឆ្កួតហើយមែនទេ?!'),
     (r'^ប្រពន្ធរបស់អ្នក[។.]*$', 'ភរិយារបស់លោក!'),
     (r'^វាមិនសំខាន់ទេ[។.]*$', 'មិនអីទេ!'),
     (r'^បន្ទប់បង្រៀន[។.]*$', 'បន្ទប់រាយការណ៍!'),
-    (r'^ល្ងង់មែនទេ.*$', 'ឯងល្ងង់មែនទេ?!'),
     (r'^បំណែកនៃសំរាមដូចអ្នក[។.]*$', 'មនុស្សអត់បានការដូចឯង!'),
     (r'^អ្នកដឹងពីបទល្មើស[។.]*$', 'ឯងដឹងកំហុសហើយនៅ?!'),
     (r'បងប្អូនក្មេក', 'បងថ្លៃស្រី'),
@@ -329,16 +325,16 @@ KHMER_DUBBING_POST_CLEANUP = [
     (r'ម៉េចហ៊ានវាយយើង[!?។.\s]*', 'ម៉េចក៏ហ៊ានវាយយើង?!'),
     (r'តើអ្នកកំពុងផ្ញើអ្វី\??', 'ជូនស្អីគេ?!'),
     (r'ផ្ញើអ្វី\??', 'ជូនស្អីគេ?!'),
-    (r'ខ្ញុំកំពុងផ្ញើវាទៅអ្នក[។.]*', 'ខ្ញុំកំពុងប្រាប់ឯងតើ!'),
+    (r'ខ្ញុំកំពុងផ្ញើវាទៅអ្នក', 'ខ្ញុំកំពុងប្រាប់ឯងតើ'),
     (r'សុំ​ឱ្យ​គាត់​យក​អ្នក​វិញ​ជា​មុន​សិន', 'ឱ្យគាត់ជូនឯងត្រឡប់ទៅវិញសិនទៅ'),
     (r'យក​អ្នក​វិញ​ជា​មុន​សិន', 'ជូនឯងត្រឡប់ទៅវិញសិន'),
     (r'មិនអីទេ\s*ប្រយ័ត្ន(?:ខ្លួនណា!)*', 'មិនអីទេ ប្រយ័ត្នខ្លួនណា!'),
-    (r'ផ្លាស់ទី[,.]*', 'កម្រើកហើយ!'),
-    (r'មិនដែលត្រូវបានគំរាមកំហែង[។.]*', 'មិនដែលឱ្យនរណាមកគំរាមកំហែងបានទេ!'),
-    (r'ខ្ញុំគិតថាអ្នកមិនដឹងទៀតទេ[។.]*', 'ខ្ញុំគិតថាឯងច្បាស់ជាមិនចង់រស់ទេ!'),
-    (r'ខ្ញុំគិតថាអ្នកមិនចង់រស់នៅទៀតទេ[។.]*', 'ខ្ញុំគិតថាឯងច្បាស់ជាមិនចង់រស់ទេ!'),
+    (r'^ផ្លាស់ទី[,.]*$', 'កម្រើកហើយ!'),
+    (r'មិនដែលត្រូវបានគំរាមកំហែង', 'មិនដែលឱ្យនរណាមកគំរាមកំហែងបានទេ'),
+    (r'ខ្ញុំគិតថាអ្នកមិនដឹងទៀតទេ', 'ខ្ញុំគិតថាឯងច្បាស់ជាមិនចង់រស់ទេ'),
+    (r'ខ្ញុំគិតថាអ្នកមិនចង់រស់នៅទៀតទេ', 'ខ្ញុំគិតថាឯងច្បាស់ជាមិនចង់រស់ទេ'),
     (r'តើអ្នកខ្វាក់ដែរទេ\??', 'ឯងខ្វាក់ភ្នែកហើយមែនទេ?!'),
-    (r'តើអ្នកទៅណា\?\s*តើអ្នកចង់ផ្ញើខ្ញុំទៅណា\?', 'ទៅណា?! ខ្ញុំមិនទៅណាទាំងអស់!'),
+    (r'តើអ្នកចង់ផ្ញើខ្ញុំទៅណា\?', 'តើចង់ជូនខ្ញុំទៅណា?'),
 
 
     # 3. Question & Exclamation idioms
@@ -398,8 +394,8 @@ KHMER_DUBBING_POST_CLEANUP = [
     (r'តើអ្នកអាចជួយខ្ញុំបានទេ', 'ជួយខ្ញុំបន្តិចបានទេ'),
 
     # 6. Naturalizing Mechanical Google-Translate Pronouns & Robotic Phrasing
-    (r'តើអ្នកមិនអីទេ\??', 'ឯងមិនអីទេមែនទេ?!'),
-    (r'អ្នកមិនអីទេ\??', 'ឯងមិនអីទេមែនទេ?!'),
+    (r'តើអ្នកមិនអីទេ(?:\s*មែនទេ)?\??', 'ឯងមិនអីទេមែនទេ?!'),
+    (r'អ្នកមិនអីទេ(?:\s*មែនទេ)?\??', 'ឯងមិនអីទេមែនទេ?!'),
     (r'\bតើអ្នកកំពុងធ្វើអ្វី\b', 'ឯងកំពុងធ្វើស្អីហ្នឹង?!'),
     (r'\bតើអ្នកចង់បានអ្វី\b', 'ឯងចង់បានស្អី?!'),
     (r'\bតើអ្នកដឹងទេ\b', 'ឯងដឹងទេ?!'),
@@ -546,17 +542,13 @@ def enrich_khmer_drama_dialogue(
             res = re.sub(pattern, replacement, res)
 
     # 3. Contextual pronoun conversion (avoid robotic 'អ្នក')
-    res = re.sub(r'\bតើអ្នកមិនអីទេ[?!។.\s]*', 'ឯងមិនអីទេមែនទេ?! ', res)
-    res = re.sub(r'\bអ្នកមិនអីទេ[?!។.\s]*', 'ឯងមិនអីទេមែនទេ?! ', res)
-    res = re.sub(r'\bតើអ្នក\b', 'ឯង', res)
-    res = re.sub(r'\bអ្នក\b(?!\s*(?:ណា|ស្រី|ប្រុស|ចម្បាំង|និពន្ធ|ជំនួញ))', 'ឯង', res)
+    res = re.sub(r'^(?:តើ)?(?:អ្នក|ឯង)មិនអីទេ(?:\s*មែនទេ)*[?!។.\s]*', 'ឯងមិនអីទេមែនទេ?! ', res)
     res = re.sub(r'កំដរឯង', 'ជូនឯង', res)
     res = re.sub(r'កំដរអ្នក', 'ជូនឯង', res)
     res = re.sub(r'ផ្ញើខ្ញុំ', 'ជូនខ្ញុំ', res)
     res = re.sub(r'ផ្ញើឯង', 'ជូនឯង', res)
     res = re.sub(r'ផ្ញើអ្នក', 'ជូនឯង', res)
     res = re.sub(r'ទុកខ្ញុំចោល', 'កុំខ្វល់ពីខ្ញុំអី', res)
-    res = re.sub(r'ឆាប់ទៅ(?!\w)', 'ឆាប់រត់ទៅ', res)
 
     # Clean repeated phrase patterns that can occur during chained substitutions
     res = re.sub(r'(?:ភ្លាម[!?\s]*)+', 'ភ្លាម! ', res)
@@ -585,14 +577,9 @@ def enrich_khmer_drama_dialogue(
     clean_no_punct = re.sub(r'[!！?？។.\s]+', '', res)
     zh_clean = re.sub(r'[\s!！?？,，.。~～`\'"]+', '', str(zh_text or ''))
 
-    # 4.1 Natural Dialogue Flow for Short Timecodes (<= 1.2s):
-    # Only remove superfluous introductory particles, NEVER cut or drop dialogue clauses!
-    if duration_sec is not None and duration_sec <= 1.2:
-        res = re.sub(r'^(?:សូមមេត្តា|យ៉ាងណាវិញ|ដោយសារតែ|ដូច្នេះហើយ|តាមពិតទៅ)\s*', '', res)
-
     # Only apply standalone shout overrides when zh_clean is strictly an isolated short phrase (<= 4 chars)
-    # This guarantees that sentences like "我们快走吧不要迟到" or "等一下我有话要说" are NEVER truncated or dropped!
-    if len(zh_clean) <= 4:
+    # AND translated text is also short (<= 12 chars). This guarantees 100% Zero-Drop sentence fidelity!
+    if len(zh_clean) <= 4 and len(clean_no_punct) <= 12:
         if zh_clean in ('送什么', '送啥'):
             res = "ជូនស្អីទៅ?!" if any(q in res for q in ('?', '？', 'អី', 'ស្អី')) else "ជូនស្អី?!"
         elif zh_clean in ('等一下', '等等', '等我', '等'):
@@ -600,7 +587,7 @@ def enrich_khmer_drama_dialogue(
         elif zh_clean in ('动了', '有动静'):
             res = "កម្រើកហើយ!"
         elif zh_clean in ('快走', '快走吧', '走吧', '走'):
-            res = "ទៅណា?!" if any(q in res for q in ('?', '？', 'ណា')) else "ឆាប់ទៅ!"
+            res = "ឆាប់ទៅ!" if "快" in zh_clean else "តោះទៅ!"
         elif zh_clean in ('救命', '救命啊'):
             res = "ជួយផង!"
         elif zh_clean in ('站住', '住手'):
@@ -1152,7 +1139,8 @@ class DramaTranslator:
         target_voice_override: Optional[str] = None,
         category: str = "chinese_general",
         custom_dict: Optional[Dict[str, str]] = None,
-        mode: str = "drama_dubbing"
+        mode: str = "drama_dubbing",
+        drama_title: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Translate dialogue items using Nisay AI Gateway (gemini-3.8-flash-high).
@@ -1168,14 +1156,26 @@ class DramaTranslator:
             texts.append(txt)
 
         # ⚡ Optimal Batch Sizing for Zero-Drop & High Speed:
-        # 35 lines per chunk ensures gemini-3.8-flash-high never merges, skips, or truncates dialogue lines
-        chunk_size = 35
+        # 20 lines per chunk ensures gemini-3.8-flash-high never merges, skips, or truncates dialogue lines
+        chunk_size = 20
         text_chunks = [texts[i:i + chunk_size] for i in range(0, len(texts), chunk_size)]
 
+        eff_cat = category
+        if drama_title and any(w in str(drama_title) for w in ("神", "殿", "帝", "皇", "王", "仙", "剑", "古", "宫", "朝", "武", "封神", "hero", "ancient", "costume")):
+            eff_cat = "chinese_historical"
+
         if mode == "movie_recap":
-            context_directive = "Movie Recap Storyteller Style (សម្រាយរឿង Facebook & TikTok): Translate into thrilling, high-energy spoken Khmer recap narration by a charismatic Cambodian narrator (អ្នកសម្រាយរឿង ពិសិដ្ឋ/ស្រីមុំ). Dramatic, fast-paced, and engaging."
+            context_directive = "Movie Recap Storyteller Style (សម្រាយរឿង Facebook & TikTok): Translate into thrilling, high-energy spoken Khmer recap narration by a charismatic Cambodian narrator (អ្នកសម្រាយរឿង ពិសិដ្ឋ/ស្រីមុំ). 100% Complete fidelity - never drop words."
         else:
-            context_directive = f"Story genre: {category}. Apply Standard Khmer orthography and authentic Asian drama dubbing dialogue style."
+            context_directive = (
+                f"Master Cambodian television drama dubbing scriptwriter (អ្នកសរសេរអត្ថបទបញ្ចូលសំឡេងរឿងភាគទូរទស្សន៍អាជីព). "
+                f"Story genre: {eff_cat}. Apply authentic Cambodian television drama dubbing dialogue style (ភាសាបញ្ចូលសំឡេងរឿងភាគបែបខ្មែរ ពិរោះ រណ្តំចិត្ត ដូចទូរទស្សន៍ហង្សមាស បាយ័ន ស៊ីធីអិន). "
+                "CRITICAL MANDATORY RULES (ហាមដាច់ខាត): "
+                "1. 100% COMPLETE DIALOGUE FIDELITY & ZERO DROPPED WORDS (បកប្រែឱ្យគ្រប់ន័យ ហាមកាត់ចោលពាក្យ ឬបាត់ន័យសាច់រឿងជាដាច់ខាត): "
+                "You MUST translate the full thought, facts, and intent of the character. Never omit words, clauses, character names, or statements! "
+                "2. Natural spoken Khmer film dubbing (មិនប្រើភាសាសៀវភៅ ឬភាសារ៉ូបូតទេ). "
+                "3. Match character relationship tone: Husband/Wife (បង/អូន), Boss/Subordinate (លោកប្រធាន/ខ្ញុំ/ឯង), Enemies (ឯង/យើង), Elders (លោកតា/លោកយាយ/ម៉ាក់ក្មេក)."
+            )
 
         sem = asyncio.Semaphore(5)
         async def _trans_chunk(t_chunk):
@@ -1184,7 +1184,7 @@ class DramaTranslator:
                     res = await asyncio.to_thread(
                         translate_khmer,
                         t_chunk,
-                        category=category,
+                        category=eff_cat,
                         entity_glossary=custom_dict,
                         context=context_directive
                     )
@@ -1292,28 +1292,21 @@ class DramaTranslator:
                 e = float(c_itm.get("end", s + 2.0))
                 dur = round(max(0.2, e - s), 2)
                 c_itm["duration"] = dur
-                max_w = max(1, int(round(dur * 2.2)))
-                if dur <= 1.2:
-                    max_w = min(max_w, 3)
-                elif dur <= 2.0:
-                    max_w = min(max_w, 6)
+                max_w = max(4, int(round(dur * 3.5)))
                 c_itm["max_words"] = max_w
                 enriched_chunk.append(c_itm)
 
             prompt = f"""Mode: {mode} (Authentic Cambodian TV Drama Dubbing)
 Source Language: {source_lang}
-Input script items in JSON (includes exact 'duration' in seconds and 'max_words' budget):
+Input script items in JSON:
 {json.dumps(enriched_chunk, ensure_ascii=False, indent=2)}
 
 Translate each dialogue item into emotional, natural spoken Khmer dubbing script ('text_km').
 {voice_directive}
-CRITICAL LIP-SYNC & SYLLABLE-PACING (ត្រូវទាន់ជាមួយតួអង្គហាមាត់និយាយ និងល្បឿននិយាយធម្មជាតិ 1.0x):
-- COMPLETE MEANING: Translate the entire dialogue without omitting words, clauses, character names, or statements. NEVER drop parts of what the speaker says!
-- SYLLABLE BUDGET MATCHING: The Khmer sentence length MUST match the actor's mouth duration so that the voice speaks at a natural, unhurried human pace (1.0x). DO NOT write overly long sentences for short clips!
-  * Duration <= 1.2s: strictly translate into 1-3 PUNCHY words max (e.g. "ជូនស្អី?!", "ចេញទៅ!", "ឈប់ភ្លាម!", "ទៅណា?!", "ជួយផង!", "បិទមាត់!", "ចាំសិន!", "ចង់ងាប់មែនទេ?!"). NEVER expand short shouts into long explanations.
-  * Duration 1.3s - 2.5s: 4-7 natural spoken Khmer words.
-  * Duration >= 3.0s: translate with natural dramatic cadence matching the mouth duration window.
+CRITICAL TRANSLATION FIDELITY (បកប្រែឱ្យគ្រប់ន័យ ហាមកាត់ចោលពាក្យ ឬបាត់ន័យសាច់រឿងជាដាច់ខាត):
+- 100% COMPLETE SENTENCES: Translate the entire dialogue without omitting words, clauses, character names, or statements. NEVER drop parts of what the speaker says!
 - Natural spoken Khmer drama dubbing style (ពិរោះស្ដាប់ រណ្តំចិត្ត ដូចទូរទស្សន៍ហង្សមាស បាយ័ន ស៊ីធីអិន): no robotic "តើអ្នក", no formal book language.
+- Short standalone shouts (e.g. 滚, 站住, 救命): translate punchily (e.g. "ចេញទៅ!", "ឈប់ភ្លាម!", "ជួយផង!").
 Return JSON object with key "dialogues" containing an array with keys: id, start, end, text_original, text_km, speaker, voice, rate_percent, pitch_hz, emotion."""
 
             for model_name in candidate_models:
@@ -1468,7 +1461,8 @@ Return JSON object with key "dialogues" containing an array with keys: id, start
                         target_voice_override=target_voice_override,
                         category="chinese_general",
                         custom_dict=custom_dict,
-                        mode=mode
+                        mode=mode,
+                        drama_title=drama_title
                     )
                     if nisay_res and len(nisay_res) == len(dialogues):
                         print(f"[OK] SN AI Cloud Server translated {len(nisay_res)} dialogues successfully!")
@@ -1508,28 +1502,21 @@ Return JSON object with key "dialogues" containing an array with keys: id, start
                         e = float(c_itm.get("end", s + 2.0))
                         dur = round(max(0.2, e - s), 2)
                         c_itm["duration"] = dur
-                        max_w = max(1, int(round(dur * 2.2)))
-                        if dur <= 1.2:
-                            max_w = min(max_w, 3)
-                        elif dur <= 2.0:
-                            max_w = min(max_w, 6)
+                        max_w = max(4, int(round(dur * 3.5)))
                         c_itm["max_words"] = max_w
                         enriched_chunk.append(c_itm)
 
                     prompt = f"""Mode: {mode} (Authentic Cambodian TV Drama Dubbing)
 Source Language: {source_lang}
-Input script items in JSON (includes exact 'duration' in seconds and 'max_words' budget):
+Input script items in JSON:
 {json.dumps(enriched_chunk, ensure_ascii=False, indent=2)}
 
 Translate each dialogue item into emotional, natural spoken Khmer dubbing script ('text_km').
 {voice_directive}
-CRITICAL LIP-SYNC & SYLLABLE-PACING (ត្រូវទាន់ជាមួយតួអង្គហាមាត់និយាយ និងល្បឿននិយាយធម្មជាតិ 1.0x):
-- COMPLETE MEANING: Translate the entire dialogue without omitting words, clauses, character names, or statements. NEVER drop parts of what the speaker says!
-- SYLLABLE BUDGET MATCHING: The Khmer sentence length MUST match the actor's mouth duration so that the voice speaks at a natural, unhurried human pace (1.0x). DO NOT write overly long sentences for short clips!
-  * Duration <= 1.2s: strictly translate into 1-3 PUNCHY words (e.g. "ចេញទៅ!", "ឈប់ភ្លាម!", "ទៅណា?!", "ជួយផង!", "បិទមាត់!", "ចាំសិន!", "ចង់ងាប់មែនទេ?!"). NEVER expand short shouts into long explanations.
-  * Duration 1.3s - 2.5s: 4-7 natural spoken Khmer words.
-  * Duration >= 3.0s: translate with natural dramatic cadence matching the mouth duration window.
+CRITICAL TRANSLATION FIDELITY (បកប្រែឱ្យគ្រប់ន័យ ហាមកាត់ចោលពាក្យ ឬបាត់ន័យសាច់រឿងជាដាច់ខាត):
+- 100% COMPLETE SENTENCES: Translate the entire dialogue without omitting words, clauses, character names, or statements. NEVER drop parts of what the speaker says!
 - Natural spoken Khmer drama dubbing style (ពិរោះស្ដាប់ រណ្តំចិត្ត ដូចទូរទស្សន៍ហង្សមាស បាយ័ន ស៊ីធីអិន): no robotic "តើអ្នក", no formal book language.
+- Short standalone shouts (e.g. 滚, 站住, 救命): translate punchily (e.g. "ចេញទៅ!", "ឈប់ភ្លាម!", "ជួយផង!").
 Return ONLY valid JSON array with keys: id, start, end, text_original, text_km, speaker, voice, rate_percent, pitch_hz, emotion."""
 
                     active_client = self.get_client() or self.client

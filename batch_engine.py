@@ -46,14 +46,30 @@ def resolve_drama_export_directories(in_path: str, drama_title: str, custom_expo
     # Extract clean series name (strip episode suffixes like EP_01, Episode 12, etc.)
     raw_title = str(drama_title or "").strip()
     raw_title = re.sub(r'(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$', '', raw_title, flags=re.IGNORECASE)
-    clean_series = re.sub(r'(?i)^(Dubbed_)?(EP|Episode|Part|第)?[\s_\-]*\d+.*$', '', raw_title).strip('_ ')
-    if not clean_series or len(clean_series) < 2:
-        try:
-            p_in = Path(in_path).resolve()
-            if p_in.parent.name.lower() not in ("batch_temp", "uploads", "cache", "temp", "exports", "sn_dramas", "downloads"):
-                clean_series = p_in.parent.name
-        except Exception:
-            pass
+    clean_series = re.sub(r'^(?:Dubbed_)+', '', raw_title, flags=re.IGNORECASE)
+    clean_series = re.sub(r'^Raw_Full_Movie_', '', clean_series, flags=re.IGNORECASE)
+    clean_series = re.sub(r'_Full_Movie.*$', '', clean_series, flags=re.IGNORECASE)
+    clean_series = re.sub(r'(?i)^(EP|Episode|Part|第)?[\s_\-]*\d+.*$', '', clean_series).strip('_ ')
+
+    generic_names = ("drama_series", "dubbed_drama_series_full_movie", "full_movie", "raw_full_movie", "")
+    if not clean_series or clean_series.lower() in generic_names:
+        # Check custom_export_dir for authentic drama name
+        if custom_export_dir:
+            try:
+                p_c = Path(str(custom_export_dir).strip()).resolve()
+                if p_c.name.lower() not in ("exports", "sn_dramas", "dramas", "uploads", "downloads", "temp", "batch_temp", "data"):
+                    clean_series = p_c.name
+            except Exception:
+                pass
+        # Check in_path for authentic drama folder name
+        if not clean_series or clean_series.lower() in generic_names:
+            try:
+                p_in = Path(in_path).resolve()
+                if p_in.parent.name.lower() not in ("batch_temp", "uploads", "cache", "temp", "exports", "sn_dramas", "downloads", "data"):
+                    clean_series = p_in.parent.name
+            except Exception:
+                pass
+
     if not clean_series:
         clean_series = "Drama_Series"
 
@@ -63,9 +79,16 @@ def resolve_drama_export_directories(in_path: str, drama_title: str, custom_expo
     if custom_export_dir and str(custom_export_dir).strip():
         try:
             p_cust = Path(str(custom_export_dir).strip()).resolve()
-            # If p_cust is a parent directory (doesn't already end with safe_title or 'dubbed_khmer'),
-            # automatically create the dedicated drama folder inside it!
-            if safe_title and p_cust.name.lower() not in (safe_title.lower(), "dubbed_khmer"):
+            # If user selected an authentic drama directory (e.g. D:/SN_Dramas/封神殿),
+            # export directly into p_cust WITHOUT creating a redundant nested subfolder!
+            is_generic_root = p_cust.name.lower() in ("sn_dramas", "dramas", "exports", "uploads", "data", "downloads", "temp", "batch_temp") or len(p_cust.parts) <= 2
+            if not is_generic_root:
+                # p_cust is already a drama-specific folder! Export directly into it!
+                p_cust.mkdir(parents=True, exist_ok=True)
+                return [p_cust]
+
+            # If user selected a general root directory like D:/SN_Dramas, create the drama folder inside it
+            if safe_title and safe_title.lower() not in ("drama_series", "full_movie"):
                 p_cust = p_cust / safe_title
             p_cust.mkdir(parents=True, exist_ok=True)
             return [p_cust]

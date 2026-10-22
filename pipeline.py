@@ -535,6 +535,13 @@ class ProjectManager:
             clean_stem = re.sub(r'^Raw_Full_Movie_', '', clean_stem, flags=re.IGNORECASE)
             clean_stem = re.sub(r'(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$', '', clean_stem, flags=re.IGNORECASE)
             clean_stem = re.sub(r'_\d{9,12}$', '', clean_stem)
+            
+            # If clean_stem is generic, resolve from destination drama directory name
+            if clean_stem.lower() in ("drama_series", "drama_series_full_movie", "full_movie", "") and dest_dirs:
+                parent_drama_name = dest_dirs[0].name
+                if parent_drama_name and parent_drama_name.lower() not in ("exports", "sn_dramas", "uploads", "data", "temp"):
+                    clean_stem = f"{parent_drama_name}_Full_Movie"
+
             out_stem = f"Dubbed_{clean_stem}"
             
             saved_paths = []
@@ -544,17 +551,23 @@ class ProjectManager:
                     shutil.copy2(str(output_video_path), str(dest_file))
                 saved_paths.append(str(dest_file))
 
-                # Also automatically generate and export matching .srt subtitle file into folder!
+                # Do NOT generate unwanted .srt subtitle document file in output folder!
+                # Only produce the finished dubbed MP4 video.
+                # Also clean up any lingering .srt file with the same stem if present
                 try:
-                    dialogues = project.get("dialogues", [])
-                    if dialogues:
-                        from translator import format_srt_content
-                        srt_content = format_srt_content(dialogues)
-                        srt_file = d / f"{out_stem}.srt"
-                        with open(srt_file, "w", encoding="utf-8") as sf:
-                            sf.write(srt_content)
-                except Exception as se:
-                    print(f"Subtitle export note: {se}")
+                    lingering_srt = d / f"{out_stem}.srt"
+                    if lingering_srt.exists():
+                        lingering_srt.unlink()
+                except Exception:
+                    pass
+
+                # Also clean up any generic lingering Dubbed_Drama_Series_Full_Movie.srt
+                try:
+                    generic_srt = d / "Dubbed_Drama_Series_Full_Movie.srt"
+                    if generic_srt.exists():
+                        generic_srt.unlink()
+                except Exception:
+                    pass
 
             if saved_paths:
                 project["final_exported_video_path"] = saved_paths[0]

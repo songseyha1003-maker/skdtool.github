@@ -12,9 +12,9 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\SN_TOOL
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputDir=D:\\folder My Project\\SN\\dist
+OutputDir=D:\\Sal\\SN\\dist
 OutputBaseFilename=SN_TOOL_Setup
-SetupIconFile=D:\\folder My Project\\SN\\icon.ico
+SetupIconFile=D:\\Sal\\SN\\icon.ico
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -32,7 +32,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "D:\\folder My Project\\SN\\dist\\SN_TOOL\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "license.key, *.bak, *.tmp, *.log"
+Source: "D:\\Sal\\SN\\dist\\SN_TOOL\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "license.key, *.bak, *.tmp, *.log"
 
 [Icons]
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"; WorkingDir: "{app}"; Tasks: desktopicon
