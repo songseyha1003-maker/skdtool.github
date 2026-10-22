@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SN TOOL - STUDIO PRO | License Activation</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Kantumruy+Pro:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="style.css?v=72.0">
+    <style>
+        /* Standalone preview overrides to ensure 100% active visibility and video recording quality */
+        body {
+            margin: 0;
+            padding: 0;
+            background: #08090e;
+            font-family: 'Plus Jakarta Sans', 'Outfit', 'Kantumruy Pro', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .license-gate-overlay {
+            position: absolute;
+            inset: 0;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            background: #08090e;
+            z-index: 100;
+        }
+
+        .license-gate-overlay .license-gate-card {
+            transform: scale(1) translateY(0) !important;
+        }
+
+        /* Subtle glowing background ambient aurora for premium look */
+        .preview-ambient-glow {
+            position: absolute;
+            width: 550px;
+            height: 550px;
+            background: radial-gradient(circle, rgba(250, 204, 21, 0.08) 0%, rgba(217, 119, 6, 0.03) 45%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1;
+            filter: blur(40px);
+        }
+
+        /* Video Recorder Control Bar (Floating & can be hidden with H key or close icon) */
+        .video-record-toolbar {
+            position: fixed;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(250, 204, 21, 0.35);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(250, 204, 21, 0.15);
+            padding: 8px 14px;
+            border-radius: 30px;
+            z-index: 9999999;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .video-record-toolbar.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translate(-50%, 30px);
+        }
+
+        .record-tool-title {
+            font-size: 0.72rem;
+            font-weight: 800;
+            color: #facc15;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding-right: 8px;
+            border-right: 1px solid rgba(255,255,255,0.12);
+        }
+
+        .record-tool-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #e2e8f0;
+            border-radius: 20px;
+            padding: 6px 12px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .record-tool-btn:hover {
+            background: rgba(250, 204, 21, 0.18);
+            border-color: #facc15;
+            color: #fde047;
+            transform: translateY(-1px);
+        }
+
+        .record-tool-btn.primary {
+            background: linear-gradient(135deg, #facc15 0%, #ca8a04 100%);
+            color: #000;
+            border-color: #facc15;
+            box-shadow: 0 2px 10px rgba(250, 204, 21, 0.35);
+        }
+
+        .record-tool-btn.primary:hover {
+            background: linear-gradient(135deg, #fde047 0%, #eab308 100%);
+            box-shadow: 0 4px 15px rgba(250, 204, 21, 0.55);
+        }
+
+        .record-tool-btn.danger {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.35);
+            color: #fca5a5;
+        }
+
+        .record-tool-btn.danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: #ef4444;
+            color: #fff;
+        }
+
+        /* Tiny button on screen corner to re-show toolbar if hidden */
+        .show-toolbar-btn {
+            position: fixed;
+            bottom: 12px;
+            right: 12px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #94a3b8;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            cursor: pointer;
+            z-index: 9999998;
+            opacity: 0.35;
+            transition: opacity 0.2s;
+        }
+
+        .show-toolbar-btn:hover {
+            opacity: 1;
+            color: #facc15;
+            border-color: #facc15;
+        }
+
+        /* Floating Toast Notification */
+        .preview-toast {
+            position: fixed;
+            top: 55px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(250, 204, 21, 0.4);
+            color: #f8fafc;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+            z-index: 10000000;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .preview-toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="preview-ambient-glow"></div>
+
+    <!-- MODAL: LICENSE ACTIVATION GATE (Cyber-Gold Lock Screen) -->
+    <div class="license-gate-overlay active" id="modal-license-gate">
+        
+        <!-- Native Windows App Titlebar -->
+        <div class="gate-titlebar">
+            <div class="gate-titlebar-left">
+                <img src="logo.png" alt="SN" class="gate-titlebar-icon">
+                <span class="gate-titlebar-text">SN TOOL - STUDIO PRO</span>
+            </div>
+            <div class="gate-titlebar-controls">
+                <button type="button" class="gate-win-btn win-minimize" title="Minimize">
+                    <i class="fa-solid fa-minus"></i>
+                </button>
+                <button type="button" class="gate-win-btn win-maximize" title="Maximize">
+                    <i class="fa-regular fa-square"></i>
+                </button>
+                <button type="button" class="gate-win-btn close" title="Close" onclick="window.close()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Central Card -->
+        <div class="license-gate-card">
+            <!-- Header -->
+            <div class="license-gate-header">
+                <div class="license-gate-logo-wrap">
+                    <img src="logo.png" alt="SN Logo">
+                </div>
+                <div class="license-gate-brand">
+                    <span class="license-gate-brand-name">SN TOOL</span>
+                    <span class="license-gate-tag">STUDIO PRO</span>
+                </div>
+                <div class="license-gate-badge">
+                    <i class="fa-solid fa-shield-halved" style="color:#facc15;"></i>
+                    <span>LICENSE ACTIVATION</span>
+                </div>
+                <div class="license-gate-subtitle">
+                    Please enter your License Key to activate the application
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="license-gate-body">
+                <!-- HWID Container -->
+                <div class="license-gate-hwid-card">
+                    <div class="license-gate-hwid-top">
+                        <span><i class="fa-solid fa-desktop" style="color:#94a3b8; margin-right:4px;"></i> Machine HWID (Copy & send to Admin):</span>
+                    </div>
+                    <div class="license-gate-hwid-row">
+                        <span class="license-gate-hwid-code" id="gate-hwid-text">E53CEFB948DFC356</span>
+                        <button type="button" class="license-gate-btn-copy" onclick="copyHwidAction()">
+                            <i class="fa-solid fa-copy"></i> Copy HWID
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Key Input -->
+                <div class="license-gate-input-group">
+                    <label class="license-gate-input-label" for="gate-license-input">
+                        <i class="fa-solid fa-key" style="color:#facc15;"></i> Enter LICENSE KEY (Provided by Admin):
+                    </label>
+                    <div class="license-gate-input-wrap">
+                        <input type="text" id="gate-license-input" class="license-gate-input-field" placeholder="SN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" onkeyup="if(event.key==='Enter') executeActivate()">
+                        <button type="button" class="license-gate-btn-paste" onclick="pasteKeyAction()">
+                            <i class="fa-solid fa-paste"></i> Paste
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status Alert Message -->
+                <div id="gate-status-msg" class="license-gate-status-msg"></div>
+
+                <!-- Activate Button -->
+                <button type="button" class="license-gate-btn-activate" id="btn-activate-main" onclick="executeActivate()">
+                    <i class="fa-solid fa-unlock-keyhole"></i> ACTIVATE NOW
+                </button>
+
+                <!-- Divider & Contact Admin -->
+                <div class="license-gate-divider">
+                    <span>OR CONTACT ADMIN FOR KEY</span>
+                </div>
+
+                <div class="license-gate-contact-buttons">
+                    <a href="https://t.me/" target="_blank" class="license-gate-contact-btn tg">
+                        <i class="fa-brands fa-telegram"></i> Telegram Admin
+                    </a>
+                    <a href="https://facebook.com/" target="_blank" class="license-gate-contact-btn fb">
+                        <i class="fa-brands fa-facebook"></i> Facebook Page
+                    </a>
+                </div>
+
+                <!-- Footer Note with Version -->
+                <div class="license-gate-footer">
+                    <div class="license-gate-footer-badge">
+                        <i class="fa-solid fa-shield-halved" style="color:#facc15;"></i>
+                        <span id="gate-security-version">SN TOOL Security Engine • v1.1.3</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="preview-toast" class="preview-toast">
+        <i class="fa-solid fa-circle-check" style="color:#4ade80;"></i>
+        <span id="preview-toast-text">HWID Copied</span>
+    </div>
+
+    <!-- Floating Video Recording Assistant Toolbar -->
+    <div class="video-record-toolbar" id="record-toolbar">
+        <div class="record-tool-title">
+            <i class="fa-solid fa-video" style="color:#ef4444;"></i> Video Tools
+        </div>
+        <button type="button" class="record-tool-btn" onclick="resetBlankState()" title="Clear inputs to virgin first-time user state">
+            <i class="fa-solid fa-rotate-left"></i> Reset Blank
+        </button>
+        <button type="button" class="record-tool-btn primary" onclick="autoTypeKeyDemo()" title="Animate realistic key typing for recording">
+            <i class="fa-solid fa-keyboard"></i> Auto-Type Key
+        </button>
+        <button type="button" class="record-tool-btn" onclick="executeActivate()" title="Trigger activate animation">
+            <i class="fa-solid fa-circle-play"></i> Trigger Activate
+        </button>
+        <button type="button" class="record-tool-btn danger" onclick="triggerInvalidKeyDemo()" title="Show invalid key error">
+            <i class="fa-solid fa-triangle-exclamation"></i> Error Demo
+        </button>
+        <button type="button" class="record-tool-btn" onclick="toggleToolbar(true)" title="Hide toolbar for clean recording (Press 'H' or 'Esc' to show again)">
+            <i class="fa-solid fa-eye-slash"></i> Hide (H)
+        </button>
+    </div>
+
+    <!-- Discreet toggle button on corner -->
+    <button type="button" class="show-toolbar-btn" onclick="toggleToolbar(false)" title="Show/Hide Video Tools (H)">
+        <i class="fa-solid fa-gear"></i>
+    </button>
+
+    <script>
+        const SAMPLE_KEY = "SN-PRO-526A-3693-F457-DBD7A0";
+        let isTyping = false;
+
+        function showToast(msg, icon = 'fa-circle-check', color = '#4ade80') {
+            const toast = document.getElementById('preview-toast');
+            const text = document.getElementById('preview-toast-text');
+            text.textContent = msg;
+            toast.querySelector('i').className = `fa-solid ${icon}`;
+            toast.querySelector('i').style.color = color;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+
+        function copyHwidAction() {
+            const hwid = document.getElementById('gate-hwid-text').textContent.trim();
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(hwid).then(() => {
+                    showToast(`Copied HWID: ${hwid}`);
+                }).catch(() => {
+                    showToast(`HWID: ${hwid}`);
+                });
+            } else {
+                showToast(`HWID: ${hwid}`);
+            }
+        }
+
+        async function pasteKeyAction() {
+            const input = document.getElementById('gate-license-input');
+            try {
+                if (navigator.clipboard && navigator.clipboard.readText) {
+                    const clipText = await navigator.clipboard.readText();
+                    if (clipText) {
+                        input.value = clipText.trim();
+                        input.focus();
+                        showToast("Pasted License Key!");
+                        return;
+                    }
+                }
+            } catch (e) {}
+            // Fallback paste sample key
+            input.value = SAMPLE_KEY;
+            input.focus();
+            showToast("Pasted Sample License Key!");
+        }
+
+        function resetBlankState() {
+            const input = document.getElementById('gate-license-input');
+            const msgBox = document.getElementById('gate-status-msg');
+            const btn = document.getElementById('btn-activate-main');
+            input.value = "";
+            msgBox.style.display = "none";
+            msgBox.textContent = "";
+            btn.innerHTML = `<i class="fa-solid fa-unlock-keyhole"></i> ACTIVATE NOW`;
+            btn.style.opacity = "1";
+            btn.disabled = false;
+            showToast("Reset to Virgin Screen", "fa-rotate-left", "#facc15");
+        }
+
+        function autoTypeKeyDemo() {
+            if (isTyping) return;
+            isTyping = true;
+            const input = document.getElementById('gate-license-input');
+            const msgBox = document.getElementById('gate-status-msg');
+            msgBox.style.display = "none";
+            input.value = "";
+            input.focus();
+
+            let index = 0;
+            const speed = 75; // natural human typing cadence ms
+
+            function typeNextChar() {
+                if (index < SAMPLE_KEY.length) {
+                    input.value += SAMPLE_KEY.charAt(index);
+                    index++;
+                    setTimeout(typeNextChar, speed + (Math.random() * 40 - 20));
+                } else {
+                    isTyping = false;
+                    showToast("Key entered! Ready to click ACTIVATE NOW", "fa-keyboard", "#facc15");
+                }
+            }
+
+            typeNextChar();
+        }
+
+        function executeActivate() {
+            const input = document.getElementById('gate-license-input');
+            const msgBox = document.getElementById('gate-status-msg');
+            const btn = document.getElementById('btn-activate-main');
+            const key = input.value.trim();
+
+            if (!key) {
+                msgBox.style.display = 'block';
+                msgBox.style.color = '#f87171';
+                msgBox.style.background = 'rgba(239,68,68,0.12)';
+                msgBox.style.borderColor = 'rgba(239,68,68,0.3)';
+                msgBox.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Please enter your License Key';
+                return;
+            }
+
+            // Step 1: Verifying
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> VERIFYING KEY...`;
+            btn.style.opacity = "0.85";
+            msgBox.style.display = 'block';
+            msgBox.style.color = '#facc15';
+            msgBox.style.background = 'rgba(250,204,21,0.12)';
+            msgBox.style.borderColor = 'rgba(250,204,21,0.3)';
+            msgBox.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Contacting SN Cloud Security Engine...';
+
+            setTimeout(() => {
+                // Step 2: Activated successfully!
+                btn.innerHTML = `<i class="fa-solid fa-check-double"></i> ACTIVATED 100%!`;
+                btn.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
+                btn.style.color = '#ffffff';
+                btn.style.boxShadow = '0 0 20px rgba(34, 197, 94, 0.5)';
+
+                msgBox.style.color = '#4ade80';
+                msgBox.style.background = 'rgba(34,197,94,0.16)';
+                msgBox.style.borderColor = 'rgba(34,197,94,0.35)';
+                msgBox.innerHTML = '<i class="fa-solid fa-circle-check"></i> Welcome! License Activated Successfully 100%!';
+
+                showToast("Activated License Key successfully 100%!", "fa-circle-check", "#4ade80");
+            }, 1400);
+        }
+
+        function triggerInvalidKeyDemo() {
+            const input = document.getElementById('gate-license-input');
+            const msgBox = document.getElementById('gate-status-msg');
+            const btn = document.getElementById('btn-activate-main');
+
+            input.value = "SN-TEST-INVALID-KEY-XXXX";
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> VERIFYING KEY...`;
+            msgBox.style.display = 'block';
+            msgBox.style.color = '#facc15';
+            msgBox.style.background = 'rgba(250,204,21,0.12)';
+            msgBox.style.borderColor = 'rgba(250,204,21,0.3)';
+            msgBox.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking Key Validity...';
+
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-unlock-keyhole"></i> ACTIVATE NOW`;
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.style.boxShadow = '';
+
+                msgBox.style.color = '#f87171';
+                msgBox.style.background = 'rgba(239,68,68,0.15)';
+                msgBox.style.borderColor = 'rgba(239,68,68,0.35)';
+                msgBox.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Invalid License Key! Please contact Admin for activation.';
+                showToast("Invalid License Key Error", "fa-circle-xmark", "#ef4444");
+            }, 1200);
+        }
+
+        function toggleToolbar(forceHide) {
+            const bar = document.getElementById('record-toolbar');
+            if (forceHide === true) {
+                bar.classList.add('hidden');
+                showToast("Toolbar hidden! Press 'H' to show again", "fa-eye-slash", "#facc15");
+            } else if (forceHide === false) {
+                bar.classList.toggle('hidden');
+            } else {
+                bar.classList.toggle('hidden');
+            }
+        }
+
+        // Hotkey: press 'H' or 'Esc' to toggle recording toolbar
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'h' || e.key === 'H') {
+                const tag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
+                if (tag !== 'input') {
+                    toggleToolbar();
+                }
+            } else if (e.key === 'Escape') {
+                toggleToolbar();
+            }
+        });
+
+        // URL Param triggers for video screenshots
+        if (window.location.search.includes('clean=1') || window.location.search.includes('clean=true')) {
+            const bar = document.getElementById('record-toolbar');
+            if (bar) bar.classList.add('hidden');
+            const gear = document.querySelector('.show-toolbar-btn');
+            if (gear) gear.style.display = 'none';
+        }
+
+        if (window.location.search.includes('key=1') || window.location.search.includes('filled=1')) {
+            document.getElementById('gate-license-input').value = SAMPLE_KEY;
+        }
+
+        if (window.location.search.includes('success=1')) {
+            document.getElementById('gate-license-input').value = SAMPLE_KEY;
+            executeActivate();
+        }
+    </script>
+</body>
+</html>
