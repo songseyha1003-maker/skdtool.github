@@ -13,21 +13,6 @@
     "status": "ACTIVE"
   },
   {
-    "license_key": "SN-LIF-0000-0DFD-3998-633BF8",
-    "client_name": "Akara01",
-    "plan": "LIFETIME",
-    "duration_days": 0,
-    "created_at": "2026-10-22 09:01:36",
-    "expires_at": "LIFETIME",
-    "expiry_timestamp": 0,
-    "bound_hwid": "09935A76E7AE4525",
-    "raw_payload": "SN:LIF:0000:0DFD:3998",
-    "signature": "633BF8",
-    "status": "REVOKED",
-    "revoked_at": "2026-10-22 09:05:19",
-    "revoke_reason": "Admin blocked user"
-  },
-  {
     "license_key": "SN-30D-5129-5580-C9CC-704A7D",
     "client_name": "Bong Nak",
     "plan": "30D",
