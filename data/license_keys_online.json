@@ -57,6 +57,34 @@
     "status": "ACTIVE",
     "last_renewed": "2026-10-21 16:55:13"
   },
+  "SN-29D-5129-0DFD-3EC1-1D6E52": {
+    "license_key": "SN-29D-5129-0DFD-3EC1-1D6E52",
+    "client_name": "Pon Akara",
+    "plan": "29D",
+    "duration_days": 29,
+    "created_at": "2026-10-22 09:02:04",
+    "expires_at": "2026-11-20",
+    "expiry_timestamp": 1795219199,
+    "bound_hwid": "09935A76E7AE4525",
+    "raw_payload": "SN:29D:5129:0DFD:3EC1",
+    "signature": "1D6E52",
+    "status": "ACTIVE"
+  },
+  "SN-LIF-0000-0DFD-3998-633BF8": {
+    "license_key": "SN-LIF-0000-0DFD-3998-633BF8",
+    "client_name": "Akara01",
+    "plan": "LIFETIME",
+    "duration_days": 0,
+    "created_at": "2026-10-22 09:01:36",
+    "expires_at": "LIFETIME",
+    "expiry_timestamp": 0,
+    "bound_hwid": "09935A76E7AE4525",
+    "raw_payload": "SN:LIF:0000:0DFD:3998",
+    "signature": "633BF8",
+    "status": "REVOKED",
+    "revoked_at": "2026-10-22 09:05:19",
+    "revoke_reason": "Admin blocked user"
+  },
   "SN-30D-5129-5580-C9CC-704A7D": {
     "license_key": "SN-30D-5129-5580-C9CC-704A7D",
     "client_name": "Bong Nak",
