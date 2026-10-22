@@ -273,7 +273,6 @@ Start-Process "{dest_file}"
 Remove-Item -Force $MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue
 """
         else:
-            restart_target = f'"{exe_file}"' if exe_file.exists() else f'"{run_bat}"'
             ps1_content = f"""
 Start-Sleep -Seconds 2
 Get-Process | Where-Object {{ $_.Path -like "{app_dir}*" }} | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -294,6 +293,7 @@ for ($i = 0; $i -lt 8; $i++) {{
         $extracted = $true
         break
     }} catch {{
+        Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
     }}
 }}
@@ -302,8 +302,23 @@ if ($licBackup -ne $null) {{
     [System.IO.File]::WriteAllBytes("{app_dir}\\license.key", $licBackup)
 }}
 Remove-Item -Force "{dest_file}" -ErrorAction SilentlyContinue
+
+# Determine best restart binary or launcher
+$targetExe = "{exe_file}"
+if (-not (Test-Path $targetExe)) {{
+    if (Test-Path "{app_dir}\\Khmer_Drama_Studio_Launcher.bat") {{
+        $targetExe = "{app_dir}\\Khmer_Drama_Studio_Launcher.bat"
+    }} elseif (Test-Path "{app_dir}\\START_SN_TOOL.bat") {{
+        $targetExe = "{app_dir}\\START_SN_TOOL.bat"
+    }} elseif (Test-Path "{app_dir}\\SN_TOOL.bat") {{
+        $targetExe = "{app_dir}\\SN_TOOL.bat"
+    }}
+}}
+
 Start-Sleep -Seconds 1
-Start-Process {restart_target}
+if (Test-Path $targetExe) {{
+    Start-Process -FilePath $targetExe -WorkingDirectory "{app_dir}"
+}}
 Remove-Item -Force $MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue
 """
         with open(ps1_file, "w", encoding="utf-8") as f:
