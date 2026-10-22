@@ -1,15 +1,19 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title SN TOOL - 1-Click Client Updater (Upgrade to v1.0.9)
+title SN TOOL - 1-Click Client Updater (Upgrade to v1.1.3)
 color 0b
 cls
 
 echo ========================================================================
-echo  SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.0.9)
-echo  Khmer Neural Voice Enhancement and Nisay Cloud AI Gateway
+echo  🎬 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.1.3)
+echo  ⚡ 4x Fast Neural Voice Synthesis & Zero-Drop Nisay Translation
 echo ========================================================================
 echo.
+
+echo [*] កំពុងបិទ Process ចាស់ដើម្បីការពារបញ្ហា File Lock Collision...
+taskkill /f /im SN_TOOL.exe /im pythonw.exe >nul 2>&1
+timeout /t 1 /nobreak >nul
 
 where python >nul 2>nul
 if %ERRORLEVEL% EQU 0 (
@@ -27,9 +31,9 @@ if %ERRORLEVEL% EQU 0 (
     )
 )
 
-if exist "python\python.exe" (
+if exist "%LOCALAPPDATA%\Programs\SN_TOOL\_internal\python.exe" (
     if exist "scripts\update_client.py" (
-        python\python.exe scripts\update_client.py
+        "%LOCALAPPDATA%\Programs\SN_TOOL\_internal\python.exe" scripts\update_client.py
         goto :END
     )
 )

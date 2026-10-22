@@ -1,12 +1,12 @@
-# SN TOOL Studio Pro - PowerShell Client Updater (v1.0.9)
+# SN TOOL Studio Pro - PowerShell Client Updater (v1.1.3+)
 # Preserves license.key and updates all application files cleanly.
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ProgressPreference = 'SilentlyContinue'
 
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.0.9)" -ForegroundColor Cyan
-Write-Host "  Khmer Neural Voice Enhancement & Nisay Cloud AI Gateway" -ForegroundColor Cyan
+Write-Host "  SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.1.3+)" -ForegroundColor Cyan
+Write-Host "  4x Fast Neural Voice Synthesis & Zero-Drop Nisay Translation" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -22,6 +22,11 @@ if ($localAppData) {
 }
 
 Write-Host "[*] Target Installation: $targetDir" -ForegroundColor Yellow
+
+# Terminate running instances to prevent file lock
+Write-Host "[*] Closing any active SN_TOOL instances..." -ForegroundColor Yellow
+Stop-Process -Name "SN_TOOL", "pythonw" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
 
 # Backup license.key if present
 $licFile = Join-Path $targetDir "license.key"
@@ -39,10 +44,10 @@ if (Test-Path $licFile) {
 }
 
 # Download update package
-$updateUrl = "https://drive.usercontent.google.com/download?id=1x_k269mEwMPH01tx8o6N67QEtLz7jlUo&export=download&confirm=t"
-$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v109.zip"
+$updateUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
+$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v113.zip"
 
-Write-Host "[*] Downloading update package from Google Drive Cloud CDN..." -ForegroundColor Yellow
+Write-Host "[*] Downloading v1.1.3 update package from Cloud CDN..." -ForegroundColor Yellow
 
 $downloadOk = $false
 try {
@@ -54,11 +59,11 @@ try {
         if ($zipSize -gt 1000000) {
             $downloadOk = $true
             $mb = [math]::Round($zipSize / 1MB, 2)
-            Write-Host "[OK] Downloaded v1.0.9 update package ($mb MB) successfully!" -ForegroundColor Green
+            Write-Host "[OK] Downloaded v1.1.3 update package ($mb MB) successfully!" -ForegroundColor Green
         }
     }
 } catch {
-    Write-Host "[!] Google Drive CDN direct download notice: $_" -ForegroundColor Yellow
+    Write-Host "[!] Cloud CDN direct download notice: $_" -ForegroundColor Yellow
 }
 
 if (-not $downloadOk) {
@@ -74,13 +79,24 @@ if (-not $downloadOk) {
     }
 }
 
-# Extract update package
+# Extract update package with retry
 Write-Host "[*] Extracting update patch over installation..." -ForegroundColor Yellow
-try {
-    Expand-Archive -Path $tempZip -DestinationPath $targetDir -Force
-    Write-Host "[OK] Files and modules updated successfully!" -ForegroundColor Green
-} catch {
-    Write-Host "[ERROR] Extraction failed: $_" -ForegroundColor Red
+$extracted = $false
+for ($i = 0; $i -lt 5; $i++) {
+    try {
+        Expand-Archive -Path $tempZip -DestinationPath $targetDir -Force -ErrorAction Stop
+        $extracted = $true
+        Write-Host "[OK] Files and modules updated successfully!" -ForegroundColor Green
+        break
+    } catch {
+        Write-Host "[!] Retry extracting in 2 seconds (waiting for file release)..." -ForegroundColor Yellow
+        Stop-Process -Name "SN_TOOL", "pythonw" -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+    }
+}
+
+if (-not $extracted) {
+    Write-Host "[ERROR] Extraction failed. Please close all running windows and try again." -ForegroundColor Red
     Exit 1
 }
 
@@ -102,7 +118,6 @@ if ($tempZip -ne (Join-Path $targetDir "SN_TOOL_UPDATE.zip") -and (Test-Path $te
 
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Green
-Write-Host "  [SUCCESS] SN TOOL Studio Pro upgraded to Version 1.0.9!" -ForegroundColor Green
-Write-Host "  [SUCCESS] Khmer Neural Voices & Nisay AI Gateway active!" -ForegroundColor Green
+Write-Host "  🎉 [SUCCESS] SN TOOL STUDIO PRO has been updated to v1.1.3!" -ForegroundColor Green
 Write-Host "========================================================================" -ForegroundColor Green
 Write-Host ""
