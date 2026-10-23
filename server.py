@@ -134,6 +134,9 @@ PUBLIC_API_WHITELIST = {
     "/api/license/activate",
     "/api/license/hwid",
     "/api/system/play-completion-sound",
+    "/api/system/disk-status",
+    "/api/system/clean-disk",
+    "/api/system/set-auto-clean",
     "/api/version",
     "/health",
     "/api/health"
@@ -261,6 +264,49 @@ def play_windows_completion_sound():
 def system_play_completion_sound_endpoint():
     play_windows_completion_sound()
     return jsonify({"success": True, "message": "Windows completion sound played"})
+
+
+@app.route("/api/system/disk-status", methods=["GET"])
+def system_disk_status_endpoint():
+    try:
+        from disk_cleaner import scan_junk_files
+        res = scan_junk_files()
+        return jsonify({
+            "success": True,
+            "junk_files_count": res.get("junk_files_count", 0),
+            "total_junk_mb": res.get("total_junk_mb", 0),
+            "total_junk_gb": res.get("total_junk_gb", 0),
+            "free_disk_gb": res.get("free_disk_gb", 0),
+            "total_disk_gb": res.get("total_disk_gb", 0),
+            "auto_clean_enabled": res.get("auto_clean_enabled", True)
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/system/clean-disk", methods=["POST"])
+def system_clean_disk_endpoint():
+    try:
+        from disk_cleaner import execute_disk_cleanup
+        res = execute_disk_cleanup()
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/system/set-auto-clean", methods=["POST"])
+def system_set_auto_clean_endpoint():
+    try:
+        from disk_cleaner import get_disk_config, save_disk_config
+        data = request.get_json(force=True) or {}
+        cfg = get_disk_config()
+        if "enabled" in data:
+            cfg["auto_clean_after_dubbing"] = bool(data["enabled"])
+            save_disk_config(cfg)
+        return jsonify({"success": True, "auto_clean_enabled": cfg.get("auto_clean_after_dubbing", True)})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 @app.route("/")

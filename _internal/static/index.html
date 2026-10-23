@@ -152,6 +152,10 @@
                             <i class="fa-solid fa-pen-to-square" style="color:#fbbf24;"></i>
                             <span>Rename</span>
                         </div>
+                        <div class="power-item" onclick="openDiskCleanerModal()">
+                            <i class="fa-solid fa-broom" style="color:#10b981;"></i>
+                            <span>Clean Disk Cache</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1632,6 +1636,20 @@
                         </div>
                         <i class="fa-solid fa-chevron-right modal-chevron-arrow"></i>
                     </div>
+
+                    <!-- Row 5: Disk Space & Cache Cleaner -->
+                    <div class="modal-nav-row-card" onclick="openDiskCleanerModal()">
+                        <div class="modal-card-left-col">
+                            <div class="modal-icon-badge badge-disk" style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); color:#10b981;">
+                                <i class="fa-solid fa-hard-drive"></i>
+                            </div>
+                            <div class="modal-card-titles">
+                                <div class="modal-card-title-main">Disk Space &amp; Cache Cleaner</div>
+                                <div class="modal-card-desc-sub">សម្អាតកាកសំណល់សំឡេង WAV និងទាញយកទំហំ Hard Disk មកវិញ</div>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right modal-chevron-arrow"></i>
+                    </div>
                 </div>
 
                 <!-- Subpage 1: Studio Translation Engine -->
@@ -2738,6 +2756,69 @@
                     <div class="power-modal-actions-footer">
                         <button type="button" class="power-btn-cancel" onclick="closeModal('modal-power-rename')">Close</button>
                         <button type="button" class="power-btn-submit" id="btn-power-rename-start" onclick="executeBatchRename()"><i class="fa-solid fa-pen-to-square"></i> Rename All Files</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <!-- ====================================================================
+             MODAL: DISK SPACE & CACHE CLEANER (High-Performance Storage Optimizer)
+             ==================================================================== -->
+        <div class="modal-backdrop-overlay" id="modal-disk-cleaner">
+            <div class="capcut-update-card" style="max-width: 580px;">
+                <!-- Top Header Bar -->
+                <div class="capcut-update-header">
+                    <div class="capcut-update-brand">
+                        <i class="fa-solid fa-hard-drive" style="color:#10b981; font-size:1.1rem; margin-right:8px;"></i>
+                        <span class="capcut-brand-title">STORAGE &amp; DISK CLEANER</span>
+                        <span class="capcut-pro-tag" style="background:rgba(16,185,129,0.2); color:#10b981; border-color:rgba(16,185,129,0.4);">OPTIMIZER</span>
+                    </div>
+                    <button type="button" class="capcut-close-btn" onclick="closeModal('modal-disk-cleaner')" title="Close">✕</button>
+                </div>
+
+                <div class="capcut-update-body" style="padding: 16px 20px;">
+                    <!-- Dual Stat Metric Cards -->
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:14px;">
+                        <!-- Junk Card -->
+                        <div style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.25); border-radius:10px; padding:12px; text-align:center;">
+                            <div style="font-size:0.7rem; color:#94a3b8; text-transform:uppercase; font-weight:600; letter-spacing:0.5px;">Temporary Audio Junk</div>
+                            <div id="disk-junk-size-display" style="font-size:1.9rem; font-weight:800; color:#10b981; line-height:1.2; margin:4px 0;">-- GB</div>
+                            <div id="disk-junk-count-display" style="font-size:0.7rem; color:#cbd5e1;">Scanning files...</div>
+                        </div>
+
+                        <!-- Free Disk Space Card -->
+                        <div style="background:rgba(250,204,21,0.06); border:1px solid rgba(250,204,21,0.25); border-radius:10px; padding:12px; text-align:center;">
+                            <div style="font-size:0.7rem; color:#94a3b8; text-transform:uppercase; font-weight:600; letter-spacing:0.5px;">Drive Free Space</div>
+                            <div id="disk-free-space-display" style="font-size:1.9rem; font-weight:800; color:#facc15; line-height:1.2; margin:4px 0;">-- GB</div>
+                            <div id="disk-total-space-display" style="font-size:0.7rem; color:#cbd5e1;">Available space</div>
+                        </div>
+                    </div>
+
+                    <!-- 100% Protection Guarantee -->
+                    <div style="background:#0a0c10; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px 14px; margin-bottom:14px; display:flex; align-items:flex-start; gap:10px;">
+                        <i class="fa-solid fa-shield-halved" style="color:#10b981; font-size:1.1rem; margin-top:2px;"></i>
+                        <div style="font-size:0.75rem; color:#94a3b8; line-height:1.4;">
+                            <strong style="color:#e2e8f0;">ការធានាសុវត្ថិភាព ១០០%:</strong> មិនប៉ះពាល់ដល់ <span style="color:#facc15;">License</span>, <span style="color:#38bdf8;">វីដេអូស្រេចបាច់ (.mp4)</span>, ឬ <span style="color:#a78bfa;">Subtitle (.srt)</span> ឡើយ។ ប្រព័ន្ធលុបតែ File សំឡេងបណ្តោះអាសន្ន (.wav) ដែលកកស្ទះប៉ុណ្ណោះ។
+                        </div>
+                    </div>
+
+                    <!-- Auto-Clean Option Toggle -->
+                    <div style="background:#0a0c10; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px 14px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <i class="fa-solid fa-wand-magic-sparkles" style="color:#38bdf8; font-size:0.9rem;"></i>
+                            <span style="font-size:0.75rem; color:#e2e8f0; font-weight:500;">Auto-Clean ក្រោយបកប្រែវីដេអូចប់ (Auto Purge WAVs)</span>
+                        </div>
+                        <input type="checkbox" id="chk-disk-autoclean" onchange="toggleAutoCleanDisk(this.checked)" checked style="cursor:pointer; width:16px; height:16px; accent-color:#10b981;">
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="power-btn-cancel" onclick="closeModal('modal-disk-cleaner')">បិទ (Close)</button>
+                        <button type="button" class="power-btn-submit" id="btn-disk-clean-now" onclick="runOneClickDiskCleanup()" style="background:linear-gradient(135deg, #10b981 0%, #059669 100%); color:#fff; border:none; box-shadow:0 4px 15px rgba(16,185,129,0.35); font-weight:700;">
+                            <i class="fa-solid fa-broom"></i> <span id="btn-disk-clean-text">សម្អាតសម្រាមឥឡូវនេះ (Clean Cache)</span>
+                        </button>
                     </div>
                 </div>
             </div>

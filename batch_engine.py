@@ -407,6 +407,14 @@ class BatchDubbingManager:
         item["output_video"] = str(final_video_path)
         item["drama_folder"] = str(primary_dir.resolve()).replace("\\", "/")
 
+        # Auto-clean temporary scratch files for this batch item
+        try:
+            from disk_cleaner import cleanup_single_project_cache
+            cleanup_single_project_cache(item_dir)
+        except Exception as cln_err:
+            print(f"[Batch AutoClean Note] {cln_err}")
+
+
     def _auto_merge_completed_series(self):
         """Automatically merge completed episodes of a series into a single Full Movie (1-2 hours) in the drama folder."""
         import shutil

@@ -11604,3 +11604,139 @@ document.addEventListener('keydown', function(e) {
 });
 
 
+// ==========================================================================
+// 🧹 STORAGE & DISK CACHE CLEANER ENGINE
+// ==========================================================================
+async function openDiskCleanerModal() {
+    closeModal('modal-settings');
+    const powerPopup = document.getElementById('power-menu-popup');
+    if (powerPopup) powerPopup.classList.remove('show');
+    openModal('modal-disk-cleaner');
+
+    const junkSizeEl = document.getElementById('disk-junk-size-display');
+    const junkCountEl = document.getElementById('disk-junk-count-display');
+    const freeSpaceEl = document.getElementById('disk-free-space-display');
+    const totalSpaceEl = document.getElementById('disk-total-space-display');
+    const autoCleanEl = document.getElementById('chk-disk-autoclean');
+    const btnClean = document.getElementById('btn-disk-clean-now');
+    const btnText = document.getElementById('btn-disk-clean-text');
+
+    if (junkSizeEl) junkSizeEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:1.2rem;"></i>';
+    if (junkCountEl) junkCountEl.textContent = 'Analyzing disk cache...';
+    if (btnClean) btnClean.disabled = true;
+
+    try {
+        const res = await fetch('/api/system/disk-status');
+        const data = await res.json();
+        if (data.success) {
+            const junkGb = data.total_junk_gb || 0;
+            const junkMb = data.total_junk_mb || 0;
+            const junkCount = data.junk_files_count || 0;
+            const freeGb = data.free_disk_gb || 0;
+            const totalGb = data.total_disk_gb || 0;
+
+            if (junkSizeEl) {
+                if (junkGb >= 1.0) {
+                    junkSizeEl.textContent = `${junkGb.toFixed(1)} GB`;
+                } else if (junkMb > 0) {
+                    junkSizeEl.textContent = `${junkMb.toFixed(0)} MB`;
+                } else {
+                    junkSizeEl.textContent = `0.0 GB`;
+                }
+            }
+            if (junkCountEl) {
+                junkCountEl.textContent = `${junkCount.toLocaleString()} temporary audio files (.wav)`;
+            }
+            if (freeSpaceEl) {
+                freeSpaceEl.textContent = `${freeGb.toFixed(1)} GB Free`;
+            }
+            if (totalSpaceEl) {
+                totalSpaceEl.textContent = `out of ${totalGb.toFixed(0)} GB drive capacity`;
+            }
+            if (autoCleanEl) {
+                autoCleanEl.checked = !!data.auto_clean_enabled;
+            }
+
+            if (btnClean) {
+                if (junkCount === 0 || junkMb < 1) {
+                    btnClean.disabled = true;
+                    btnClean.style.opacity = '0.6';
+                    if (btnText) btnText.textContent = 'Disk Is Clean (គ្មានសម្រាមទេ)';
+                } else {
+                    btnClean.disabled = false;
+                    btnClean.style.opacity = '1.0';
+                    if (btnText) btnText.textContent = 'សម្អាតសម្រាមឥឡូវនេះ (Clean Cache)';
+                }
+            }
+        }
+    } catch (err) {
+        console.warn("Disk scan note:", err);
+        if (junkSizeEl) junkSizeEl.textContent = 'Error';
+        if (junkCountEl) junkCountEl.textContent = 'Could not read disk status';
+        if (btnClean) btnClean.disabled = false;
+    }
+}
+
+async function toggleAutoCleanDisk(enabled) {
+    try {
+        await fetch('/api/system/set-auto-clean', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: enabled })
+        });
+        showToast(enabled ? "Auto-clean is now active!" : "Auto-clean disabled");
+        appendLiveTerminalLine(`Auto-clean mode set to: ${enabled ? 'ENABLED' : 'DISABLED'}`, "[Storage]", "info");
+    } catch (e) {
+        console.warn("Auto-clean toggle note:", e);
+    }
+}
+
+async function runOneClickDiskCleanup() {
+    const btnClean = document.getElementById('btn-disk-clean-now');
+    const btnText = document.getElementById('btn-disk-clean-text');
+    const junkSizeEl = document.getElementById('disk-junk-size-display');
+    const junkCountEl = document.getElementById('disk-junk-count-display');
+    const freeSpaceEl = document.getElementById('disk-free-space-display');
+
+    if (btnClean) btnClean.disabled = true;
+    if (btnText) btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> កំពុងសម្អាតសម្រាម...';
+
+    appendLiveTerminalLine("Starting safe disk cache cleanup (purging temporary WAV files)...", "[Storage]", "info");
+
+    try {
+        const res = await fetch('/api/system/clean-disk', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            const freedGb = data.freed_gb || 0;
+            const freedMb = data.freed_mb || 0;
+            const filesCount = data.files_removed || 0;
+            const freeGbNow = data.free_disk_gb_now || 0;
+
+            const freedStr = freedGb >= 1.0 ? `${freedGb.toFixed(1)} GB` : `${freedMb.toFixed(0)} MB`;
+
+            if (junkSizeEl) junkSizeEl.textContent = '0.0 GB';
+            if (junkCountEl) junkCountEl.textContent = '0 temporary files (Cleaned)';
+            if (freeSpaceEl) freeSpaceEl.textContent = `${freeGbNow.toFixed(1)} GB Free`;
+
+            showToast(`🎉 បានសម្អាតសម្រាមជោគជ័យ! សន្សំទំហំ Hard Disk បាន ${freedStr}!`);
+            appendLiveTerminalLine(`🎉 Disk cleanup completed successfully! Purged ${filesCount.toLocaleString()} temporary files and recovered ${freedStr} of free space.`, "[Storage]", "success");
+
+            if (btnClean) {
+                btnClean.disabled = true;
+                btnClean.style.opacity = '0.6';
+            }
+            if (btnText) btnText.innerHTML = '<i class="fa-solid fa-check"></i> សម្អាតរួចរាល់ (Cleaned)';
+        } else {
+            showToast("Cleanup note: " + (data.error || "Unknown error"));
+            if (btnClean) btnClean.disabled = false;
+            if (btnText) btnText.textContent = 'សាកល្បងម្ដងទៀត (Retry)';
+        }
+    } catch (e) {
+        showToast("Error cleaning disk: " + e.message);
+        if (btnClean) btnClean.disabled = false;
+        if (btnText) btnText.textContent = 'សាកល្បងម្ដងទៀត (Retry)';
+    }
+}
+
+
+

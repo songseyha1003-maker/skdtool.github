@@ -893,5 +893,13 @@ class ProjectManager:
         )
         gc.collect()
 
+        # Auto-clean temporary intermediate audio files to preserve disk space
+        try:
+            from disk_cleaner import cleanup_single_project_cache
+            cleanup_single_project_cache(proj_dir)
+        except Exception as cln_err:
+            print(f"[AutoClean Note] {cln_err}")
+
         update_prog(100, "🎉 100% Complete! Dubbed video saved successfully!", "Completed! Video ready.")
         return rendered_project
+
