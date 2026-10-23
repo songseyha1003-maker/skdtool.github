@@ -536,24 +536,41 @@ class ProjectManager:
             clean_stem = re.sub(r'(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$', '', clean_stem, flags=re.IGNORECASE)
             clean_stem = re.sub(r'_\d{9,12}$', '', clean_stem)
             
-            # If clean_stem is generic, resolve from destination drama directory name
-            if clean_stem.lower() in ("drama_series", "drama_series_full_movie", "full_movie", "") and dest_dirs:
-                parent_drama_name = dest_dirs[0].name
-                if parent_drama_name and parent_drama_name.lower() not in ("exports", "sn_dramas", "uploads", "data", "temp"):
-                    clean_stem = f"{parent_drama_name}_Full_Movie"
+            # Check original filename before falling back to folder name
+            orig_name = Path(video_in).stem
+            orig_name = re.sub(r'^(?:Dubbed_)+', '', orig_name, flags=re.IGNORECASE)
+            orig_name = re.sub(r'^Raw_Full_Movie_', '', orig_name, flags=re.IGNORECASE)
+            orig_name = re.sub(r'(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$', '', orig_name, flags=re.IGNORECASE)
+            orig_name = re.sub(r'_\d{9,12}$', '', orig_name)
+            orig_name = re.sub(r'^\d{9,12}_', '', orig_name)
 
+            if clean_stem.lower() in ("drama_series", "drama_series_full_movie", "full_movie", "video", ""):
+                if orig_name and orig_name.lower() not in ("drama_series", "full_movie", "video", "source_media", "drama_video", "sample_video"):
+                    clean_stem = orig_name
+                elif dest_dirs:
+                    parent_drama_name = dest_dirs[0].name
+                    if parent_drama_name and parent_drama_name.lower() not in ("exports", "sn_dramas", "uploads", "data", "temp"):
+                        clean_stem = f"{parent_drama_name}_Full_Movie"
+                    else:
+                        clean_stem = "Drama_Series_Full_Movie"
+
+            # CRITICAL: Sanitize illegal Windows filename characters (: * ? " < > | / \)
+            clean_stem = re.sub(r'[\\/*?:"<>|]', '_', str(clean_stem)).strip('. ') or "Video"
             out_stem = f"Dubbed_{clean_stem}"
             
             saved_paths = []
             for d in dest_dirs:
-                dest_file = d / f"{out_stem}.mp4"
-                if Path(output_video_path).resolve() != dest_file.resolve():
-                    shutil.copy2(str(output_video_path), str(dest_file))
-                saved_paths.append(str(dest_file))
+                try:
+                    d.mkdir(parents=True, exist_ok=True)
+                    dest_file = d / f"{out_stem}.mp4"
+                    if Path(output_video_path).resolve() != dest_file.resolve():
+                        shutil.copy2(str(output_video_path), str(dest_file))
+                    if dest_file.exists():
+                        saved_paths.append(str(dest_file))
+                except Exception as copy_e:
+                    print(f"[Export Folder Copy Error] Failed copying to {d}: {copy_e}")
 
-                # Do NOT generate unwanted .srt subtitle document file in output folder!
-                # Only produce the finished dubbed MP4 video.
-                # Also clean up any lingering .srt file with the same stem if present
+                # Clean up any lingering .srt file with the same stem if present
                 try:
                     lingering_srt = d / f"{out_stem}.srt"
                     if lingering_srt.exists():
@@ -561,7 +578,6 @@ class ProjectManager:
                 except Exception:
                     pass
 
-                # Also clean up any generic lingering Dubbed_Drama_Series_Full_Movie.srt
                 try:
                     generic_srt = d / "Dubbed_Drama_Series_Full_Movie.srt"
                     if generic_srt.exists():
@@ -569,8 +585,19 @@ class ProjectManager:
                 except Exception:
                     pass
 
+            # If all destination directories failed (e.g. read-only or invalid drive), fall back to data/exports
+            if not saved_paths:
+                fallback_dir = Path("data/exports")
+                fallback_dir.mkdir(parents=True, exist_ok=True)
+                fallback_file = fallback_dir / f"{out_stem}.mp4"
+                if Path(output_video_path).resolve() != fallback_file.resolve():
+                    shutil.copy2(str(output_video_path), str(fallback_file))
+                if fallback_file.exists():
+                    saved_paths.append(str(fallback_file))
+
             if saved_paths:
                 project["final_exported_video_path"] = saved_paths[0]
+                project["final_exported_filename"] = Path(saved_paths[0]).name
                 project["final_exported_dir"] = str(Path(saved_paths[0]).parent)
         except Exception as e:
             print(f"Unified drama folder export note: {e}")

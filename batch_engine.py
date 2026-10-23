@@ -377,7 +377,8 @@ class BatchDubbingManager:
         custom_export_dir = item.get("custom_export_dir")
         target_dirs = resolve_drama_export_directories(in_path, drama_title, custom_export_dir=custom_export_dir)
         primary_dir = target_dirs[0]
-        out_filename = f"Dubbed_{p_in.stem}.mp4"
+        clean_in_stem = re.sub(r'[\\/*?:"<>|]', '_', p_in.stem).strip('. ') or "Video"
+        out_filename = f"Dubbed_{clean_in_stem}.mp4"
         final_video_path = primary_dir / out_filename
         
         render_dubbed_video(

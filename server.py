@@ -3177,6 +3177,7 @@ def auto_dub_status_endpoint(task_id):
         resp["video_url"] = f"/media/{out_vid.replace(chr(92), '/')}" if out_vid else ""
         resp["mixed_audio_url"] = f"/media/{out_aud.replace(chr(92), '/')}" if out_aud else ""
         resp["final_exported_video_path"] = proj.get("final_exported_video_path") or out_vid
+        resp["final_exported_filename"] = proj.get("final_exported_filename") or (Path(resp["final_exported_video_path"]).name if resp["final_exported_video_path"] else "Dubbed_Video.mp4")
         resp["final_exported_dir"] = proj.get("final_exported_dir") or (str(Path(out_vid).parent) if out_vid else "")
 
     return jsonify(resp)
@@ -3188,17 +3189,23 @@ def open_project_folder_endpoint():
     target_path = data.get("path")
     if not target_path:
         target_path = str(Path("data/exports").resolve())
-    else:
-        p = Path(target_path)
-        if p.is_file():
-            target_path = str(p.parent.resolve())
-        else:
-            target_path = str(p.resolve())
 
     if sys.platform == "win32":
         try:
-            os.startfile(target_path)
-            return jsonify({"success": True, "opened_path": target_path})
+            import subprocess
+            p = Path(target_path).resolve()
+            if p.is_file():
+                # Open Explorer and highlight the exact file!
+                subprocess.Popen(f'explorer.exe /select,"{str(p)}"', shell=True)
+                return jsonify({"success": True, "opened_path": str(p.parent), "selected_file": str(p)})
+            elif p.is_dir():
+                os.startfile(str(p))
+                return jsonify({"success": True, "opened_path": str(p)})
+            else:
+                # If neither exists yet, create parent directory and open
+                p.mkdir(parents=True, exist_ok=True)
+                os.startfile(str(p))
+                return jsonify({"success": True, "opened_path": str(p)})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
     return jsonify({"success": True, "opened_path": target_path})

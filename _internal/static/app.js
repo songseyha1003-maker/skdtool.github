@@ -10228,6 +10228,12 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                     // Show success action prompt with Open Folder & Download buttons
                     showDubbingSuccessNotification(sData);
 
+                    // Automatically open folder and highlight the rendered video file in Windows Explorer!
+                    const targetToOpen = sData.final_exported_video_path || (sData.project && sData.project.final_exported_video_path) || sData.final_exported_dir || currentCustomExportFolder || '';
+                    if (targetToOpen) {
+                        openExportFolderDirect(targetToOpen);
+                    }
+
                 } else if (sData.status === "failed") {
                     clearInterval(activeDubbingPollTimer);
                     activeDubbingPollTimer = null;
@@ -10707,6 +10713,8 @@ function showDubbingSuccessNotification(data) {
 
     const isBatch = data && data.batch_count;
     const proj = data && data.project;
+    const finalFile = (proj && proj.final_exported_video_path) || (data && data.final_exported_video_path) || "";
+    const finalFileName = (proj && proj.final_exported_filename) || (data && data.final_exported_filename) || (finalFile ? finalFile.split(/[\\/]/).pop() : "");
     const finalDir = (proj && (proj.final_exported_dir || (proj.final_exported_video_path ? proj.final_exported_video_path.replace(/[\\/][^\\/]+$/, '') : ''))) || (data && data.final_exported_dir) || currentCustomExportFolder || 'data/exports';
 
     const bannerMsg = isBatch
@@ -10716,6 +10724,9 @@ function showDubbingSuccessNotification(data) {
     // Stream directly into Studio Processing & Activity Console as requested by user
     if (typeof appendLiveTerminalLine === 'function') {
         appendLiveTerminalLine(bannerMsg, "[Render 100%]", "success");
+        if (finalFileName) {
+            appendLiveTerminalLine(`Rendered File: ${finalFileName}`, "[Export Done]", "success");
+        }
         appendLiveTerminalLine(`Files saved in: ${finalDir} (100% Complete)`, "[Export Done]", "success");
     }
 
