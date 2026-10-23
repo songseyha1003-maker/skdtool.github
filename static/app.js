@@ -11374,12 +11374,11 @@ async function checkForAppUpdates(manual = false) {
             openModal('modal-update');
             if (manual) showToast(`New version available: v${latVer}`);
         } else {
-            // Even when currently on latest build, show the full What's New changelog so user sees all update details!
+            // Already on latest official build: Do NOT pop up modal! Only log to Studio Processing & Activity Console!
             if (badgeText) badgeText.textContent = "LATEST OFFICIAL BUILD";
             if (subtitle) subtitle.textContent = `Official release notes and feature highlights for SN Tool Studio Pro (v${curVer}):`;
             if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-rotate"></i> <span id="btn-do-update-text">Reinstall / Update (v${curVer})</span>`;
             if (manual) {
-                openModal('modal-update');
                 showToast(`SN Tool Studio Pro v${curVer} is up to date!`);
             }
         }
