@@ -1,0 +1,7 @@
+{
+  "auto_clean_after_dubbing": true,
+  "clean_intermediate_wavs": true,
+  "clean_scratch_voices": true,
+  "clean_cache_scratch": true,
+  "last_clean_timestamp": 1792729619
+}
