@@ -36,12 +36,67 @@ EXPORTS_DIR = Path("data/exports")
 EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def sanitize_export_path(p_str: Optional[str]) -> Optional[str]:
+    """
+    Cleans up any recursive or overly-nested folder chains like:
+    D:/SN_Dramas/封神殿/Drama_Series/东北话事人/封神殿/Dubbed/封神殿/Drama_Series
+    Truncates at the first authentic drama folder level (e.g. D:/SN_Dramas/封神殿).
+    Ensures zero nested subfolders (no /Dubbed_Khmer, no /Drama_Series, no duplicate names).
+    """
+    if not p_str or not str(p_str).strip():
+        return None
+    raw = str(p_str).strip().replace('\\', '/').rstrip('/')
+    if re.match(r'^[a-zA-Z]:/?$', raw):
+        return raw if raw.endswith('/') else raw + '/'
+
+    parts = [pt for pt in raw.split('/') if pt]
+    if not parts:
+        return None
+
+    cleaned_parts = []
+    seen_lower = set()
+
+    ROOT_CONTAINERS = {'sn_dramas', 'dramas', 'exports', 'data', 'downloads', 'my_dramas'}
+    JUNK_TOKENS = {'dubbed', 'dubbed_khmer', 'dubbed_khmer_full_movie', 'temp', 'batch_temp', 'uploads', 'cache'}
+
+    for idx, part in enumerate(parts):
+        part_clean = part.strip()
+        if not part_clean:
+            continue
+        p_lower = part_clean.lower()
+
+        if p_lower in JUNK_TOKENS:
+            break
+
+        if (p_lower in ('drama_series', 'full_movie', 'video')) and len(cleaned_parts) >= 2:
+            break
+
+        if p_lower in seen_lower and p_lower not in ROOT_CONTAINERS and not re.match(r'^[a-zA-Z]:$', part_clean):
+            break
+
+        cleaned_parts.append(part_clean)
+        if not re.match(r'^[a-zA-Z]:$', part_clean):
+            seen_lower.add(p_lower)
+
+        if len(cleaned_parts) >= 3 and cleaned_parts[1].lower() in ROOT_CONTAINERS:
+            break
+
+    if not cleaned_parts:
+        return None
+    if re.match(r'^[a-zA-Z]:$', cleaned_parts[0]):
+        if len(cleaned_parts) == 1:
+            return cleaned_parts[0] + '/'
+        return cleaned_parts[0] + '/' + '/'.join(cleaned_parts[1:])
+    return '/'.join(cleaned_parts)
+
+
 def resolve_drama_export_directories(in_path: str, drama_title: str, custom_export_dir: Optional[str] = None) -> List[Path]:
     """
-    Resolves the single dedicated unified folder for this drama series.
-    Prioritizes user-selected custom_export_dir if provided, otherwise places
-    inside authentic drama folder 'Dubbed_Khmer' or SN_Dramas root.
-    Guarantees a dedicated drama folder is ALWAYS created on disk, even for a single episode.
+    Resolves the single direct folder for exporting dubbed videos (strictly 1 folder level, NO nested subfolders).
+    1. If user chose a custom_export_dir: sanitizes it and exports directly into it (zero subfolders).
+    2. If user did not choose:
+       - If source video is a local file on disk: exports directly into the source video's parent folder.
+       - If source video is a temp upload: exports directly into D:/SN_Dramas/<DramaTitle> (or C:/SN_Dramas or data/exports).
     """
     # Extract clean series name (strip episode suffixes like EP_01, Episode 12, etc.)
     raw_title = str(drama_title or "").strip()
@@ -53,71 +108,57 @@ def resolve_drama_export_directories(in_path: str, drama_title: str, custom_expo
 
     generic_names = ("drama_series", "dubbed_drama_series_full_movie", "full_movie", "raw_full_movie", "")
     if not clean_series or clean_series.lower() in generic_names:
-        # Check custom_export_dir for authentic drama name
-        if custom_export_dir:
-            try:
-                p_c = Path(str(custom_export_dir).strip()).resolve()
-                if p_c.name.lower() not in ("exports", "sn_dramas", "dramas", "uploads", "downloads", "temp", "batch_temp", "data"):
-                    clean_series = p_c.name
-            except Exception:
-                pass
         # Check in_path for authentic drama folder name
-        if not clean_series or clean_series.lower() in generic_names:
-            try:
-                p_in = Path(in_path).resolve()
-                if p_in.parent.name.lower() not in ("batch_temp", "uploads", "cache", "temp", "exports", "sn_dramas", "downloads", "data"):
-                    clean_series = p_in.parent.name
-            except Exception:
-                pass
+        try:
+            p_in = Path(in_path).resolve()
+            if p_in.parent.name.lower() not in ("batch_temp", "uploads", "cache", "temp", "exports", "sn_dramas", "downloads", "data"):
+                clean_series = p_in.parent.name
+        except Exception:
+            pass
 
-    if not clean_series:
+    if not clean_series or clean_series.lower() in generic_names:
         clean_series = "Drama_Series"
 
     safe_title = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', str(clean_series)).strip('_ ') or "Drama_Series"
 
-    # 0. User-selected custom export folder takes absolute #1 priority!
-    if custom_export_dir and str(custom_export_dir).strip():
+    # 1. User-selected custom export folder takes absolute priority!
+    sanitized_cust = sanitize_export_path(custom_export_dir)
+    if sanitized_cust:
         try:
-            p_cust = Path(str(custom_export_dir).strip()).resolve()
-            # If user selected an authentic drama directory (e.g. D:/SN_Dramas/封神殿),
-            # export directly into p_cust WITHOUT creating a redundant nested subfolder!
-            is_generic_root = p_cust.name.lower() in ("sn_dramas", "dramas", "exports", "uploads", "data", "downloads", "temp", "batch_temp") or len(p_cust.parts) <= 2
-            if not is_generic_root:
-                # p_cust is already a drama-specific folder! Export directly into it!
-                p_cust.mkdir(parents=True, exist_ok=True)
-                return [p_cust]
-
-            # If user selected a general root directory like D:/SN_Dramas, create the drama folder inside it
-            if safe_title and safe_title.lower() not in ("drama_series", "full_movie"):
+            p_cust = Path(sanitized_cust).resolve()
+            # If user selected an exact folder (e.g. D:/MyFolder or D:/SN_Dramas/封神殿), export directly into it!
+            # Only if user selected the bare root container itself (e.g. D:/SN_Dramas or C:/SN_Dramas or D:/), put it inside the drama title
+            is_bare_root = p_cust.name.lower() in ("sn_dramas", "dramas") or len(p_cust.parts) <= 2
+            if is_bare_root and safe_title and safe_title.lower() not in ("drama_series", "full_movie"):
                 p_cust = p_cust / safe_title
             p_cust.mkdir(parents=True, exist_ok=True)
             return [p_cust]
         except Exception as ce:
             print(f"[Export Folder] Custom folder note ({custom_export_dir}): {ce}")
 
-    # 1. Detect if in_path belongs to an existing drama series folder
+    # 2. When user did NOT pick a folder:
+    # Check if in_path is a real video on disk in a persistent user folder
     try:
         p_in = Path(in_path).resolve()
         parent_dir = p_in.parent
-        p_name = parent_dir.name.strip()
-        if parent_dir.exists() and p_name.lower() not in ("batch_temp", "uploads", "cache", "temp", "sn_dramas", "exports", "data", "downloads"):
-            # Inside authentic drama folder (e.g. D:/SN_Dramas/无敌张三烽/)
-            dubbed_sub = parent_dir / "Dubbed_Khmer"
-            dubbed_sub.mkdir(parents=True, exist_ok=True)
-            return [dubbed_sub]
+        p_name = parent_dir.name.strip().lower()
+        # If not inside a temporary/cache directory, save directly in the source folder!
+        if parent_dir.exists() and p_name not in ("batch_temp", "uploads", "cache", "temp", "data", "tmp"):
+            parent_dir.mkdir(parents=True, exist_ok=True)
+            return [parent_dir]
     except Exception:
         pass
 
-    # 2. Dedicated unified series folder in SN_Dramas (D:/SN_Dramas/<Series_Title>/Dubbed_Khmer)
+    # 3. For uploaded temp files, save in dedicated drama folder (strictly 1 single level, NO Dubbed_Khmer subfolder)
     for root_str in ("D:/SN_Dramas", "C:/SN_Dramas"):
         root_p = Path(root_str)
         if root_p.exists():
-            root_drama_dubbed = root_p / safe_title / "Dubbed_Khmer"
-            root_drama_dubbed.mkdir(parents=True, exist_ok=True)
-            return [root_drama_dubbed]
+            root_drama = root_p / safe_title
+            root_drama.mkdir(parents=True, exist_ok=True)
+            return [root_drama]
 
-    # Fallback to data/exports/<Series_Title>/Dubbed_Khmer/
-    export_drama_dir = EXPORTS_DIR / safe_title / "Dubbed_Khmer"
+    # Fallback to data/exports/<safe_title>
+    export_drama_dir = EXPORTS_DIR / safe_title
     export_drama_dir.mkdir(parents=True, exist_ok=True)
     return [export_drama_dir]
 
@@ -377,7 +418,9 @@ class BatchDubbingManager:
         custom_export_dir = item.get("custom_export_dir")
         target_dirs = resolve_drama_export_directories(in_path, drama_title, custom_export_dir=custom_export_dir)
         primary_dir = target_dirs[0]
-        clean_in_stem = re.sub(r'[\\/*?:"<>|]', '_', p_in.stem).strip('. ') or "Video"
+        clean_in_stem = re.sub(r'^(?:Dubbed_)+', '', p_in.stem, flags=re.IGNORECASE)
+        clean_in_stem = re.sub(r'(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$', '', clean_in_stem, flags=re.IGNORECASE)
+        clean_in_stem = re.sub(r'[\\/*?:"<>|]', '_', clean_in_stem).strip('. ') or "Video"
         out_filename = f"Dubbed_{clean_in_stem}.mp4"
         final_video_path = primary_dir / out_filename
         

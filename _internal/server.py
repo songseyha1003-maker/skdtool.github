@@ -765,8 +765,13 @@ def open_export_folder():
     drama_title = data.get("drama_title") or request.args.get("title")
 
     target_dir = None
-    if folder_path and os.path.exists(folder_path):
-        target_dir = Path(folder_path).resolve()
+    if folder_path:
+        from batch_engine import sanitize_export_path
+        clean_path = sanitize_export_path(folder_path) or folder_path
+        if os.path.exists(clean_path):
+            target_dir = Path(clean_path).resolve()
+        elif os.path.exists(folder_path):
+            target_dir = Path(folder_path).resolve()
     elif drama_title:
         safe = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', str(drama_title)).strip('_ ')
         for root in ("D:/SN_Dramas", "C:/SN_Dramas", "data/exports"):
@@ -3236,10 +3241,15 @@ def open_project_folder_endpoint():
     if not target_path:
         target_path = str(Path("data/exports").resolve())
 
+    from batch_engine import sanitize_export_path
+    clean_target = sanitize_export_path(target_path) or target_path
+
     if sys.platform == "win32":
         try:
             import subprocess
-            p = Path(target_path).resolve()
+            p = Path(clean_target).resolve()
+            if not p.exists() and Path(target_path).exists():
+                p = Path(target_path).resolve()
             if p.is_file():
                 # Open Explorer and highlight the exact file!
                 subprocess.Popen(f'explorer.exe /select,"{str(p)}"', shell=True)
@@ -3265,20 +3275,14 @@ def merge_episodes_endpoint():
     series_title = data.get("series_title", "Drama_Series")
 
     clean_title = re.sub(r'^(?:Dubbed_)+', '', str(series_title), flags=re.IGNORECASE)
-    clean_title = re.sub(r'[^\w\-_.]', '_', clean_title).strip('_')
-    if not clean_title:
+    clean_title = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', clean_title).strip('_ ')
+    if not clean_title or clean_title.lower() in ("drama_series", "full_movie"):
         clean_title = "Drama_Series"
 
     output_filename = f"Dubbed_{clean_title}_Full_Movie.mp4"
     custom_export_dir = data.get("custom_export_dir")
-    if custom_export_dir:
-        p_c = Path(custom_export_dir).resolve()
-        if clean_title and p_c.name.lower() not in (clean_title.lower(), "dubbed_khmer"):
-            p_c = p_c / clean_title
-        p_c.mkdir(parents=True, exist_ok=True)
-        out_file = p_c / output_filename
-    else:
-        out_file = Path("data/exports") / output_filename
+    from batch_engine import sanitize_export_path
+    sanitized_cust = sanitize_export_path(custom_export_dir)
 
     if not video_paths:
         return jsonify({"success": False, "error": "No video paths provided"}), 400
@@ -3301,6 +3305,30 @@ def merge_episodes_endpoint():
     if not resolved_paths:
         return jsonify({"success": False, "error": "No existing episode files found to merge"}), 404
 
+    # Determine output folder: 1 folder level only, zero subfolders!
+    if sanitized_cust:
+        p_c = Path(sanitized_cust).resolve()
+        is_bare_root = p_c.name.lower() in ("sn_dramas", "dramas") or len(p_c.parts) <= 2
+        if is_bare_root and clean_title and clean_title.lower() not in ("drama_series", "full_movie"):
+            p_c = p_c / clean_title
+        p_c.mkdir(parents=True, exist_ok=True)
+        out_file = p_c / output_filename
+    else:
+        # Save directly next to the source episodes on disk if in an authentic drama folder
+        first_parent = None
+        for rp in resolved_paths:
+            p_rp = Path(rp)
+            if p_rp.parent.name.lower() not in ("batch_temp", "uploads", "cache", "temp", "tmp", "data"):
+                first_parent = p_rp.parent
+                break
+        if first_parent:
+            out_file = first_parent / output_filename
+        else:
+            target_root = Path("D:/SN_Dramas") if Path("D:/SN_Dramas").exists() else (Path("C:/SN_Dramas") if Path("C:/SN_Dramas").exists() else Path("data/exports"))
+            target_dir = target_root / clean_title
+            target_dir.mkdir(parents=True, exist_ok=True)
+            out_file = target_dir / output_filename
+
     try:
         from video_processor import merge_videos
         final_path = merge_videos(resolved_paths, str(out_file), auto_trim_freeze=True)
@@ -3309,7 +3337,7 @@ def merge_episodes_endpoint():
             "success": True,
             "merged_path": str(final_path),
             "merged_filename": output_filename,
-            "video_url": f"/media/data/exports/{output_filename}"
+            "video_url": f"/media/{str(final_path).replace('\\', '/')}"
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

@@ -3285,7 +3285,70 @@ let exportJobTimer = null;
 let exportPercent = 0;
 let exportElapsedSec = 0;
 let currentExportOutputMode = 'separate'; // 'separate' | 'full' | 'both'
-let currentCustomExportFolder = localStorage.getItem('sn_custom_export_dir') || "";
+function sanitizeExportFolderPath(rawPath) {
+    if (!rawPath || typeof rawPath !== 'string') return "";
+    let clean = rawPath.trim().replace(/\\/g, '/').replace(/\/+$/, '');
+    if (!clean) return "";
+
+    // If drive root only (e.g. "D:" or "D:/")
+    if (/^[a-zA-Z]:\/?$/.test(clean)) return clean.endsWith('/') ? clean : clean + '/';
+
+    const parts = clean.split('/').filter(p => p.trim().length > 0);
+    if (parts.length === 0) return "";
+
+    const ROOT_CONTAINERS = new Set(["sn_dramas", "dramas", "exports", "data", "downloads", "my_dramas"]);
+    const JUNK_TOKENS = new Set(["dubbed", "dubbed_khmer", "dubbed_khmer_full_movie", "temp", "batch_temp", "uploads", "cache"]);
+
+    const cleanedParts = [];
+    const seenLower = new Set();
+
+    for (let i = 0; i < parts.length; i++) {
+        const pt = parts[i].trim();
+        if (!pt) continue;
+        const ptLower = pt.toLowerCase();
+
+        // Stop if we hit a junk / dubbed subfolder
+        if (JUNK_TOKENS.has(ptLower)) break;
+
+        // Stop if generic drama_series was stacked after a real drama folder
+        if ((ptLower === "drama_series" || ptLower === "full_movie" || ptLower === "video") && cleanedParts.length >= 2) {
+            break;
+        }
+
+        // Stop on circular repeat
+        if (seenLower.has(ptLower) && !ROOT_CONTAINERS.has(ptLower) && !/^[a-zA-Z]:$/.test(pt)) {
+            break;
+        }
+
+        cleanedParts.push(pt);
+        if (!/^[a-zA-Z]:$/.test(pt)) {
+            seenLower.add(ptLower);
+        }
+
+        // If root container + authentic drama folder, break to prevent further chaining
+        if (cleanedParts.length >= 3 && ROOT_CONTAINERS.has(cleanedParts[1].toLowerCase())) {
+            break;
+        }
+    }
+
+    if (cleanedParts.length === 0) return "";
+    if (/^[a-zA-Z]:$/.test(cleanedParts[0])) {
+        if (cleanedParts.length === 1) return cleanedParts[0] + "/";
+        return cleanedParts[0] + "/" + cleanedParts.slice(1).join('/');
+    }
+    return cleanedParts.join('/');
+}
+
+// Clean any polluted / multi-nested paths previously stored in browser localStorage
+let storedExportDir = localStorage.getItem('sn_custom_export_dir') || "";
+let currentCustomExportFolder = sanitizeExportFolderPath(storedExportDir);
+if (currentCustomExportFolder !== storedExportDir) {
+    if (currentCustomExportFolder) {
+        localStorage.setItem('sn_custom_export_dir', currentCustomExportFolder);
+    } else {
+        localStorage.removeItem('sn_custom_export_dir');
+    }
+}
 
 let stagedVideoSiblings = null;
 let stagedVideoFolderTitle = "";
@@ -3297,53 +3360,24 @@ function updateExportLocationUI() {
     if (!pathTextElem) return;
 
     if (currentCustomExportFolder && currentCustomExportFolder.trim()) {
-        const cleanPath = currentCustomExportFolder.trim();
-        pathTextElem.innerHTML = `Saved in <strong>${cleanPath}</strong>`;
+        const cleanPath = sanitizeExportFolderPath(currentCustomExportFolder);
+        currentCustomExportFolder = cleanPath;
+        pathTextElem.innerHTML = `Saved in <strong>${cleanPath}</strong> (1 folder only)`;
         pathTextElem.title = `Saved in: ${cleanPath}`;
         if (resetBtn) resetBtn.style.display = 'inline-flex';
     } else {
-        pathTextElem.innerHTML = `Saved in <strong>SN TOOL</strong> folder next to source video`;
-        pathTextElem.title = `Saved in SN TOOL folder next to source video`;
+        pathTextElem.innerHTML = `Saved in <strong>source video folder</strong> (or D:/SN_Dramas)`;
+        pathTextElem.title = `Saved in same folder as source video (1 folder only, zero nested subfolders)`;
         if (resetBtn) resetBtn.style.display = 'none';
     }
 }
 
 async function syncDramaExportFolder(dramaTitle) {
-    if (!dramaTitle || !dramaTitle.trim()) return;
-    const cleanTitle = dramaTitle.trim()
-        .replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '')
-        .replace(/^(?:Dubbed_)+/i, '')
-        .replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+.*$/i, '')
-        .replace(/[-_]+$/, '')
-        .trim();
-    if (!cleanTitle) return;
-
-    let baseDir = currentCustomExportFolder || localStorage.getItem('sn_custom_export_dir') || "";
-    if (!baseDir) {
-        baseDir = "D:/SN_Dramas";
+    if (currentCustomExportFolder) {
+        currentCustomExportFolder = sanitizeExportFolderPath(currentCustomExportFolder);
+        localStorage.setItem('sn_custom_export_dir', currentCustomExportFolder);
     }
-
-    baseDir = baseDir.replace(/\\/g, '/').replace(/\/+$/, '');
-    const currentLeaf = baseDir.split('/').pop() || "";
-    let targetFolder = baseDir;
-    if (currentLeaf.toLowerCase() !== cleanTitle.toLowerCase() && currentLeaf.toLowerCase() !== "dubbed_khmer") {
-        targetFolder = `${baseDir}/${cleanTitle}`;
-    }
-
-    currentCustomExportFolder = targetFolder;
-    localStorage.setItem('sn_custom_export_dir', currentCustomExportFolder);
     updateExportLocationUI();
-
-    // Auto-create folder on disk immediately!
-    try {
-        await fetch('/api/system/ensure-folder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: targetFolder })
-        });
-    } catch (e) {
-        console.warn("Auto create folder note:", e);
-    }
 }
 
 async function browseExportFolder(event) {
@@ -3361,31 +3395,10 @@ async function browseExportFolder(event) {
         });
         const data = await res.json();
         if (data && data.success && data.path) {
-            let chosen = data.path.replace(/\\/g, '/').replace(/\/+$/, '');
+            let chosen = sanitizeExportFolderPath(data.path);
+            if (!chosen) chosen = data.path.replace(/\\/g, '/').replace(/\/+$/, '');
 
-            // Detect current drama title
-            let dramaTitle = stagedVideoFolderTitle || "";
-            if (!dramaTitle && stagedBatchFiles && stagedBatchFiles.length > 0) {
-                const fName = getMediaFileName(stagedBatchFiles[0]);
-                dramaTitle = fName.replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '')
-                    .replace(/^(?:Dubbed_)+/i, '')
-                    .replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+.*$/i, '')
-                    .replace(/[-_]+$/, '')
-                    .trim();
-            } else if (!dramaTitle && stagedVideoFile) {
-                const vName = getMediaFileName(stagedVideoFile);
-                dramaTitle = vName.replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '')
-                    .replace(/^(?:Dubbed_)+/i, '')
-                    .replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+.*$/i, '')
-                    .replace(/[-_]+$/, '')
-                    .trim();
-            }
-
-            const chosenLeaf = chosen.split('/').pop() || "";
-            if (dramaTitle && chosenLeaf.toLowerCase() !== dramaTitle.toLowerCase() && chosenLeaf.toLowerCase() !== "dubbed_khmer") {
-                chosen = `${chosen}/${dramaTitle}`;
-            }
-
+            // Use the EXACT folder selected by user (NO appending dramaTitle or subfolders!)
             currentCustomExportFolder = chosen;
             localStorage.setItem('sn_custom_export_dir', currentCustomExportFolder);
 
@@ -3401,7 +3414,7 @@ async function browseExportFolder(event) {
             }
 
             updateExportLocationUI();
-            showToast(`📁 បានបង្កើត Folder ដោយស្វ័យប្រវត្តិ៖ ${chosen}`);
+            showToast(`📁 ទីតាំង Export ត្រូវបានកំណត់៖ ${chosen}`);
         }
     } catch (e) {
         console.warn("Folder picker note:", e);
@@ -10695,7 +10708,9 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
     // Progress stays steady at 100% Completed!
 
     // Auto open export folder in Windows Explorer
-    openExportFolderDirect();
+    const lastDone = (completedProjects && completedProjects.length > 0) ? completedProjects[completedProjects.length - 1] : null;
+    const targetDirToOpen = (lastDone && (lastDone.final_exported_video_path || lastDone.final_exported_dir)) || currentCustomExportFolder || '';
+    openExportFolderDirect(targetDirToOpen);
 
     // Show success notification banner
     if (completedProjects.length > 0) {
@@ -10750,7 +10765,10 @@ function showDubbingSuccessNotification(data) {
 
 async function openExportFolderDirect(targetPath) {
     try {
-        const pathToOpen = targetPath || currentCustomExportFolder || '';
+        let pathToOpen = targetPath || currentCustomExportFolder || '';
+        if (pathToOpen && typeof pathToOpen === 'string') {
+            pathToOpen = sanitizeExportFolderPath(pathToOpen) || pathToOpen;
+        }
         const res = await fetch('/api/projects/open-folder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
