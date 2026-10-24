@@ -3138,6 +3138,17 @@ def auto_dub_video_endpoint():
                 clean_target = re.sub(r'_\d{9,12}$', '', clean_target)
                 final_title = f"Dubbed_{clean_target}"
 
+                # Create dedicated drama folder FIRST on disk before processing starts!
+                try:
+                    from batch_engine import resolve_drama_export_directories
+                    clean_series_name = clean_target.replace('Dubbed_', '')
+                    drama_folders = resolve_drama_export_directories(v_path, clean_series_name, custom_export_dir=cust_dir)
+                    if drama_folders:
+                        drama_folders[0].mkdir(parents=True, exist_ok=True)
+                        print(f"[AutoFolder] Created drama folder on disk BEFORE dubbing: {drama_folders[0]}")
+                except Exception as cde:
+                    print(f"[AutoFolder Init Single Note] {cde}")
+
                 res_proj = loop.run_until_complete(pm.process_video_pipeline(
                     video_path=v_path,
                     title=final_title,

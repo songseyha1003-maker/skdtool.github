@@ -3353,6 +3353,8 @@ if (currentCustomExportFolder !== storedExportDir) {
 let stagedVideoSiblings = null;
 let stagedVideoFolderTitle = "";
 
+let defaultDramaExportFolder = "";
+
 function updateExportLocationUI() {
     const pathTextElem = document.getElementById('export-output-path-text');
     const resetBtn = document.getElementById('btn-reset-export-folder');
@@ -3362,21 +3364,56 @@ function updateExportLocationUI() {
     if (currentCustomExportFolder && currentCustomExportFolder.trim()) {
         const cleanPath = sanitizeExportFolderPath(currentCustomExportFolder);
         currentCustomExportFolder = cleanPath;
-        pathTextElem.innerHTML = `Saved in <strong>${cleanPath}</strong> (1 folder only)`;
+        pathTextElem.innerHTML = `Folder: <strong>${cleanPath}</strong> (Custom)`;
         pathTextElem.title = `Saved in: ${cleanPath}`;
         if (resetBtn) resetBtn.style.display = 'inline-flex';
     } else {
-        pathTextElem.innerHTML = `Saved in <strong>source video folder</strong> (or D:/SN_Dramas)`;
-        pathTextElem.title = `Saved in same folder as source video (1 folder only, zero nested subfolders)`;
+        const autoFolder = defaultDramaExportFolder || "D:/SN_Dramas/Drama_Series";
+        pathTextElem.innerHTML = `Auto Created Folder: <strong>${autoFolder}</strong>`;
+        pathTextElem.title = `Dedicated drama folder auto-created on disk before dubbing (1 folder only)`;
         if (resetBtn) resetBtn.style.display = 'none';
     }
 }
 
 async function syncDramaExportFolder(dramaTitle) {
+    if (!dramaTitle || !dramaTitle.trim()) return;
+
+    // Clean drama title to form authentic dedicated folder name
+    let clean = dramaTitle.trim()
+        .replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '')
+        .replace(/^(?:Dubbed_)+/i, '')
+        .replace(/^(?:Raw_Full_Movie_)+/i, '')
+        .replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+.*$/i, '')
+        .replace(/[-_]+$/, '')
+        .trim();
+    if (!clean || clean.toLowerCase() === "drama_series" || clean.toLowerCase() === "video") {
+        clean = "Drama_Series";
+    }
+
+    const autoFolder = `D:/SN_Dramas/${clean}`;
+    defaultDramaExportFolder = autoFolder;
+
+    const folderToEnsure = currentCustomExportFolder ? sanitizeExportFolderPath(currentCustomExportFolder) : autoFolder;
     if (currentCustomExportFolder) {
-        currentCustomExportFolder = sanitizeExportFolderPath(currentCustomExportFolder);
+        currentCustomExportFolder = folderToEnsure;
         localStorage.setItem('sn_custom_export_dir', currentCustomExportFolder);
     }
+
+    // Auto-create folder on disk immediately BEFORE translation begins!
+    try {
+        await fetch('/api/system/ensure-folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: folderToEnsure })
+        });
+        console.log(`[AutoFolder] Created dedicated drama folder on disk: ${folderToEnsure}`);
+        if (typeof appendLiveTerminalLine === 'function') {
+            appendLiveTerminalLine(`Dedicated drama folder ready on disk: "${folderToEnsure}"`, "[Auto Folder]", "info");
+        }
+    } catch (e) {
+        console.warn("Auto create folder note:", e);
+    }
+
     updateExportLocationUI();
 }
 
@@ -9814,6 +9851,7 @@ function setStagedVideo(file) {
     updateScrubberUI();
     showToast(`Loaded "${fileName}" successfully! Click Export to start auto-dubbing.`);
     appendTerminalLine(`[Ready] Video "${fileName}" loaded. Click [Export] to begin studio dubbing.`);
+    syncDramaExportFolder(fileName);
 }
 
 function discardStagedVideo(e) {
@@ -9964,6 +10002,7 @@ function setStagedBatchFiles(files, folderTitle = "") {
         appendLiveTerminalLine(`  ... and ${files.length - 5} more episodes`, "[Episode List]", "info");
     }
     appendLiveTerminalLine(`Click [Export] on the top bar to begin full drama automated dubbing.`, "[Ready]", "success");
+    syncDramaExportFolder(folderName || (files && files[0] ? getMediaFileName(files[0]) : "Drama_Series"));
 }
 
 function clearStagedFiles() {
@@ -10079,7 +10118,7 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                     aspect_ratio: activeAspectRatio,
                     burn_subtitles: activeBurnSubs,
                     overlay_config: overlayConfig,
-                    custom_export_dir: currentCustomExportFolder || undefined
+                    custom_export_dir: currentCustomExportFolder || defaultDramaExportFolder || undefined
                 })
             });
         } else {
@@ -10094,8 +10133,9 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
             formData.append("aspect_ratio", activeAspectRatio);
             formData.append("burn_subtitles", activeBurnSubs);
             formData.append("overlay_config", JSON.stringify(overlayConfig));
-            if (currentCustomExportFolder) {
-                formData.append("custom_export_dir", currentCustomExportFolder);
+            const activeCustomDir = currentCustomExportFolder || defaultDramaExportFolder || "";
+            if (activeCustomDir) {
+                formData.append("custom_export_dir", activeCustomDir);
             }
             if (currentOverlayAssets.logo instanceof File) {
                 formData.append("logo_file", currentOverlayAssets.logo);
@@ -10488,7 +10528,7 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                         aspect_ratio: activeAspectRatio,
                         burn_subtitles: activeBurnSubs,
                         overlay_config: batchOverlayConfig,
-                        custom_export_dir: currentCustomExportFolder || undefined
+                        custom_export_dir: currentCustomExportFolder || defaultDramaExportFolder || undefined
                     })
                 });
             } else {
@@ -10501,8 +10541,9 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                 formData.append("aspect_ratio", activeAspectRatio);
                 formData.append("burn_subtitles", activeBurnSubs);
                 formData.append("overlay_config", JSON.stringify(batchOverlayConfig));
-                if (currentCustomExportFolder) {
-                    formData.append("custom_export_dir", currentCustomExportFolder);
+                const activeBatchDir = currentCustomExportFolder || defaultDramaExportFolder || "";
+                if (activeBatchDir) {
+                    formData.append("custom_export_dir", activeBatchDir);
                 }
                 if (currentOverlayAssets.logo instanceof File) {
                     formData.append("logo_file", currentOverlayAssets.logo);
@@ -10655,7 +10696,7 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                 body: JSON.stringify({
                     video_paths: videoPaths,
                     series_title: seriesTitle,
-                    custom_export_dir: currentCustomExportFolder || undefined
+                    custom_export_dir: currentCustomExportFolder || defaultDramaExportFolder || undefined
                 })
             });
             const mData = await mRes.json();

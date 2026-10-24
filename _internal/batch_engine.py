@@ -137,19 +137,7 @@ def resolve_drama_export_directories(in_path: str, drama_title: str, custom_expo
             print(f"[Export Folder] Custom folder note ({custom_export_dir}): {ce}")
 
     # 2. When user did NOT pick a folder:
-    # Check if in_path is a real video on disk in a persistent user folder
-    try:
-        p_in = Path(in_path).resolve()
-        parent_dir = p_in.parent
-        p_name = parent_dir.name.strip().lower()
-        # If not inside a temporary/cache directory, save directly in the source folder!
-        if parent_dir.exists() and p_name not in ("batch_temp", "uploads", "cache", "temp", "data", "tmp"):
-            parent_dir.mkdir(parents=True, exist_ok=True)
-            return [parent_dir]
-    except Exception:
-        pass
-
-    # 3. For uploaded temp files, save in dedicated drama folder (strictly 1 single level, NO Dubbed_Khmer subfolder)
+    # Always create a dedicated folder FIRST for this drama series before dubbing!
     for root_str in ("D:/SN_Dramas", "C:/SN_Dramas"):
         root_p = Path(root_str)
         if root_p.exists():
@@ -287,6 +275,23 @@ class BatchDubbingManager:
         in_path = item["filepath"]
         item_dir = Path(f"data/projects/batch_{item_id}")
         item_dir.mkdir(parents=True, exist_ok=True)
+
+        # 0. Create dedicated drama export folder FIRST on disk before any work begins!
+        try:
+            p_in = Path(in_path)
+            parent_folder = p_in.parent.name
+            if parent_folder and parent_folder.lower() not in ("batch_temp", "uploads", "exports", "sn_dramas", "downloads", "data"):
+                early_title = parent_folder
+            else:
+                clean_t = re.sub(r'(?i)(?:EP|Episode|Part|第)?[\s_\-]*\d+[\s_\-]*(?:集|話|部)?', '', p_in.stem)
+                clean_t = re.sub(r'[\s_\-]+', '_', clean_t).strip('_ ')
+                early_title = clean_t or "Drama_Series"
+            target_dirs = resolve_drama_export_directories(in_path, early_title, custom_export_dir=item.get("custom_export_dir"))
+            if target_dirs:
+                target_dirs[0].mkdir(parents=True, exist_ok=True)
+                print(f"[AutoFolder] Created drama folder on disk BEFORE dubbing: {target_dirs[0]}")
+        except Exception as fe:
+            print(f"[AutoFolder Init Note] {fe}")
 
         # 1. Extract Audio
         item["step"] = "1/5 Extracting audio from video..."
