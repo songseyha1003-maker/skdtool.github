@@ -39,7 +39,7 @@ def main():
     print("=" * 70)
 
     # 1. Read current version
-    current_ver = "1.1.3"
+    current_ver = "1.1.4"
     current_notes = ""
     current_title = ""
     if vjson_file.exists():
@@ -52,7 +52,7 @@ def main():
         except Exception:
             pass
 
-    # Suggest next version (e.g., 1.1.3 -> 1.1.4)
+    # Suggest next version (e.g., 1.1.4 -> 1.1.5)
     parts = current_ver.split(".")
     if len(parts) == 3 and parts[2].isdigit():
         suggested_ver = f"{parts[0]}.{parts[1]}.{int(parts[2]) + 1}"

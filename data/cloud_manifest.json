@@ -1,10 +1,10 @@
 {
-  "version": "1.1.3",
+  "version": "1.1.4",
   "app_name": "SN TOOL - STUDIO PRO",
-  "release_date": "2026-10-21",
-  "title": "SN TOOL STUDIO PRO - Official Update v1.1.3 (4x Fast TTS & Zero-Drop Translation)",
-  "subtitle": "A major update (v1.1.3) is available with 4x Faster Voice Synthesis (6 Workers), Smooth Progress Bar, and Zero-Drop Khmer Translation.",
-  "release_notes": "• ⚡ 4x Faster Neural Voice Synthesis (Concurrency 6 Parallel Workers): 800+ lines synthesized in 2-3 minutes!\n• 📊 Smooth Line-by-Line Progress Indicator: Real-time active counter and percentage without stalling at 76%\n• 💎 100% Zero-Dropped-Words Nisay Translation: High-fidelity drama dialogue with complete sentences, preservation of every syllable & nuance\n• 🎙️ Adaptive Lip-Sync Audio Fitting: Time compression without clipping, preserving every spoken Khmer word",
+  "release_date": "2026-10-24",
+  "title": "SN TOOL STUDIO PRO - Official Update v1.1.4 (Auto Drama Folder & Ultra-Accurate AI Translation)",
+  "subtitle": "A major update (v1.1.4) is available with Auto-Created Drama Folders, 1-Folder Clean Direct Export, 184 Asian Drama Tropes, and 0ms Instant Disk Translation Cache.",
+  "release_notes": "• 📁 Auto-Create Drama Folder First: Automatically creates dedicated folder (D:\\SN_Dramas\\<DramaName>\\) before dubbing begins - zero manual browsing required!\n• 🎯 1-Folder Clean Direct Export: All episodes and full movie saved directly into 1 single folder, zero nested subfolders, Explorer opens & selects video directly\n• 🧠 Upgraded 184 Asian Drama Tropes & Idiom Brain: Authentic colloquial Khmer translation with CEO, revenge, slap-in-the-face & hidden identity tropes\n• ⚡ 0ms Instant Disk Translation Cache: Recurring dialogues load instantly with zero Nisay API token consumption\n• 👄 Adaptive Lip-Sync Rate Scaler (+0% to +22%): Khmer speech pace dynamically budgeted to match Chinese mouth movement seamlessly\n• 💎 Fixed .mp4.mp4 double extension & cleaned luxury General Settings interface",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }

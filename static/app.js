@@ -11377,7 +11377,7 @@ async function checkForAppUpdates(manual = false) {
         }
 
         _latestUpdateInfo = data;
-        const curVer = data.current_version || '1.1.3';
+        const curVer = data.current_version || '1.1.4';
         const latVer = data.latest_version || curVer;
         window._currentAppVersion = curVer;
 
