@@ -92,6 +92,28 @@ class DramaSeriesMemory:
             glossary["替嫁"] = "រៀបការជំនួស"
             glossary["入赘"] = "កូនប្រសារចូលស្តី"
 
+        # Revenge & Face-slapping Tropes
+        if re.search(r'打脸|逆袭|首富|神豪|扮猪吃虎|退婚|隐形首富|白眼狼', raw_text_corpus):
+            roles_detected.append("Revenge & Face-slapping / សងសឹកវាយបក")
+            glossary["打脸"] = "ទះកំផ្លៀងមុខឱ្យបាក់មុខកណ្តាលវាល"
+            glossary["逆袭"] = "ក្រោកឈរវាយបកយកជ័យជម្នះ"
+            glossary["首富"] = "មហាសេដ្ឋីលំដាប់ប្រទេស"
+            glossary["白眼狼"] = "មនុស្សរមិលគុណស៊ីបាយបោកឆ្នាំង"
+
+        # Family & Mother-in-Law Tropes
+        if re.search(r'婆婆|恶婆婆|丈母娘|扫地出门|断绝关系|家产|分家', raw_text_corpus):
+            roles_detected.append("Family In-Law Feud / ជម្លោះគ្រួសារម្តាយក្មេក")
+            glossary["婆婆"] = "ម្តាយក្មេក"
+            glossary["扫地出门"] = "បណ្តេញក្បាលចេញពីផ្ទះ!"
+            glossary["断绝关系"] = "កាត់កាលចោលឈប់រាប់អាន!"
+
+        # Secret Child & Reunion Tropes
+        if re.search(r'带球跑|萌宝|怀了|怀孕|打掉孩子|两道杠|亲子鉴定', raw_text_corpus):
+            roles_detected.append("Secret Pregnancy / ពពោះកូនរត់គេចខ្លួន")
+            glossary["带球跑"] = "ពពោះកូនរត់គេចខ្លួន"
+            glossary["萌宝"] = "កូនឆ្លាតវៃ"
+            glossary["亲子鉴定"] = "ការធ្វើតេស្ត DNA ឈាមជ័រឪពុកកូន"
+
         # Extract specific Chinese names if present
         name_matches = re.findall(r'([李张王刘陈杨赵黄周吴徐孙胡朱高林何郭马罗梁宋郑谢韩唐冯于董萧程曹袁邓许傅沈顾陆霍江裴][\u4e00-\u9fff]{1,2})', raw_text_corpus)
         unique_names = []

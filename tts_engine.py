@@ -643,7 +643,7 @@ def _get_cache_filename(text: str, voice_id: str, rate: str, pitch: str) -> Path
 
 def calculate_optimal_tts_rate(text_km: str, target_window_sec: float) -> int:
     """
-    Calculate optimal Edge-TTS speaking rate (+0% to +12%) for pure natural human tempo.
+    Calculate optimal Edge-TTS speaking rate (+0% to +22%) for pure natural human tempo and tight lip-sync.
     Khmer average natural speech speed is ~13.5 characters per second (including vowels and diacritics).
     """
     if not text_km or target_window_sec <= 0.3:
@@ -654,7 +654,7 @@ def calculate_optimal_tts_rate(text_km: str, target_window_sec: float) -> int:
         return 0
     factor = est_natural_sec / target_window_sec
     needed_rate = int((factor - 1.0) * 100)
-    return min(12, max(0, needed_rate))
+    return min(22, max(0, needed_rate))
 
 
 async def synthesize_khmer_speech(
@@ -912,16 +912,17 @@ async def batch_synthesize(
             end = float(item.get("end", start + 2.0))
 
             # Lip-sync mouth movement duration budget:
-            # Allows natural Khmer spoken phrasing while guaranteeing speech finishes before next actor speaks
+            # Allows natural Khmer spoken phrasing while tightly hugging the actor's mouth movement
             mouth_dur = max(0.5, end - start)
             if index + 1 < len(dialogue_items):
-                nxt_start = float(dialogue_items[index + 1].get("start", end + 2.0))
-                gap_to_next = max(0.8, nxt_start - start - 0.08)
-                avail_dur = min(max(mouth_dur + 2.0, 3.5), gap_to_next)
+                nxt_start = float(dialogue_items[index + 1].get("start", end + 1.0))
+                gap_to_next = max(0.6, nxt_start - start - 0.05)
+                # Tight lip-sync window: mouth_dur + 0.4s buffer max, strictly bound by gap_to_next
+                avail_dur = min(max(mouth_dur + 0.4, 1.6), gap_to_next)
             else:
-                avail_dur = max(mouth_dur + 3.0, 4.5)
+                avail_dur = max(mouth_dur + 0.8, 2.5)
 
-            # Dynamically calculate optimal Edge-TTS speaking rate (+0% to +35%)
+            # Dynamically calculate optimal Edge-TTS speaking rate (+0% to +22%)
             # so the speech tempo naturally matches the actor's mouth speed, eliminating voice lag!
             dyn_rate = calculate_optimal_tts_rate(text, avail_dur)
             rate = max(int(item.get("rate_percent", 0)), dyn_rate)

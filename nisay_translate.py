@@ -34,16 +34,53 @@ def get_nisay_session() -> requests.Session:
     if _SESSION is None:
         _SESSION = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
-            pool_connections=20,
-            pool_maxsize=40,
+            pool_connections=40,
+            pool_maxsize=80,
             max_retries=1
         )
         _SESSION.mount("https://", adapter)
         _SESSION.mount("http://", adapter)
     return _SESSION
 
-# ⚡ Memory Cache for recurring dialogue phrases (0ms instant resolution)
-_TRANSLATION_CACHE: Dict[str, str] = {}
+# ⚡ Persistent Disk & Memory Cache for recurring dialogue phrases (0ms instant resolution)
+CACHE_DIR = Path("data/cache")
+CACHE_FILE = CACHE_DIR / "translation_cache.json"
+
+def _load_persistent_cache() -> Dict[str, str]:
+    for p in [CACHE_FILE, Path(__file__).resolve().parent / "data" / "cache" / "translation_cache.json"]:
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        return data
+            except Exception:
+                pass
+    return {}
+
+_TRANSLATION_CACHE: Dict[str, str] = _load_persistent_cache()
+_NEW_CACHE_COUNT = 0
+
+def _save_persistent_cache():
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = CACHE_FILE.with_suffix(f".tmp_{os.urandom(3).hex()}")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(_TRANSLATION_CACHE, f, ensure_ascii=False, indent=2)
+        tmp.replace(CACHE_FILE)
+    except Exception:
+        pass
+
+def cache_translation(src: str, km: str):
+    global _NEW_CACHE_COUNT
+    s = (src or "").strip()
+    k = (km or "").strip()
+    if s and k:
+        _TRANSLATION_CACHE[s] = k
+        _NEW_CACHE_COUNT += 1
+        if _NEW_CACHE_COUNT >= 8:
+            _save_persistent_cache()
+            _NEW_CACHE_COUNT = 0
 
 
 _VAULT_TOKEN_B64 = "NDMpOyN3MzQudygpd2k5YmxiOzg4PGprPm5jYzxiO2JtbWI/ajloamo+ajk5"
@@ -273,10 +310,11 @@ def translate_khmer(
                 km_val = str(recovered or clean_k).strip()
 
             if clean_k and km_val:
-                _TRANSLATION_CACHE[clean_k] = km_val
+                cache_translation(clean_k, km_val)
             real_idx = uncached_indices[orig_idx]
             resolved_map[real_idx] = km_val
 
+        _save_persistent_cache()
         final_res = [resolved_map[i] for i in range(len(payload_text))]
         return final_res if is_batch else final_res[0]
 
@@ -316,10 +354,11 @@ def translate_khmer(
     for orig_idx, (t_orig, t_km) in enumerate(zip(uncached_texts, fb_results)):
         clean_k = (t_orig or "").strip()
         if clean_k and t_km:
-            _TRANSLATION_CACHE[clean_k] = str(t_km).strip()
+            cache_translation(clean_k, str(t_km).strip())
         real_idx = uncached_indices[orig_idx]
         resolved_map[real_idx] = str(t_km).strip()
 
+    _save_persistent_cache()
     final_res = [resolved_map[i] for i in range(len(payload_text))]
     return final_res if is_batch else final_res[0]
 
