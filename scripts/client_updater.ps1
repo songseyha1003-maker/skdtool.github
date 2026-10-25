@@ -105,15 +105,46 @@ if (-not (Test-Path $targetDir)) {
     New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
 }
 
+try {
+    Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object {
+        Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+    }
+} catch {}
+
 $extracted = $false
+Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+
 for ($i = 0; $i -lt 8; $i++) {
     try {
-        Expand-Archive -Path $tempZip -DestinationPath $targetDir -Force -ErrorAction Stop
-        $extracted = $true
-        Write-Host "[OK] Files and modules updated successfully!" -ForegroundColor Green
-        break
+        if ([System.IO.Compression.ZipFile]) {
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($tempZip)
+            foreach ($entry in $archive.Entries) {
+                $destPath = [System.IO.Path]::Combine($targetDir, $entry.FullName)
+                $destParent = [System.IO.Path]::GetDirectoryName($destPath)
+                if (-not [System.IO.Directory]::Exists($destParent)) {
+                    [System.IO.Directory]::CreateDirectory($destParent) | Out-Null
+                }
+                if ($entry.Name -ne "") {
+                    [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destPath, $true)
+                }
+            }
+            $archive.Dispose()
+            $extracted = $true
+            Write-Host "[OK] Files and modules updated successfully via .NET ZipFile!" -ForegroundColor Green
+            break
+        } else {
+            Expand-Archive -Path $tempZip -DestinationPath $targetDir -Force -ErrorAction Stop
+            $extracted = $true
+            Write-Host "[OK] Files and modules updated successfully!" -ForegroundColor Green
+            break
+        }
     } catch {
         Write-Host "[!] Retry extracting in 2 seconds (waiting for file release)..." -ForegroundColor Yellow
+        try {
+            Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object {
+                Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+            }
+        } catch {}
         Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
     }

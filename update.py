@@ -263,62 +263,131 @@ def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any
         ps1_file = app_dir / "apply_update.ps1"
         exe_file = app_dir / "SN_TOOL.exe"
         run_bat = app_dir / "START_SN_TOOL.bat"
+        log_file = app_dir / "data" / "update_install.log"
 
         if is_exe:
             ps1_content = f"""
 Start-Sleep -Seconds 2
 Stop-Process -Name "SN_TOOL" -Force -ErrorAction SilentlyContinue
+Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object {{
+    Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+}}
 Start-Sleep -Seconds 1
 Start-Process "{dest_file}"
 Remove-Item -Force $MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue
 """
         else:
             ps1_content = f"""
-Start-Sleep -Seconds 2
-Get-Process | Where-Object {{ $_.Path -like "{app_dir}*" }} | Stop-Process -Force -ErrorAction SilentlyContinue
-Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
+$logPath = "{log_file}"
+$appDir = "{app_dir}"
+$destZip = "{dest_file}"
 
-# Backup existing license.key before extracting
-$licBackup = $null
-if (Test-Path "{app_dir}\\license.key") {{
-    $licBackup = [System.IO.File]::ReadAllBytes("{app_dir}\\license.key")
+function Log-Update($msg) {{
+    $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $line = "[$ts] $msg"
+    try {{ Add-Content -Path $logPath -Value $line -Encoding UTF8 }} catch {{}}
 }}
 
-# Retry extraction to prevent file lock collision
-$extracted = $false
-for ($i = 0; $i -lt 8; $i++) {{
+Log-Update "Starting in-app OTA update installation..."
+
+Start-Sleep -Seconds 2
+
+# 1. Terminate any active process holding port 8000 or running in appDir
+try {{
+    Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object {{
+        Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+    }}
+}} catch {{}}
+
+Get-Process | Where-Object {{ $_.Path -like "$appDir*" }} | Stop-Process -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "SN_TOOL" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+
+# 2. Backup existing license.key before extracting
+$licBackup = $null
+$licPath = Join-Path $appDir "license.key"
+if (Test-Path $licPath) {{
     try {{
-        Expand-Archive -Path "{dest_file}" -DestinationPath "{app_dir}" -Force -ErrorAction Stop
-        $extracted = $true
-        break
+        $licBackup = [System.IO.File]::ReadAllBytes($licPath)
+        Log-Update "License key backed up successfully."
     }} catch {{
+        Log-Update "Warning backing up license key: $_"
+    }}
+}}
+
+# 3. Fast resilient extraction (.NET ZipFile with Expand-Archive fallback)
+$extracted = $false
+Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+
+for ($attempt = 1; $attempt -le 8; $attempt++) {{
+    try {{
+        Log-Update "Extraction attempt $attempt..."
+        if ([System.IO.Compression.ZipFile]) {{
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($destZip)
+            foreach ($entry in $archive.Entries) {{
+                $targetPath = [System.IO.Path]::Combine($appDir, $entry.FullName)
+                $targetParent = [System.IO.Path]::GetDirectoryName($targetPath)
+                if (-not [System.IO.Directory]::Exists($targetParent)) {{
+                    [System.IO.Directory]::CreateDirectory($targetParent) | Out-Null
+                }}
+                if ($entry.Name -ne "") {{
+                    [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)
+                }}
+            }}
+            $archive.Dispose()
+            $extracted = $true
+            Log-Update "Extraction via .NET ZipFile succeeded!"
+            break
+        }} else {{
+            Expand-Archive -Path $destZip -DestinationPath $appDir -Force -ErrorAction Stop
+            $extracted = $true
+            Log-Update "Extraction via Expand-Archive succeeded!"
+            break
+        }}
+    }} catch {{
+        Log-Update "Extraction attempt $attempt notice: $_"
+        try {{
+            Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object {{
+                Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+            }}
+        }} catch {{}}
         Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
     }}
 }}
 
+# 4. Restore license.key
 if ($licBackup -ne $null) {{
-    [System.IO.File]::WriteAllBytes("{app_dir}\\license.key", $licBackup)
-}}
-Remove-Item -Force "{dest_file}" -ErrorAction SilentlyContinue
-
-# Determine best restart binary or launcher
-$targetExe = "{exe_file}"
-if (-not (Test-Path $targetExe)) {{
-    if (Test-Path "{app_dir}\\Khmer_Drama_Studio_Launcher.bat") {{
-        $targetExe = "{app_dir}\\Khmer_Drama_Studio_Launcher.bat"
-    }} elseif (Test-Path "{app_dir}\\START_SN_TOOL.bat") {{
-        $targetExe = "{app_dir}\\START_SN_TOOL.bat"
-    }} elseif (Test-Path "{app_dir}\\SN_TOOL.bat") {{
-        $targetExe = "{app_dir}\\SN_TOOL.bat"
+    try {{
+        [System.IO.File]::WriteAllBytes($licPath, $licBackup)
+        Log-Update "License key restored successfully."
+    }} catch {{
+        Log-Update "Error restoring license key: $_"
     }}
 }}
 
+# 5. Remove temporary download package
+Remove-Item -Force $destZip -ErrorAction SilentlyContinue
+
+# 6. Determine best restart binary or launcher
+$targetExe = "{exe_file}"
+if (-not (Test-Path $targetExe)) {{
+    if (Test-Path (Join-Path $appDir "START_SN_TOOL.bat")) {{
+        $targetExe = Join-Path $appDir "START_SN_TOOL.bat"
+    }} elseif (Test-Path (Join-Path $appDir "Khmer_Drama_Studio_Launcher.bat")) {{
+        $targetExe = Join-Path $appDir "Khmer_Drama_Studio_Launcher.bat"
+    }} elseif (Test-Path (Join-Path $appDir "SN_TOOL.bat")) {{
+        $targetExe = Join-Path $appDir "SN_TOOL.bat"
+    }}
+}}
+
+Log-Update "Relaunching application via: $targetExe"
 Start-Sleep -Seconds 1
 if (Test-Path $targetExe) {{
-    Start-Process -FilePath $targetExe -WorkingDirectory "{app_dir}"
+    Start-Process -FilePath $targetExe -WorkingDirectory $appDir
 }}
+
+Log-Update "Update finished successfully."
 Remove-Item -Force $MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue
 """
         with open(ps1_file, "w", encoding="utf-8") as f:

@@ -11494,13 +11494,39 @@ async function executeAppUpdate() {
         clearInterval(simInterval);
         const data = await res.json();
         if (data.success) {
-            if (progressBar) progressBar.style.width = "100%";
-            if (progressPct) progressPct.textContent = "100%";
-            if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Update successful! Restarting to new version...';
-            showToast("Update successful!");
+            const targetVer = (_latestUpdateInfo && _latestUpdateInfo.latest_version) ? _latestUpdateInfo.latest_version : '1.1.4';
+            if (progressBar) progressBar.style.width = "90%";
+            if (progressPct) progressPct.textContent = "90%";
+            if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#10b981;"></i> Updating to v' + targetVer + '... Application is restarting automatically.';
+            showToast("Update patch downloaded! Restarting to v" + targetVer + "...");
+
+            // Poll server until the newly updated version comes online
+            let pollAttempts = 0;
+            const maxPoll = 40;
             setTimeout(() => {
-                window.location.reload();
-            }, 3000);
+                const pollInterval = setInterval(async () => {
+                    pollAttempts++;
+                    try {
+                        const ping = await fetch('/api/update/check?_t=' + Date.now(), { cache: 'no-store' });
+                        if (ping.ok) {
+                            const pdata = await ping.json();
+                            clearInterval(pollInterval);
+                            const finalVer = (pdata && pdata.current_version) ? pdata.current_version : targetVer;
+                            if (progressBar) progressBar.style.width = "100%";
+                            if (progressPct) progressPct.textContent = "100%";
+                            if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Update to v' + finalVer + ' complete! Refreshing...';
+                            setTimeout(() => {
+                                window.location.href = window.location.pathname + '?_v=' + Date.now();
+                            }, 1200);
+                        }
+                    } catch (netErr) {
+                        if (pollAttempts >= maxPoll) {
+                            clearInterval(pollInterval);
+                            window.location.href = window.location.pathname + '?_v=' + Date.now();
+                        }
+                    }
+                }, 1500);
+            }, 3500);
         } else {
             if (statusMsg) statusMsg.textContent = "Error: " + (data.error || "Update failed");
             if (btnUpdate) btnUpdate.disabled = false;
