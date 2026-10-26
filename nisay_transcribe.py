@@ -21,7 +21,18 @@ import requests
 
 BASE_URL = "https://api.nisay.store/v1"
 TRANSCRIBE_ENDPOINT = f"{BASE_URL}/audio/transcriptions"
-MANDATORY_MODEL = "nisay-transcribe"
+DEFAULT_MODEL = "nisay-transcribe"
+BACKUP_MODEL = "gemini-3.8-transcribe"
+MANDATORY_MODEL = DEFAULT_MODEL  # Maintained for backward compatibility
+
+# Smart Auto-Failover & Auto-Recovery State:
+# Default Model: nisay-transcribe. Backup Model: gemini-3.8-transcribe.
+# If nisay-transcribe fails, automatically smart-switches to gemini-3.8-transcribe.
+# When nisay-transcribe is operational again, automatically restores to nisay-transcribe.
+_ACTIVE_TRANSCRIBE_MODEL = DEFAULT_MODEL
+_LAST_PRIMARY_FAILURE_TIME = 0.0
+_PRIMARY_RETRY_COOLDOWN = 60.0  # 60s cooldown before automatically probing nisay-transcribe again
+
 DEFAULT_PROMPT = "Transcribe verbatim with complete punctuation (。！？) and millisecond timestamps for each dialogue turn."
 ACCEPTED_FORMATS = {"verbose_json", "srt", "vtt", "json", "text"}
 
@@ -100,12 +111,17 @@ def transcribe_audio(
     language: str = "auto",
     prompt: str = DEFAULT_PROMPT,
     api_key: Optional[str] = None,
-    max_retries: int = 3,
+    model: Optional[str] = None,
+    max_retries: int = 2,
     timeout: int = 300
 ) -> Union[Dict[str, Any], str]:
     """
-    Send media file exactly once to /audio/transcriptions with model=nisay-transcribe.
-    
+    Send media file to /audio/transcriptions with smart auto-failover:
+      - Default Model: nisay-transcribe
+      - Backup Model: gemini-3.8-transcribe
+    If nisay-transcribe fails or is unavailable, automatically smart-switches to gemini-3.8-transcribe.
+    When nisay-transcribe recovers, automatically restores back to nisay-transcribe.
+
     Preserves verbatim speech, millisecond timestamps, neutral speaker IDs (S0, S1, S2...),
     original language, repeated speech, and [inaudible] markers.
     Never translates in this workflow.
@@ -114,6 +130,8 @@ def transcribe_audio(
         dict if response_format in ('json', 'verbose_json'),
         or str if response_format in ('srt', 'vtt', 'text').
     """
+    global _ACTIVE_TRANSCRIBE_MODEL, _LAST_PRIMARY_FAILURE_TIME
+
     file_p = Path(file_path)
     if not file_p.exists():
         raise FileNotFoundError(f"Media file not found: {file_path}")
@@ -132,74 +150,110 @@ def transcribe_audio(
         "Authorization": f"Bearer {resolved_key}"
     }
 
-    last_error = None
-    for attempt in range(1, max_retries + 1):
-        try:
-            with open(file_p, "rb") as f:
-                # Prepare multipart upload
-                files = {
-                    "file": (file_p.name, f, "application/octet-stream")
-                }
-                data = {
-                    "model": MANDATORY_MODEL,
-                    "language": language,
-                    "response_format": fmt,
-                    "prompt": prompt or DEFAULT_PROMPT
-                }
+    # Model resolution:
+    if model:
+        models_to_try = [model]
+    else:
+        now = time.time()
+        # If currently on backup model, check if cooldown elapsed to probe default model
+        if _ACTIVE_TRANSCRIBE_MODEL == BACKUP_MODEL:
+            if now - _LAST_PRIMARY_FAILURE_TIME >= _PRIMARY_RETRY_COOLDOWN:
+                # Probe primary model to see if it recovered
+                models_to_try = [DEFAULT_MODEL, BACKUP_MODEL]
+            else:
+                models_to_try = [BACKUP_MODEL, DEFAULT_MODEL]
+        else:
+            models_to_try = [DEFAULT_MODEL, BACKUP_MODEL]
 
-                resp = requests.post(
-                    TRANSCRIBE_ENDPOINT,
-                    headers=headers,
-                    files=files,
-                    data=data,
-                    timeout=timeout
-                )
+    overall_errors = []
 
-            if resp.status_code == 401 or resp.status_code == 403:
-                raise RuntimeError("403 Forbidden: check Cloud API Key in SN TOOL Settings")
+    for target_model in models_to_try:
+        model_error = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                with open(file_p, "rb") as f:
+                    files = {
+                        "file": (file_p.name, f, "application/octet-stream")
+                    }
+                    data = {
+                        "model": target_model,
+                        "language": language,
+                        "response_format": fmt,
+                        "prompt": prompt or DEFAULT_PROMPT
+                    }
 
-            if resp.status_code == 422:
-                try:
-                    err_json = resp.json()
-                    err_info = err_json.get("error", {})
-                    err_code = err_info.get("code") or ""
-                    err_msg = str(err_info.get("message") or "")
-                    if err_code == "no_timestamped_speech" or "no timestamped speech" in err_msg.lower():
-                        print("[SN CLOUD SPEECH] No speech detected in audio segment (silent/music).")
-                        if fmt in ("json", "verbose_json"):
-                            return {"text": "", "segments": []}
-                        return ""
-                except Exception:
-                    pass
-                last_error = f"HTTP 422: {resp.text[:200]}"
-                break
+                    resp = requests.post(
+                        TRANSCRIBE_ENDPOINT,
+                        headers=headers,
+                        files=files,
+                        data=data,
+                        timeout=timeout
+                    )
 
-            if resp.status_code == 429:
-                retry_after = int(resp.headers.get("Retry-After", 2 * attempt))
-                last_error = f"HTTP 429 Rate Limited. Retry-After: {retry_after}s"
-                time.sleep(retry_after)
-                continue
+                if resp.status_code == 401 or (resp.status_code == 403 and "API key" in resp.text and "MODEL_NOT_ASSIGNED" not in resp.text):
+                    raise RuntimeError("403 Forbidden: check Cloud API Key in SN TOOL Settings")
 
-            if resp.status_code >= 500:
-                last_error = f"HTTP {resp.status_code}: {resp.text[:200]}"
-                time.sleep(2 * attempt)
-                continue
+                if resp.status_code == 422:
+                    try:
+                        err_json = resp.json()
+                        err_info = err_json.get("error", {})
+                        err_code = err_info.get("code") or ""
+                        err_msg = str(err_info.get("message") or "")
+                        if err_code == "no_timestamped_speech" or "no timestamped speech" in err_msg.lower():
+                            print(f"[SN CLOUD SPEECH] No speech detected in audio segment ({target_model}).")
+                            if fmt in ("json", "verbose_json"):
+                                return {"text": "", "segments": []}
+                            return ""
+                    except Exception:
+                        pass
+                    model_error = f"HTTP 422: {resp.text[:200]}"
+                    break
 
-            resp.raise_for_status()
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", 2 * attempt))
+                    model_error = f"HTTP 429 Rate Limited. Retry-After: {retry_after}s"
+                    time.sleep(retry_after)
+                    continue
 
-            # Successful response parsing
-            if fmt in ("json", "verbose_json"):
-                parsed_json = resp.json()
-                return parsed_json
-            return resp.text
+                if resp.status_code >= 500 or resp.status_code in (404, 502, 503, 504):
+                    model_error = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                    time.sleep(1.5 * attempt)
+                    continue
 
-        except requests.RequestException as e:
-            if "403" in str(e):
-                raise
-            last_error = str(e)
-            time.sleep(2 * attempt)
+                if resp.status_code == 403:
+                    # Model not assigned or unauthorized
+                    model_error = f"HTTP 403: {resp.text[:200]}"
+                    break
 
-    raise RuntimeError(f"SN Cloud Speech Engine failed after {max_retries} attempts: {last_error}")
+                resp.raise_for_status()
+
+                # Success!
+                if target_model == DEFAULT_MODEL and _ACTIVE_TRANSCRIBE_MODEL != DEFAULT_MODEL:
+                    print(f"[SN CLOUD SPEECH] 🟢 Primary model '{DEFAULT_MODEL}' is operational again! Auto-restored to default.")
+                    _ACTIVE_TRANSCRIBE_MODEL = DEFAULT_MODEL
+                    _LAST_PRIMARY_FAILURE_TIME = 0.0
+                elif target_model == DEFAULT_MODEL:
+                    _ACTIVE_TRANSCRIBE_MODEL = DEFAULT_MODEL
+                    _LAST_PRIMARY_FAILURE_TIME = 0.0
+
+                if fmt in ("json", "verbose_json"):
+                    parsed_json = resp.json()
+                    return parsed_json
+                return resp.text
+
+            except requests.RequestException as e:
+                model_error = str(e)
+                time.sleep(1.5 * attempt)
+
+        # If target_model failed:
+        overall_errors.append(f"{target_model}: {model_error}")
+        if target_model == DEFAULT_MODEL and BACKUP_MODEL in models_to_try:
+            _LAST_PRIMARY_FAILURE_TIME = time.time()
+            _ACTIVE_TRANSCRIBE_MODEL = BACKUP_MODEL
+            print(f"[SN CLOUD SPEECH] ⚠️ Model '{DEFAULT_MODEL}' unavailable ({model_error}). Auto smart-switching to backup model '{BACKUP_MODEL}'...")
+
+    err_summary = "; ".join(overall_errors)
+    raise RuntimeError(f"SN Cloud Speech Engine failed after trying models {models_to_try}: {err_summary}")
 
 
 def _compress_or_slice_audio(
