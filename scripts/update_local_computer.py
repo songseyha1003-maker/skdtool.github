@@ -25,7 +25,7 @@ def main():
     installed_dir = Path(local_app_data) / "Programs" / "SN_TOOL"
 
     print("=" * 65)
-    print("  🚀 SN TOOL - LOCAL COMPUTER UPDATE ENGINE (v1.1.4)")
+    print("  🚀 SN TOOL - LOCAL COMPUTER UPDATE ENGINE (v1.1.5)")
     print("=" * 65)
     print(f" Source Workspace: {base_dir}")
     print(f" Installed App Dir: {installed_dir}")
@@ -84,7 +84,7 @@ def main():
             for root_d, int_d in targets:
                 shutil.copy2(src, root_d / cfg)
                 shutil.copy2(src, int_d / cfg)
-    print("  [OK] version.json (v1.1.4) and launch configs updated!")
+    print("  [OK] version.json (v1.1.5) and launch configs updated!")
 
     # 3. Update Static Assets (Web UI)
     print("\n[*] Updating Web UI static assets...")
@@ -174,7 +174,7 @@ def main():
         print("[*] Note: SN_TOOL.exe is currently active. Loose modules (.py / .pyc) and static assets updated successfully!")
 
     print("\n" + "=" * 65)
-    print("  🎉 LOCAL COMPUTER UPDATE TO v1.1.4 COMPLETE 100%!")
+    print("  🎉 LOCAL COMPUTER UPDATE TO v1.1.5 COMPLETE 100%!")
     print("=" * 65)
 
 if __name__ == "__main__":
