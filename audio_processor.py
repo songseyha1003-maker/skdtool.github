@@ -464,6 +464,7 @@ def mix_dubbed_audio(
     # 3. Pre-process dialogue items timing & speed adjustments
     speech_intervals = []
     prepared_lines = []
+    last_lead_end_ms = 0
 
     for i, (idx, item) in enumerate(valid_lines):
         orig_s = float(item.get("orig_start", item.get("start", 0.0)))
@@ -471,25 +472,31 @@ def mix_dubbed_audio(
         orig_start_ms = max(0, int(orig_s * 1000))
         orig_end_ms = max(0, int(orig_e * 1000))
 
-        mouth_dur_ms = max(350, orig_end_ms - orig_start_ms)
+        mouth_dur_ms = max(300, orig_end_ms - orig_start_ms)
         if i + 1 < len(valid_lines):
             next_item = valid_lines[i + 1][1]
             next_orig_s = float(next_item.get("orig_start", next_item.get("start", 0.0)))
             next_start_ms = max(0, int(next_orig_s * 1000))
-            hard_limit_ms = max(350, next_start_ms - orig_start_ms - 50)
-            target_window_ms = min(mouth_dur_ms + 100, hard_limit_ms)
+            hard_limit_ms = max(300, next_start_ms - orig_start_ms - 40)
+            target_window_ms = min(mouth_dur_ms + 50, hard_limit_ms)
         else:
-            hard_limit_ms = mouth_dur_ms + 250
-            target_window_ms = mouth_dur_ms + 100
+            hard_limit_ms = mouth_dur_ms + 200
+            target_window_ms = mouth_dur_ms + 50
 
-        start_ms = orig_start_ms
-        item_dur_est = max(400, orig_end_ms - orig_start_ms)
+        # Professional Film ADR Lip-Sync Anticipation Lead:
+        # Visual mouth opening precedes acoustic speech energy by 100ms - 150ms.
+        # Advancing audio placement by 130ms guarantees speech starts immediately as lips move!
+        lip_sync_advance_ms = 130
+        min_start_bound = last_lead_end_ms + 30 if last_lead_end_ms > 0 else 0
+        start_ms = max(min_start_bound, orig_start_ms - lip_sync_advance_ms)
+        last_lead_end_ms = start_ms + mouth_dur_ms
+
         item["start"] = round(start_ms / 1000.0, 2)
-        item["end"] = round((start_ms + item_dur_est) / 1000.0, 2)
+        item["end"] = round((start_ms + mouth_dur_ms) / 1000.0, 2)
 
         # Pad speech intervals slightly wider to guarantee 100% muting of original vocal attacks/trails
-        pad_start = max(0, orig_start_ms - 300)
-        pad_end = orig_end_ms + 300
+        pad_start = max(0, start_ms - 100)
+        pad_end = orig_end_ms + 250
         speech_intervals.append((pad_start, pad_end))
         prepared_lines.append({
             "idx": idx,
@@ -614,26 +621,30 @@ def mix_dubbed_audio(
 
                     try:
                         from pydub.silence import detect_leading_silence
-                        s_lead = detect_leading_silence(line_seg, silence_threshold=-40.0)
-                        if s_lead > 15:
-                            line_seg = line_seg[max(0, s_lead - 15):]
+                        # Zero-Latency Lip-Sync Trimming:
+                        # Strip all leading dead silence directly to the first audible phoneme
+                        s_lead = detect_leading_silence(line_seg, silence_threshold=-44.0)
+                        if s_lead > 0:
+                            line_seg = line_seg[s_lead:]
                     except Exception:
                         pass
 
-                    if len(line_seg) > 50:
-                        line_seg = line_seg.fade_in(15).fade_out(25)
+                    # 3ms micro anti-click fade (instant vocal attack so sound starts right away)
+                    if len(line_seg) > 10:
+                        line_seg = line_seg.fade_in(3).fade_out(20)
 
                     cur_dur_ms = len(line_seg)
                     tw_ms = pline["target_window_ms"]
-                    if cur_dur_ms > tw_ms and tw_ms >= 350:
-                        needed_speed = cur_dur_ms / max(300, tw_ms)
-                        speed_to_apply = min(1.22, max(1.02, needed_speed))
+                    if cur_dur_ms > tw_ms and tw_ms >= 250:
+                        needed_speed = cur_dur_ms / max(200, tw_ms)
+                        # Adaptive time-stretch up to 1.45x ensures audio completes before actor closes mouth!
+                        speed_to_apply = min(1.45, max(1.02, needed_speed))
                         if speed_to_apply >= 1.04:
                             line_seg = time_stretch_audio_segment(line_seg, speed_to_apply)
 
                     hl_ms = pline["hard_limit_ms"]
                     if len(line_seg) > hl_ms:
-                        line_seg = line_seg[:hl_ms].fade_out(40)
+                        line_seg = line_seg[:hl_ms].fade_out(25)
 
                     if line_seg.frame_rate != target_fr or line_seg.channels != channels:
                         line_seg = line_seg.set_frame_rate(target_fr).set_channels(channels)
@@ -642,7 +653,8 @@ def mix_dubbed_audio(
                     l_samples = np.frombuffer(line_seg.raw_data, dtype=np.int16).reshape(-1, channels)
                     l_end_s = l_start_s + len(l_samples)
 
-                    # Update item exact end time for subtitles
+                    # Update item exact start & end time for subtitles so subtitles also match mouth!
+                    pline["item"]["start"] = round(l_start_s / float(target_fr), 2)
                     pline["item"]["end"] = round(l_end_s / float(target_fr), 2)
 
                     active_segments.append({

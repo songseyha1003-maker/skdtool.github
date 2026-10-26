@@ -1,9 +1,9 @@
 {
-  "version": "1.1.4",
+  "version": "1.1.5",
   "app_name": "SN TOOL - STUDIO PRO",
-  "release_date": "2026-10-24",
-  "title": "SN TOOL STUDIO PRO - Official Release v1.1.4 (Auto Drama Folder & Ultra-Accurate AI Translation)",
-  "release_notes": "• 📁 Auto-Create Drama Folder First: Automatically creates dedicated folder (D:\\SN_Dramas\\<DramaName>\\) before dubbing begins - zero manual browsing required!\n• 🎯 1-Folder Clean Direct Export: All episodes and full movie saved directly into 1 single folder, zero nested subfolders, Explorer opens & selects video directly\n• 🧠 Upgraded 184 Asian Drama Tropes & Idiom Brain: Authentic colloquial Khmer translation with CEO, revenge, slap-in-the-face & hidden identity tropes\n• ⚡ 0ms Instant Disk Translation Cache: Recurring dialogues load instantly with zero Nisay API token consumption\n• 👄 Adaptive Lip-Sync Rate Scaler (+0% to +22%): Khmer speech pace dynamically budgeted to match Chinese mouth movement seamlessly\n• 💎 Fixed .mp4.mp4 double extension & cleaned luxury General Settings interface",
+  "release_date": "2026-10-26",
+  "title": "SN TOOL STUDIO PRO - Official Release v1.1.5 (Zero-Lag Lip-Sync & Instant Voice Alignment)",
+  "release_notes": "• 👄 Zero-Lag Lip-Sync Alignment: Synchronized Khmer dubbing directly to visual mouth opening with 130ms ADR anticipation lead - zero delay!\n• ⚡ Instant Audio Onset (-44dBFS Silence Trimming): Strips leading dead silence from TTS audio, starting character speech on the exact millisecond!\n• 🎯 Multi-Character Dialogue Pre-Segmentation: Intelligently separates conversational drama exchanges and long lines (>3.5s) into natural timed dialogue segments!\n• 🚫 Zero Cumulative Drift Lag: Speech start timestamps are anchored permanently, preventing voices from drifting later in long episodes!\n• ⏩ Adaptive Dynamic Time-Stretch (up to 1.45x): Speed auto-adjusts seamlessly so characters never continue speaking after closing their mouth!\n• 🧠 Drama Idiom & Particle Splitting: Perfectly splits drama dialogues containing modal particles (呀呢吧吗啦啊) and short drama shouts!",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }

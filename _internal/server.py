@@ -1222,7 +1222,7 @@ def license_status_endpoint():
         from update import get_local_version
         info["app_version"] = get_local_version()
     except Exception:
-        info["app_version"] = "1.1.4"
+        info["app_version"] = "1.1.5"
 
     cfg_path = get_data_file("license_config.json")
     if cfg_path.exists():
@@ -1243,7 +1243,7 @@ def api_version_endpoint():
         from update import get_local_version
         v = get_local_version()
     except Exception:
-        v = "1.1.4"
+        v = "1.1.5"
     return jsonify({"version": v, "success": True})
 
 

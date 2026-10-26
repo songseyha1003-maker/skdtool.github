@@ -44,7 +44,7 @@ def generate_iss_file(base_dir: Path) -> Path:
 
     iss_content = f"""; Inno Setup 6 Script for SN TOOL - STUDIO PRO
 #define MyAppName "SN TOOL - STUDIO PRO"
-#define MyAppVersion "1.1.4"
+#define MyAppVersion "1.1.5"
 #define MyAppPublisher "SN STUDIO"
 #define MyAppExeName "SN_TOOL.exe"
 

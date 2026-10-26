@@ -92,6 +92,8 @@ def package_update_zip():
         if dist_internal.exists():
             for pyc_f in dist_internal.glob("*.pyc"):
                 zf.write(pyc_f, f"_internal/{pyc_f.name}")
+            for py_f in dist_internal.glob("*.py"):
+                zf.write(py_f, f"_internal/{py_f.name}")
             int_vjson = dist_internal / "version.json"
             if int_vjson.exists():
                 zf.write(int_vjson, "_internal/version.json")

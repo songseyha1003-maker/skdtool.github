@@ -1,6 +1,6 @@
 """
 1-Click Client Updater for SN TOOL STUDIO PRO
-Directly updates installation to the latest official release (v1.1.4+)
+Directly updates installation to the latest official release (v1.1.5+)
 Safe against file locks, preserves license.key, and updates both
 installed Programs folder and portable directories.
 """
@@ -42,8 +42,8 @@ def main():
             pass
 
     print("=" * 70)
-    print("  🚀 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.1.4+)")
-    print("  ⚡ Auto Drama Folder & Ultra-Accurate AI Translation")
+    print("  🚀 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.1.5+)")
+    print("  ⚡ Zero-Lag Lip-Sync & Instant Voice Alignment")
     print("=" * 70)
     print()
 
@@ -77,8 +77,8 @@ def main():
                 print(f"[!] Warning reading license.key: {e}")
 
     # 2. Download latest update package
-    temp_zip = Path(os.environ.get("TEMP", ".")) / "SN_TOOL_UPDATE_v114.zip"
-    print(f"\n[*] Downloading latest v1.1.4 package from Cloud CDN...")
+    temp_zip = Path(os.environ.get("TEMP", ".")) / "SN_TOOL_UPDATE_v115.zip"
+    print(f"\n[*] Downloading latest v1.1.5 package from Cloud CDN...")
     download_ok = False
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -148,8 +148,8 @@ def main():
 
     print()
     print("=" * 70)
-    print("  🎉 [SUCCESS] SN TOOL STUDIO PRO has been updated to v1.1.4!")
-    print("  ✨ Auto Drama Folder, 1-Folder Clean Export & 184 Tropes active.")
+    print("  🎉 [SUCCESS] SN TOOL STUDIO PRO has been updated to v1.1.5!")
+    print("  ✨ Zero-Lag Lip-Sync Alignment & Adaptive Time-Stretch active.")
     print("=" * 70)
     print()
     return 0

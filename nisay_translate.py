@@ -205,7 +205,10 @@ def translate_khmer(
         "Translate the full thought, facts, and intent of the character. Never omit words, clauses, character names, or statements! "
         "2. Natural spoken Khmer film dubbing (មិនប្រើភាសាសៀវភៅ ឬភាសារ៉ូបូតទេ). "
         "3. Match character relationship tone: Husband/Wife (បង/អូន), Boss/Subordinate (លោកប្រធាន/ខ្ញុំ/ឯង), Enemies (ឯង/យើង), Elders (លោកតា/លោកយាយ/ម៉ាក់ក្មេក). "
-        "4. If batch input, return exactly 1-to-1 matching array of translations without skipping or merging any lines."
+        "4. CRITICAL LIP-SYNC & MOUTH DURATION SYNCHRONIZATION: The spoken Khmer line MUST match the speaking duration of the actor. "
+        "For short lines (<= 5 source characters or shouts), translate into 1-3 PUNCHY, natural spoken words (e.g. 'ឈប់ភ្លាម!', 'ទៅណា?!', 'មិនទាន់គ្រប់ទេ!'). "
+        "NEVER bloat short lines into long explanatory paragraphs! Spoken audio must match mouth duration. "
+        "5. If batch input, return exactly 1-to-1 matching array of translations without skipping or merging any lines."
     )
     context_str = context or DEFAULT_HIGH_FIDELITY_CONTEXT
 

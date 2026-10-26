@@ -643,7 +643,7 @@ def _get_cache_filename(text: str, voice_id: str, rate: str, pitch: str) -> Path
 
 def calculate_optimal_tts_rate(text_km: str, target_window_sec: float) -> int:
     """
-    Calculate optimal Edge-TTS speaking rate (+0% to +22%) for pure natural human tempo and tight lip-sync.
+    Calculate optimal Edge-TTS speaking rate (+0% to +30%) for pure natural human tempo and tight lip-sync.
     Khmer average natural speech speed is ~13.5 characters per second (including vowels and diacritics).
     """
     if not text_km or target_window_sec <= 0.3:
@@ -654,7 +654,7 @@ def calculate_optimal_tts_rate(text_km: str, target_window_sec: float) -> int:
         return 0
     factor = est_natural_sec / target_window_sec
     needed_rate = int((factor - 1.0) * 100)
-    return min(22, max(0, needed_rate))
+    return min(30, max(0, needed_rate))
 
 
 async def synthesize_khmer_speech(
@@ -817,25 +817,25 @@ def trim_and_fit_voice_audio(audio_path: str, max_duration_sec: Optional[float] 
         if len(seg) < 100 or seg.dBFS < -55.0:
             return 0.0
 
-        s_trim = detect_leading_silence(seg, silence_threshold=-42.0)
-        e_trim = detect_leading_silence(seg.reverse(), silence_threshold=-42.0)
+        s_trim = detect_leading_silence(seg, silence_threshold=-44.0)
+        e_trim = detect_leading_silence(seg.reverse(), silence_threshold=-44.0)
         dur = len(seg)
         if (s_trim + e_trim) < dur:
-            start_pos = max(0, s_trim - 25)  # 25ms headroom preserves initial breath/consonant
-            end_pos = min(dur, dur - e_trim + 40)  # 40ms headroom preserves ending consonant
+            start_pos = max(0, s_trim - 5)  # 5ms micro-headroom ensures immediate phoneme onset with no lag
+            end_pos = min(dur, dur - e_trim + 25)  # 25ms headroom preserves ending consonant
             trimmed = seg[start_pos:end_pos]
         else:
             trimmed = seg
 
         # Dynamic Lip-Sync & Natural Time Alignment (Zero Dropped Words Guarantee):
         # If speech is longer than the actor's mouth time window, adaptively time-compress
-        # up to 1.35x without pitch distortion, ensuring ALL words and syllables are 100% spoken!
+        # up to 1.45x without pitch distortion, ensuring ALL words and syllables are 100% spoken!
         if max_duration_sec is not None and max_duration_sec > 0.35:
             target_ms = int(max_duration_sec * 1000)
             cur_ms = len(trimmed)
             if cur_ms > target_ms:
-                # Dynamic speed ratio up to 1.35x for crystal-clear, natural human speech
-                speed = min(1.35, max(1.0, cur_ms / max(300, target_ms)))
+                # Dynamic speed ratio up to 1.45x for crystal-clear, natural human speech
+                speed = min(1.45, max(1.0, cur_ms / max(250, target_ms)))
                 if speed >= 1.05:
                     import io
                     wav_io = io.BytesIO()

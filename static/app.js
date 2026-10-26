@@ -11377,7 +11377,7 @@ async function checkForAppUpdates(manual = false) {
         }
 
         _latestUpdateInfo = data;
-        const curVer = data.current_version || '1.1.4';
+        const curVer = data.current_version || '1.1.5';
         const latVer = data.latest_version || curVer;
         window._currentAppVersion = curVer;
 
@@ -11494,7 +11494,7 @@ async function executeAppUpdate() {
         clearInterval(simInterval);
         const data = await res.json();
         if (data.success) {
-            const targetVer = (_latestUpdateInfo && _latestUpdateInfo.latest_version) ? _latestUpdateInfo.latest_version : '1.1.4';
+            const targetVer = (_latestUpdateInfo && _latestUpdateInfo.latest_version) ? _latestUpdateInfo.latest_version : '1.1.5';
             if (progressBar) progressBar.style.width = "90%";
             if (progressPct) progressPct.textContent = "90%";
             if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#10b981;"></i> Updating to v' + targetVer + '... Application is restarting automatically.';

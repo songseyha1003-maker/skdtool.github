@@ -22,7 +22,7 @@ import requests
 BASE_URL = "https://api.nisay.store/v1"
 TRANSCRIBE_ENDPOINT = f"{BASE_URL}/audio/transcriptions"
 MANDATORY_MODEL = "nisay-transcribe"
-DEFAULT_PROMPT = "Transcribe verbatim with millisecond timestamps and neutral speaker IDs."
+DEFAULT_PROMPT = "Transcribe verbatim with complete punctuation (。！？) and millisecond timestamps for each dialogue turn."
 ACCEPTED_FORMATS = {"verbose_json", "srt", "vtt", "json", "text"}
 
 
@@ -267,6 +267,7 @@ def _parse_raw_segments(res: Any) -> List[Dict[str, Any]]:
             "end": max(round(start_t + 0.1, 3), end_t),
             "text": txt,
             "speaker": speaker_id,
+            "words": s.get("words") or [],
             "billing": billing_info
         })
     return segments

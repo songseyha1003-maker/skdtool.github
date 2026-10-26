@@ -748,6 +748,139 @@ class SpeechToTextEngine:
         if not raw_segments:
             return []
 
+        # 0. Zero-Lag Lip-Sync Pre-Segmentation:
+        # Split multi-sentence or overly long segments (> 3.5s or containing punctuation 。！？!?；; / newlines)
+        # into separate natural dialogue lines with accurately budgeted proportional timestamps.
+        # This guarantees every character's speech matches their exact mouth movement,
+        # preventing 10-15s continuous audio overruns that cause voices to speak late or over closed mouths!
+        refined_raw_segments = []
+        for seg in raw_segments:
+            s_text = (seg.get("text") or "").strip()
+            if not s_text:
+                continue
+            s_start = float(seg.get("start", 0.0))
+            s_end = float(seg.get("end", s_start + 1.0))
+            s_dur = max(0.3, s_end - s_start)
+            spk = seg.get("speaker", "S0")
+            words = seg.get("words") or []
+
+            # 0.A Word-Level Split if available (millisecond lip-sync accuracy from Whisper/Nisay)
+            if words and len(words) > 1 and s_dur >= 2.5:
+                w_lines = []
+                curr_w = []
+                for w_i, w_item in enumerate(words):
+                    curr_w.append(w_item)
+                    w_txt = (w_item.get("word") if isinstance(w_item, dict) else getattr(w_item, "word", "")) or ""
+                    w_end = float(w_item.get("end") if isinstance(w_item, dict) else getattr(w_item, "end", 0.0))
+
+                    has_end_mark = bool(re.search(r'[。！？!?；;\n]', w_txt))
+                    has_long_pause = False
+                    if w_i + 1 < len(words):
+                        next_item = words[w_i + 1]
+                        next_start = float(next_item.get("start") if isinstance(next_item, dict) else getattr(next_item, "start", 0.0))
+                        if next_start - w_end >= 0.35:
+                            has_long_pause = True
+
+                    curr_span = w_end - float(curr_w[0].get("start") if isinstance(curr_w[0], dict) else getattr(curr_w[0], "start", 0.0))
+                    is_overlong = curr_span >= 4.5 and len(curr_w) >= 5
+
+                    if (has_end_mark or has_long_pause or is_overlong) and curr_w:
+                        l_txt = "".join((w.get("word") if isinstance(w, dict) else getattr(w, "word", "")) for w in curr_w).strip()
+                        if l_txt:
+                            lw_start = round(float(curr_w[0].get("start") if isinstance(curr_w[0], dict) else getattr(curr_w[0], "start", 0.0)), 2)
+                            lw_end = round(float(curr_w[-1].get("end") if isinstance(curr_w[-1], dict) else getattr(curr_w[-1], "end", 0.0)), 2)
+                            w_lines.append({
+                                "start": lw_start,
+                                "end": max(round(lw_start + 0.35, 2), lw_end),
+                                "orig_start": lw_start,
+                                "orig_end": lw_end,
+                                "text": l_txt,
+                                "speaker": spk
+                            })
+                        curr_w = []
+
+                if curr_w:
+                    l_txt = "".join((w.get("word") if isinstance(w, dict) else getattr(w, "word", "")) for w in curr_w).strip()
+                    if l_txt:
+                        lw_start = round(float(curr_w[0].get("start") if isinstance(curr_w[0], dict) else getattr(curr_w[0], "start", 0.0)), 2)
+                        lw_end = round(float(curr_w[-1].get("end") if isinstance(curr_w[-1], dict) else getattr(curr_w[-1], "end", 0.0)), 2)
+                        w_lines.append({
+                            "start": lw_start,
+                            "end": max(round(lw_start + 0.35, 2), lw_end),
+                            "orig_start": lw_start,
+                            "orig_end": lw_end,
+                            "text": l_txt,
+                            "speaker": spk
+                        })
+
+                if len(w_lines) > 1:
+                    refined_raw_segments.extend(w_lines)
+                    continue
+
+            # Check for standard sentence boundaries or punctuation marks
+            parts = [p.strip() for p in re.split(r'([。！？!?；;\n]+)', s_text) if p.strip()]
+            sentences = []
+            curr_s = ""
+            for p in parts:
+                curr_s += p
+                if re.search(r'[。！？!?；;\n]', p):
+                    sentences.append(curr_s.strip())
+                    curr_s = ""
+            if curr_s.strip():
+                sentences.append(curr_s.strip())
+
+            # If segment is still >= 3.8s, split on drama modal particles followed by subjects
+            if len(sentences) <= 1 and s_dur >= 3.8:
+                modal_parts = [p.strip() for p in re.split(r'([呀呢吧吗啦啊!！?？])(?=[你我他她爷爷奶奶爹娘谁什么快走来哪])', s_text) if p.strip()]
+                if len(modal_parts) > 1:
+                    sentences = []
+                    curr_m = ""
+                    for p in modal_parts:
+                        curr_m += p
+                        if re.search(r'[呀呢吧吗啦啊!！?？]$', curr_m) and len(curr_m) >= 4:
+                            sentences.append(curr_m.strip())
+                            curr_m = ""
+                    if curr_m.strip():
+                        sentences.append(curr_m.strip())
+
+            # If no sentence punctuation but segment is long (>= 4.0s) and has commas or pauses:
+            if len(sentences) <= 1 and s_dur >= 4.0:
+                comma_parts = [p.strip() for p in re.split(r'([，,、]+)', s_text) if p.strip()]
+                if len(comma_parts) > 1:
+                    sentences = []
+                    curr_c = ""
+                    for p in comma_parts:
+                        curr_c += p
+                        if re.search(r'[，,、]', p) and len(curr_c) >= 5:
+                            sentences.append(curr_c.strip())
+                            curr_c = ""
+                    if curr_c.strip():
+                        sentences.append(curr_c.strip())
+
+            if len(sentences) <= 1:
+                refined_raw_segments.append(seg)
+            else:
+                total_chars = max(1, sum(len(re.sub(r'[\s。！？!?；;，,、]+', '', s)) for s in sentences))
+                cur_t = s_start
+                for s_idx, sent in enumerate(sentences):
+                    clean_chars = len(re.sub(r'[\s。！？!?；;，,、]+', '', sent))
+                    p_dur = round(max(0.4, (clean_chars / total_chars) * s_dur), 2)
+                    p_start = round(cur_t, 2)
+                    p_end = round(min(s_end, cur_t + p_dur) if s_idx + 1 < len(sentences) else s_end, 2)
+                    if p_end <= p_start:
+                        p_end = round(p_start + 0.4, 2)
+                    refined_raw_segments.append({
+                        "start": p_start,
+                        "end": p_end,
+                        "orig_start": p_start,
+                        "orig_end": p_end,
+                        "text": sent,
+                        "speaker": spk
+                    })
+                    cur_t = p_end
+
+        raw_segments = refined_raw_segments
+
         # Check if single voice mode is requested
         vo_clean = str(voice_override or "").lower().strip()
         is_single_voice = vo_clean in ("piseth", "sreymom", "male", "female")
@@ -768,13 +901,15 @@ class SpeechToTextEngine:
 
         for idx, seg in enumerate(raw_segments):
             text = seg["text"].strip()
-            start = seg["start"]
-            end = seg["end"]
+            start = round(float(seg["start"]), 2)
+            end = round(float(seg["end"]), 2)
 
             if is_single_voice:
                 speaker_segments.append({
                     "start": start,
                     "end": end,
+                    "orig_start": start,
+                    "orig_end": end,
                     "speaker": "ស្រីមុំ (Sreymom)" if single_voice == "sreymom" else "ពិសិដ្ឋ (Piseth)",
                     "detected_role": "female" if single_voice == "sreymom" else "male",
                     "voice": single_voice,
@@ -856,6 +991,8 @@ class SpeechToTextEngine:
             speaker_segments.append({
                 "start": start,
                 "end": end,
+                "orig_start": start,
+                "orig_end": end,
                 "speaker": speaker_title,
                 "detected_role": role,
                 "voice": voice,
@@ -865,8 +1002,8 @@ class SpeechToTextEngine:
             })
 
         # 2. Second Pass: Tight Lip-Sync Consolidation
-        # CRITICAL: Only merge micro-gaps (<= 0.10s) within continuous speech.
-        # NEVER merge across pauses, ensuring speech matches mouth movements exactly!
+        # Only merge micro-gaps (<= 0.12s) within short continuous speech (<= 2.8s total).
+        # NEVER merge across pauses or turns to ensure speech matches mouth movements exactly!
         consolidated = []
         for seg in speaker_segments:
             if consolidated:
@@ -875,34 +1012,27 @@ class SpeechToTextEngine:
                 combined_len = round(seg["end"] - prev["start"], 2)
                 same_speaker = (prev["detected_role"] == seg["detected_role"])
 
-                # Merge if it's the exact same speaker with brief natural pause (<= 0.22s)
-                if same_speaker and combined_len <= 4.5 and gap <= 0.22:
+                if same_speaker and combined_len <= 2.8 and gap <= 0.12:
                     prev["end"] = seg["end"]
+                    prev["orig_end"] = seg["end"]
                     prev["text"] = f"{prev['text']} {seg['text']}".strip()
                     prev["text_original"] = prev["text"]
                     continue
 
             consolidated.append(dict(seg))
 
-        # 3. Third Pass: Strict Anti-Overlap & Boundary Enforcement
-        # Ensure that segment start times never collide or overlap with previous segment end times
+        # 3. Third Pass: Strict Anti-Overlap & Absolute Onset Anchor
+        # CRITICAL LIP-SYNC ACCURACY: The actor began moving their mouth at seg["start"].
+        # NEVER push seg["start"] later into the future (which caused cumulative lag)!
+        # If prev["end"] overruns, trim prev["end"] back so seg["start"] stays 100% on-time!
         cleaned_dialogues = []
-        min_seg_gap = 0.08  # 80ms minimum acoustic separation
+        min_seg_gap = 0.04  # 40ms acoustic separation
         for seg in consolidated:
             if cleaned_dialogues:
                 prev = cleaned_dialogues[-1]
-                if seg["start"] < prev["end"] + min_seg_gap:
-                    if prev["end"] > seg["start"]:
-                        if (seg["start"] - prev["start"]) >= 0.35:
-                            prev["end"] = round(seg["start"] - min_seg_gap, 2)
-                        else:
-                            seg["start"] = round(prev["end"] + min_seg_gap, 2)
-                            if seg["end"] <= seg["start"]:
-                                seg["end"] = round(seg["start"] + 0.35, 2)
-                    else:
-                        seg["start"] = round(prev["end"] + min_seg_gap, 2)
-                        if seg["end"] <= seg["start"]:
-                            seg["end"] = round(seg["start"] + 0.35, 2)
+                if prev["end"] > round(seg["start"] - min_seg_gap, 2):
+                    prev["end"] = round(max(prev["start"] + 0.25, seg["start"] - min_seg_gap), 2)
+                    prev["orig_end"] = prev["end"]
             cleaned_dialogues.append(seg)
         consolidated = cleaned_dialogues
 

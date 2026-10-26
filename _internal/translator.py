@@ -666,10 +666,15 @@ def enrich_khmer_drama_dialogue(
     clean_no_punct = re.sub(r'[!！?？។.\s]+', '', res)
     zh_clean = re.sub(r'[\s!！?？,，.。~～`\'"]+', '', str(zh_text or ''))
 
-    # Only apply standalone shout overrides when zh_clean is strictly an isolated short phrase (<= 4 chars)
-    # AND translated text is also short (<= 12 chars). This guarantees 100% Zero-Drop sentence fidelity!
-    if len(zh_clean) <= 4 and len(clean_no_punct) <= 12:
-        if zh_clean in ('送什么', '送啥'):
+    # Only apply standalone shout overrides when zh_clean is strictly an isolated short phrase (<= 5 chars)
+    if len(zh_clean) <= 5:
+        if zh_clean in ('还不够看', '不够看'):
+            res = "មិនទាន់គ្រប់ទេ!"
+        elif zh_clean in ('大胆', '好大的胆子'):
+            res = "ថ្លើមធំពេកហើយ!"
+        elif zh_clean in ('找死', '你想找死', '真找死'):
+            res = "ចង់ងាប់មែនទេ?!"
+        elif zh_clean in ('送什么', '送啥'):
             res = "ជូនស្អីទៅ?!" if any(q in res for q in ('?', '？', 'អី', 'ស្អី')) else "ជូនស្អី?!"
         elif zh_clean in ('等一下', '等等', '等我', '等'):
             res = "ចាំសិន!"
@@ -677,15 +682,15 @@ def enrich_khmer_drama_dialogue(
             res = "កម្រើកហើយ!"
         elif zh_clean in ('快走', '快走吧', '走吧', '走'):
             res = "ឆាប់ទៅ!" if "快" in zh_clean else "តោះទៅ!"
-        elif zh_clean in ('救命', '救命啊'):
+        elif zh_clean in ('救命', '救命啊', '救我'):
             res = "ជួយផង!"
-        elif zh_clean in ('站住', '住手'):
+        elif zh_clean in ('站住', '住手', '住口'):
             res = "ឈប់ភ្លាម!"
-        elif zh_clean in ('闭嘴', '住口'):
+        elif zh_clean in ('闭嘴', '给我闭嘴'):
             res = "បិទមាត់ភ្លាម!"
         elif zh_clean in ('滚', '滚开', '给我滚'):
             res = "ចេញទៅ!"
-        elif zh_clean in ('放开', '放开我'):
+        elif zh_clean in ('放开', '放开我', '放手'):
             res = "លែងខ្ញុំភ្លាម!"
         elif zh_clean in ('别碰我', '别碰'):
             res = "កុំប៉ះខ្ញុំ!"
@@ -695,6 +700,8 @@ def enrich_khmer_drama_dialogue(
             res = "អរគុណ!"
         elif zh_clean in ('谁啊', '是谁'):
             res = "នរណាគេ?!"
+        elif zh_clean in ('怎么可能'):
+            res = "អាចទៅរួចយ៉ាងម៉េច?!"
         elif len(clean_no_punct) <= 6:
             if clean_no_punct in ("បាទ", "បាទលោក", "បាទយល់ហើយ"):
                 res = "បាទ!"
@@ -718,14 +725,16 @@ def enrich_khmer_drama_dialogue(
     # 5. Advanced Dynamic Lip-Sync Word Budget & Syllable Pacing:
     # If duration_sec is provided, ensure character cadence matches actor's mouth duration
     if duration_sec is not None and duration_sec > 0:
-        # Khmer natural spoken rate: ~12-14 characters per second
-        target_max_chars = int(max(6, duration_sec * 15.0))
+        # Khmer natural spoken rate: ~13 characters per second
+        target_max_chars = int(max(6, duration_sec * 14.0))
         # If translation is substantially over the duration budget, trim redundant formal filler
         if len(res) > target_max_chars:
             res = re.sub(r'^(?:ខ្ញុំគិតថា|តាមពិតទៅ|ជាការពិតណាស់|តាមពិត|ជាក់ស្តែង)\s*', '', res)
             res = re.sub(r'^(?:បានធ្វើការ|ធ្វើការ)\s*', '', res)
             res = re.sub(r'^(?:គឺជា|គឺ)\s*', '', res)
             res = re.sub(r'\s*(?:នោះឯង|នោះហើយ)[។!.]*$', '!', res)
+            res = re.sub(r'ក្នុងការប្រកួតប្រជែងជាមួយយើង', '', res)
+            res = re.sub(r'ក្នុងការប្រកួតប្រជែង', '', res)
             res = re.sub(r'\s{2,}', ' ', res).strip()
 
     # 6. Natural Dialogue Cadence and Emotional Breath Flow:
@@ -1268,7 +1277,6 @@ class DramaTranslator:
 
         if mode == "movie_recap":
             context_directive = "Movie Recap Storyteller Style (សម្រាយរឿង Facebook & TikTok): Translate into thrilling, high-energy spoken Khmer recap narration by a charismatic Cambodian narrator (អ្នកសម្រាយរឿង ពិសិដ្ឋ/ស្រីមុំ). 100% Complete fidelity - never drop words."
-        else:
             context_directive = (
                 f"Master Cambodian television drama dubbing scriptwriter (អ្នកសរសេរអត្ថបទបញ្ចូលសំឡេងរឿងភាគទូរទស្សន៍អាជីព). "
                 f"Story genre: {eff_cat}. Apply authentic Cambodian television drama dubbing dialogue style (ភាសាបញ្ចូលសំឡេងរឿងភាគបែបខ្មែរ ពិរោះ រណ្តំចិត្ត ដូចទូរទស្សន៍ហង្សមាស បាយ័ន ស៊ីធីអិន). "
@@ -1276,7 +1284,10 @@ class DramaTranslator:
                 "1. 100% COMPLETE DIALOGUE FIDELITY & ZERO DROPPED WORDS (បកប្រែឱ្យគ្រប់ន័យ ហាមកាត់ចោលពាក្យ ឬបាត់ន័យសាច់រឿងជាដាច់ខាត): "
                 "You MUST translate the full thought, facts, and intent of the character. Never omit words, clauses, character names, or statements! "
                 "2. Natural spoken Khmer film dubbing (មិនប្រើភាសាសៀវភៅ ឬភាសារ៉ូបូតទេ). "
-                "3. Match character relationship tone: Husband/Wife (បង/អូន), Boss/Subordinate (លោកប្រធាន/ខ្ញុំ/ឯង), Enemies (ឯង/យើង), Elders (លោកតា/លោកយាយ/ម៉ាក់ក្មេក)."
+                "3. Match character relationship tone: Husband/Wife (បង/អូន), Boss/Subordinate (លោកប្រធាន/ខ្ញុំ/ឯង), Enemies (ឯង/យើង), Elders (លោកតា/លោកយាយ/ម៉ាក់ក្មេក). "
+                "4. CRITICAL LIP-SYNC & MOUTH-MOVEMENT SYNCHRONIZATION: The spoken Khmer line MUST match the speaking duration of the actor. "
+                "For short lines (<= 5 source characters or shouts), translate into 1-3 PUNCHY, natural spoken words (e.g. 'ឈប់ភ្លាម!', 'ទៅណា?!', 'មិនទាន់គ្រប់ទេ!'). "
+                "NEVER bloat short lines into long explanatory paragraphs! Spoken audio must match mouth duration."
             )
 
         # ⚡ High-Throughput Parallel Translation Workers (8 concurrent chunks):
