@@ -1,9 +1,9 @@
 {
-  "version": "1.1.5",
+  "version": "1.1.6",
   "app_name": "SN TOOL - STUDIO PRO",
   "release_date": "2026-10-26",
-  "title": "SN TOOL STUDIO PRO - Official Release v1.1.5 (Zero-Lag Lip-Sync & Instant Voice Alignment)",
-  "release_notes": "• 👄 Zero-Lag Lip-Sync Alignment: Synchronized Khmer dubbing directly to visual mouth opening with 130ms ADR anticipation lead - zero delay!\n• ⚡ Instant Audio Onset (-44dBFS Silence Trimming): Strips leading dead silence from TTS audio, starting character speech on the exact millisecond!\n• 🎯 Multi-Character Dialogue Pre-Segmentation: Intelligently separates conversational drama exchanges and long lines (>3.5s) into natural timed dialogue segments!\n• 🚫 Zero Cumulative Drift Lag: Speech start timestamps are anchored permanently, preventing voices from drifting later in long episodes!\n• ⏩ Adaptive Dynamic Time-Stretch (up to 1.45x): Speed auto-adjusts seamlessly so characters never continue speaking after closing their mouth!\n• 🧠 Drama Idiom & Particle Splitting: Perfectly splits drama dialogues containing modal particles (呀呢吧吗啦啊) and short drama shouts!",
+  "title": "SN TOOL STUDIO PRO - Official Release v1.1.6 (Smart Auto-Failover Transcribe & Zero-Lag Lip-Sync Pro)",
+  "release_notes": "• 🛡️ Smart Auto-Failover Speech Transcribe: Automatic seamless failover to gemini-3.8-transcribe on rate-limits (HTTP 429/500), ensuring batch processing never stops!\n• 🔄 Intelligent Auto-Recovery: Automatically detects when the primary transcribe model is restored and smoothly returns to default.\n• 👄 Zero-Lag Lip-Sync Alignment: Synchronized Khmer dubbing directly to visual mouth opening with 130ms ADR anticipation lead - zero delay!\n• ⚡ Instant Audio Onset (-44dBFS Silence Trimming): Strips leading dead silence from TTS audio, starting character speech on the exact millisecond!\n• 🎯 Multi-Character Dialogue Pre-Segmentation: Intelligently separates conversational drama exchanges and long lines (>3.5s) into natural timed dialogue segments!\n• 🚫 Zero Cumulative Drift Lag: Speech start timestamps are anchored permanently, preventing voices from drifting later in long episodes!\n• ⏩ Adaptive Dynamic Time-Stretch (up to 1.45x): Speed auto-adjusts seamlessly so characters never continue speaking after closing their mouth!\n• 🧠 Drama Idiom & Particle Splitting: Perfectly splits drama dialogues containing modal particles (呀呢吧吗啦啊) and short drama shouts!",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }

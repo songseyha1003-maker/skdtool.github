@@ -1,4 +1,4 @@
-# SN TOOL Studio Pro - Universal PowerShell Client Updater (v1.1.5+)
+# SN TOOL Studio Pro - Universal PowerShell Client Updater (v1.1.6+)
 # Preserves license.key and updates all application files cleanly.
 # Can be run locally OR via 1-line web command: irm <url> | iex
 
@@ -6,8 +6,8 @@
 $ProgressPreference = 'SilentlyContinue'
 
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  🚀 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.1.5+)" -ForegroundColor Cyan
-Write-Host "  ⚡ Zero-Lag Lip-Sync & Instant Voice Alignment" -ForegroundColor Cyan
+Write-Host "  🚀 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.1.6+)" -ForegroundColor Cyan
+Write-Host "  ⚡ Smart Auto-Failover Transcribe & Zero-Lag Lip-Sync Pro" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -65,9 +65,9 @@ if (Test-Path $licFile) {
 
 # 4. Download update package
 $updateUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
-$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v115.zip"
+$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v116.zip"
 
-Write-Host "[*] Downloading v1.1.5 update package from Cloud CDN..." -ForegroundColor Yellow
+Write-Host "[*] Downloading v1.1.6 update package from Cloud CDN..." -ForegroundColor Yellow
 
 $downloadOk = $false
 try {
@@ -79,7 +79,7 @@ try {
         if ($zipSize -gt 10000000) {
             $downloadOk = $true
             $mb = [math]::Round($zipSize / 1MB, 2)
-            Write-Host "[OK] Downloaded v1.1.5 update package ($mb MB) successfully!" -ForegroundColor Green
+            Write-Host "[OK] Downloaded v1.1.6 update package ($mb MB) successfully!" -ForegroundColor Green
         }
     }
 } catch {
@@ -180,7 +180,7 @@ if (-not (Test-Path $batFile)) {
 
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Green
-Write-Host "  🎉 [SUCCESS] SN TOOL STUDIO PRO has been updated to v1.1.5!" -ForegroundColor Green
+Write-Host "  🎉 [SUCCESS] SN TOOL STUDIO PRO has been updated to v1.1.6!" -ForegroundColor Green
 Write-Host "========================================================================" -ForegroundColor Green
 Write-Host ""
 

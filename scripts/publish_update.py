@@ -39,7 +39,7 @@ def main():
     print("=" * 70)
 
     # 1. Read current version
-    current_ver = "1.1.5"
+    current_ver = "1.1.6"
     current_notes = ""
     current_title = ""
     if vjson_file.exists():

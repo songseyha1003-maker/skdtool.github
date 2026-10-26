@@ -1,6 +1,6 @@
 ; Inno Setup 6 Script for SN TOOL - STUDIO PRO
 #define MyAppName "SN TOOL - STUDIO PRO"
-#define MyAppVersion "1.1.5"
+#define MyAppVersion "1.1.6"
 #define MyAppPublisher "SN STUDIO"
 #define MyAppExeName "SN_TOOL.exe"
 
