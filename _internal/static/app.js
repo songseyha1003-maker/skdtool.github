@@ -9310,9 +9310,9 @@ function updateStoryVoiceHint() {
 
     const val = selVoice.value;
     if (val === 'sreymom') {
-        hint.innerHTML = `<span style="color:#f472b6; font-weight:bold;">Sreymom (Female Solo - v7.3.1):</span> Smooth neural female voice (v7.3.1) for all dialogue lines.`;
+        hint.innerHTML = `<span style="color:#f472b6; font-weight:bold;">Sreymom (Female Solo):</span> Smooth neural female voice for all dialogue lines.`;
     } else {
-        hint.innerHTML = `<span style="color:#38bdf8; font-weight:bold;">Piseth (Male Solo - v7.3.1):</span> Crisp neural male voice (v7.3.1) for all dialogue lines.`;
+        hint.innerHTML = `<span style="color:#38bdf8; font-weight:bold;">Piseth (Male Solo):</span> Crisp neural male voice for all dialogue lines.`;
     }
 }
 

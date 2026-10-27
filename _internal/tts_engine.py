@@ -62,8 +62,8 @@ VOICES = {
         "role": "តួប្រុស / អ្នកសម្រាយរឿង (Male Lead / Recap Narrator)",
         "description": "សំឡេងប្រុសមាំ ច្បាស់ ល្អឥតខ្ចោះសម្រាប់តួប្រុស ឬអ្នករៀបរាប់សម្រាយសាច់រឿង",
         "avatar": "👨‍💼",
-        "tag": "Male Neural v7.3.1",
-        "version": "7.3.1"
+        "tag": "Male Neural",
+        "version": "1.0.0"
     },
     "sreymom": {
         "id": "km-KH-SreymomNeural",
@@ -72,8 +72,8 @@ VOICES = {
         "role": "តួស្រី / មនោសញ្ចេតនា (Female Lead / Emotional)",
         "description": "សំឡេងស្រីស្រទន់ ពីរោះ រស់រវើក ល្អឥតខ្ចោះសម្រាប់តួស្រី និងឈុតមនោសញ្ចេតនា",
         "avatar": "👩‍💼",
-        "tag": "Female Neural v7.3.1",
-        "version": "7.3.1"
+        "tag": "Female Neural",
+        "version": "1.0.0"
     }
 }
 
