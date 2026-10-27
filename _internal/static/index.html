@@ -2561,6 +2561,18 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Destination Directory Info -->
+                    <div class="power-field-group" style="margin-top: 10px;">
+                        <label class="power-label" style="display:flex; align-items:center; justify-content:space-between;">
+                            <span><i class="fa-solid fa-folder-open" style="color:#38bdf8;"></i> ទីតាំងរក្សាទុក (Save In Source Folder)</span>
+                            <span id="power-merge-target-folder-badge" style="color:#38bdf8; font-size:0.72rem; font-family:'JetBrains Mono', monospace; font-weight:600;">(ដូច Folder ដើមនៃវីដេអូ)</span>
+                        </label>
+                        <div id="power-merge-target-folder-display" class="power-input" style="color:#94a3b8; font-size:0.75rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:8px; background:rgba(15,23,42,0.65); border:1px solid rgba(56,189,248,0.25);">
+                            <i class="fa-solid fa-location-dot" style="color:#38bdf8;"></i>
+                            <span id="power-merge-target-folder-text" style="color:#e2e8f0; font-family:'JetBrains Mono', monospace;">រក្សាទុកក្នុង Folder ដើមនៃវីដេអូដែលបានជ្រើសរើស (Auto Save in Source Folder)</span>
+                        </div>
+                    </div>
 
                     <!-- Progress Box -->
                     <div class="power-progress-box" id="power-merge-progress-box" style="display:none;">
@@ -2575,11 +2587,11 @@
 
                     <!-- Result Box -->
                     <div class="power-result-card" id="power-merge-result-box" style="display:none;">
-                        <div class="power-result-title"><i class="fa-solid fa-circle-check"></i> Videos merged successfully!</div>
+                        <div class="power-result-title"><i class="fa-solid fa-circle-check"></i> Videos merged successfully! (រក្សាទុកក្នុង Folder ដើមរួចរាល់)</div>
                         <div class="power-result-path" id="power-merge-result-path">data/exports/merged_drama.mp4</div>
                         <div id="power-merge-ai-stats" style="font-size:0.75rem; color:#cbd5e1; margin-top:8px; display:none; background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.3); border-radius:6px; padding:8px 12px; line-height:1.5;"></div>
                         <div style="display:flex; gap:8px; margin-top:8px;">
-                            <button type="button" class="power-btn-choose" id="power-merge-btn-open-folder" onclick="openPowerOutputFolder()"><i class="fa-solid fa-folder-open"></i> Open Folder</button>
+                            <button type="button" class="power-btn-choose" id="power-merge-btn-open-folder" onclick="openPowerOutputFolder('merge')"><i class="fa-solid fa-folder-open"></i> Open Folder (បើកទីតាំងវីដេអូ)</button>
                             <button type="button" class="power-btn-choose" id="power-merge-btn-play" onclick="playPowerResultVideo()"><i class="fa-solid fa-play"></i> Preview (Play)</button>
                         </div>
                     </div>

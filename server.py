@@ -2501,7 +2501,11 @@ def system_open_folder_endpoint():
             target_dir.mkdir(parents=True, exist_ok=True)
             
         if sys.platform == "win32":
-            os.startfile(str(target_dir))
+            # If target is an existing file, reveal & highlight it directly in Windows Explorer
+            if p.exists() and p.is_file():
+                subprocess.Popen(["explorer.exe", f"/select,{str(p)}"])
+            else:
+                os.startfile(str(target_dir))
         else:
             subprocess.Popen(["xdg-open", str(target_dir)])
         return jsonify({"success": True, "path": str(target_dir).replace("\\", "/")})
@@ -2514,19 +2518,66 @@ def system_open_folder_endpoint():
 # ==========================================================================
 @app.route("/api/power/merge", methods=["POST"])
 def power_merge_endpoint():
-    """Merge multiple video files into one video."""
+    """Merge multiple video files into one video, saving directly in the source episodes folder."""
     data = request.get_json(force=True) or {}
     files = data.get("files", [])
     if len(files) < 2:
         return jsonify({"success": False, "error": "At least 2 video files are required for merging."}), 400
         
+    # Determine the target output directory:
+    # 1. Explicit output_dir passed from request
+    target_dir = None
+    explicit_out_dir = data.get("output_dir", "").strip()
+    if explicit_out_dir:
+        p_exp = Path(explicit_out_dir).resolve()
+        if p_exp.exists() and p_exp.is_dir():
+            target_dir = p_exp
+
+    # 2. Extract parent directory from the first valid source video file
+    if not target_dir:
+        for f in files:
+            if f:
+                fp = Path(f).resolve()
+                if fp.exists():
+                    target_dir = fp.parent
+                    break
+                elif fp.parent.exists() and fp.parent.is_dir():
+                    target_dir = fp.parent
+                    break
+
+    # 3. Fallback to data/exports if source folder cannot be resolved on disk
+    if not target_dir or not target_dir.exists():
+        target_dir = Path("data/exports").resolve()
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+    # 4. Check if target_dir is writable; if not, fallback to data/exports
+    try:
+        test_file = target_dir / f".sn_perm_test_{int(time.time())}"
+        test_file.touch()
+        test_file.unlink()
+    except Exception:
+        target_dir = Path("data/exports").resolve()
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine output filename
     custom_name = data.get("output_name", "").strip()
     if custom_name:
-        if not custom_name.lower().endswith((".mp4", ".mkv", ".mov")):
-            custom_name += ".mp4"
-        out_file = f"data/exports/{custom_name}"
+        custom_filename = Path(custom_name).name
+        if not custom_filename.lower().endswith((".mp4", ".mkv", ".mov")):
+            custom_filename += ".mp4"
     else:
-        out_file = f"data/exports/merged_drama_{int(time.time())}.mp4"
+        folder_name = target_dir.name if target_dir.name and target_dir.name not in ["exports", "data", "."] else "Drama"
+        custom_filename = f"{folder_name}_Merged_Full.mp4"
+
+    out_file = str((target_dir / custom_filename).resolve())
+
+    # Ensure out_file does not conflict or overwrite any source input episode
+    resolved_inputs = {str(Path(f).resolve()).lower() for f in files if f}
+    if str(Path(out_file).resolve()).lower() in resolved_inputs:
+        stem = Path(custom_filename).stem
+        ext = Path(custom_filename).suffix or ".mp4"
+        custom_filename = f"{stem}_Merged_{int(time.time())}{ext}"
+        out_file = str((target_dir / custom_filename).resolve())
         
     auto_trim_freeze = bool(data.get("auto_trim_freeze", True))
         
@@ -3487,9 +3538,14 @@ def find_sibling_episodes_endpoint():
 
 @app.route("/media/<path:filename>")
 def serve_media(filename):
-    file_path = Path(filename)
+    import urllib.parse
+    decoded = urllib.parse.unquote(filename)
+    cleaned = decoded.lstrip("/\\")
+    file_path = Path(cleaned)
     if not file_path.exists():
-        return jsonify({"error": "Media file not found"}), 404
+        file_path = Path(filename)
+        if not file_path.exists():
+            return jsonify({"error": "Media file not found"}), 404
         
     return send_file(str(file_path.resolve()), conditional=True)
 

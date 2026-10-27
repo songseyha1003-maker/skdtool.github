@@ -741,6 +741,42 @@ let lastPowerOutputPaths = {
 // 1. MERGE VIDEO SUITE (Lossless Stream-Copy Concat)
 // --------------------------------------------------------------------------
 let powerMergeQueue = [];
+let powerMergeSourceFolder = '';
+
+function updatePowerMergeSourceFolder() {
+    const folderText = document.getElementById('power-merge-target-folder-text');
+    const folderBadge = document.getElementById('power-merge-target-folder-badge');
+    const nameInput = document.getElementById('power-merge-output-name');
+
+    if (powerMergeQueue.length > 0) {
+        if (!powerMergeSourceFolder && powerMergeQueue[0].filepath) {
+            const fp = powerMergeQueue[0].filepath;
+            const lastSlash = Math.max(fp.lastIndexOf('/'), fp.lastIndexOf('\\'));
+            if (lastSlash > 0) {
+                powerMergeSourceFolder = fp.substring(0, lastSlash);
+            }
+        }
+
+        if (powerMergeSourceFolder) {
+            if (folderText) folderText.textContent = powerMergeSourceFolder;
+            if (folderBadge) folderBadge.textContent = "Source Folder Active";
+
+            // If output name is default generic, intelligently suggest folder name
+            if (nameInput && (!nameInput.value || nameInput.value === 'merged_full_drama.mp4')) {
+                const cleanFolder = powerMergeSourceFolder.replace(/[\\/]+$/, '');
+                const lastSlash = Math.max(cleanFolder.lastIndexOf('/'), cleanFolder.lastIndexOf('\\'));
+                const fName = lastSlash >= 0 ? cleanFolder.substring(lastSlash + 1) : cleanFolder;
+                if (fName && fName !== 'exports' && fName !== 'data') {
+                    nameInput.value = `${fName}_Full.mp4`;
+                }
+            }
+        }
+    } else {
+        powerMergeSourceFolder = '';
+        if (folderText) folderText.textContent = "រក្សាទុកក្នុង Folder ដើមនៃវីដេអូដែលបានជ្រើសរើស (Auto Save in Source Folder)";
+        if (folderBadge) folderBadge.textContent = "(ដូច Folder ដើមនៃវីដេអូ)";
+    }
+}
 
 function openMergeModal() {
     closePowerMenu();
@@ -750,6 +786,7 @@ function openMergeModal() {
     if (progBox) progBox.style.display = 'none';
     if (resBox) resBox.style.display = 'none';
     if (aiStats) aiStats.style.display = 'none';
+    updatePowerMergeSourceFolder();
     renderPowerMergeQueue();
     openModal('modal-power-merge');
 }
@@ -765,6 +802,10 @@ async function powerPickFilesForMerge() {
                     powerMergeQueue.push(f);
                 }
             }
+            if (data.folder) {
+                powerMergeSourceFolder = data.folder;
+            }
+            updatePowerMergeSourceFolder();
             renderPowerMergeQueue();
             showToast(`Added ${data.files.length} videos to merge queue!`);
             return;
@@ -783,10 +824,14 @@ async function powerPickFolderForMerge() {
         const data = await res.json();
         if (data && data.success && Array.isArray(data.files) && data.files.length > 0) {
             powerMergeQueue = [...data.files];
+            if (data.folder) {
+                powerMergeSourceFolder = data.folder;
+            }
             if (data.series_title) {
                 const nameInput = document.getElementById('power-merge-output-name');
                 if (nameInput) nameInput.value = `${data.series_title}_Full.mp4`;
             }
+            updatePowerMergeSourceFolder();
             renderPowerMergeQueue();
             showToast(`Scanned ${data.files.length} episodes from folder!`);
             return;
@@ -810,12 +855,15 @@ function handlePowerMergeHtmlFiles(event) {
             size_mb: (f.size / (1024 * 1024)).toFixed(1)
         });
     }
+    updatePowerMergeSourceFolder();
     renderPowerMergeQueue();
     event.target.value = '';
 }
 
 function clearPowerMergeQueue() {
     powerMergeQueue = [];
+    powerMergeSourceFolder = '';
+    updatePowerMergeSourceFolder();
     renderPowerMergeQueue();
 }
 
@@ -830,6 +878,7 @@ function moveMergeQueueItem(idx, dir) {
 
 function removeMergeQueueItem(idx) {
     powerMergeQueue.splice(idx, 1);
+    updatePowerMergeSourceFolder();
     renderPowerMergeQueue();
 }
 
@@ -899,12 +948,20 @@ async function executeVideoMerge() {
 
     try {
         const filePaths = powerMergeQueue.map(f => f.filepath);
+        if (!powerMergeSourceFolder && filePaths.length > 0 && filePaths[0]) {
+            const fp = filePaths[0];
+            const lastSlash = Math.max(fp.lastIndexOf('/'), fp.lastIndexOf('\\'));
+            if (lastSlash > 0) {
+                powerMergeSourceFolder = fp.substring(0, lastSlash);
+            }
+        }
         const res = await fetch('/api/power/merge', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 files: filePaths, 
                 output_name: outputName,
+                output_dir: powerMergeSourceFolder,
                 auto_trim_freeze: autoTrimFreeze
             })
         });
