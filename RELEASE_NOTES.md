@@ -1,6 +1,22 @@
-# 🚀 SN TOOL STUDIO PRO - Official Release v1.0.7
+# 🚀 SN TOOL STUDIO PRO - Official Release v1.1.7
 
-### ✨ មុខងារ និងការកែលម្អក្នុង Version 1.0.7៖
+### ✨ មុខងារ និងការកែលម្អក្នុង Version 1.1.7៖
+- ⚡ **Ultra-Fast 50%–60% Translation Engine:** បន្ថែមប្រព័ន្ធរាយការណ៍ Progress ឃ្លានីមួយៗតាមពេលវេលាជាក់ស្តែង (Dynamic Live Ticks 50%–68%) ជាមួយចំនួនឃ្លាដែលបានបកប្រែរួច (Lines Translated Counter) ធ្វើឱ្យ Progress Bar ដំណើរការរលូន និងមិនគាំងត្រង់ 50%–60% ទៀតឡើយ។
+- 🛡️ **12-Second Cloud Auto-Failover:** កាត់បន្ថយ Network Timeout ពី 120s មកសល់ត្រឹម 12s និងភ្ជាប់ប្រព័ន្ធស្វ័យប្រវត្តិប្តូរទៅ Multi-threaded Parallel Failover ភ្លាមៗក្នុងរយៈពេល ≤ 12–25 វិនាទី បញ្ចៀសការរង់ចាំយូររហូតដល់ច្រើននាទី។
+- 🔄 **Real-Time Visual Pulse Animation:** បន្ថែម Micro-animation និង Animated Status Ticker ក្នុង UI Monitor អំឡុងពេលបកប្រែស្គ្រីបទាំងក្នុងមុខងារ Single Video និង Batch Processing Engine។
+- 📂 **Power Tools Auto-Locate & Open Output Folder:** ជួសជុលមុខងារ Merge Video ឱ្យរក្សាទុក File ចេញទៅក្នុង Folder របស់សាច់រឿងដើមដោយស្វ័យប្រវត្តិ និងបើក Highlight វីដេអូដែលបាន Merge ក្នុង Windows Explorer ភ្លាមៗ។
+- 🎙️ **Speech-to-Text Upload Resilience:** កាត់បន្ថយ Audio Upload Timeout ពី 300s មកត្រឹម 40s ជាមួយ Instant Failover ទៅកាន់ Ultra-Fast 3-second Groq Whisper ដោយមិនជាប់គាំង CPU។
+- 👄 **Zero-Lag Lip-Sync Alignment Pro:** រក្សានូវបច្ចេកវិទ្យាផ្គូផ្គងចលនាមាត់តួអង្គច្បាស់លាស់ 130ms ADR anticipation lead ឥតឃ្លាតសូម្បីមួយមីលីវិនាទី។
+
+---
+
+# 🚀 SN TOOL STUDIO PRO - Official Release v1.1.6
+
+### ✨ មុខងារ និងការកែលម្អក្នុង Version 1.1.6៖
+- 🛡️ **Smart Auto-Failover Speech Transcribe:** ផ្លាស់ប្តូរម៉ូដែលស្វ័យប្រវត្តិទៅកាន់ gemini-3.8-transcribe នៅពេលជួប Rate-limit (HTTP 429/500)។
+- 🔄 **Intelligent Auto-Recovery:** ស្វែងរកការស្តារឡើងវិញនៃ Primary Model ដោយស្វ័យប្រវត្តិ។
+
+---
 - 📡 **Over-The-Air (OTA) Remote License Extension:** បន្តសុពលភាព License Key របស់អតិថិជនពីចម្ងាយបានភ្លាមៗ ដោយអតិថិជនមិនបាច់ផ្លាស់ប្តូរ ឬវាយបញ្ចូល Key ថ្មីឡើយ។
 - 👑 **English Orion SaaS Admin Dashboard:** ផ្ទាំងគ្រប់គ្រង License Admin Control Center (Port 8888) ត្រូវបានកែសម្រួលជាភាសាអង់គ្លេសស្អាត ទំនើប ស្រួលប្រើ និងមានសុវត្ថិភាពខ្ពស់។
 - 💎 **Nisay Cloud AI Gateway Live Monitor:** បន្ថែមឧបករណ៍ត្រួតពិនិត្យសមតុល្យ និង Token ផ្ទាល់ជាមួយ Nisay API Gateway ដោយគ្រាន់តែចុច 1-Click។

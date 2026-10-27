@@ -113,7 +113,7 @@ def transcribe_audio(
     api_key: Optional[str] = None,
     model: Optional[str] = None,
     max_retries: int = 2,
-    timeout: int = 300
+    timeout: int = 40
 ) -> Union[Dict[str, Any], str]:
     """
     Send media file to /audio/transcriptions with smart auto-failover:
@@ -187,7 +187,7 @@ def transcribe_audio(
                         headers=headers,
                         files=files,
                         data=data,
-                        timeout=timeout
+                        timeout=(4.05, min(float(timeout), 40.0))
                     )
 
                 if resp.status_code == 401 or (resp.status_code == 403 and "API key" in resp.text and "MODEL_NOT_ASSIGNED" not in resp.text):

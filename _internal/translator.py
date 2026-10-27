@@ -1251,7 +1251,8 @@ class DramaTranslator:
         category: str = "chinese_general",
         custom_dict: Optional[Dict[str, str]] = None,
         mode: str = "drama_dubbing",
-        drama_title: Optional[str] = None
+        drama_title: Optional[str] = None,
+        progress_callback: Optional[Any] = None
     ) -> List[Dict[str, Any]]:
         """
         Translate dialogue items using Nisay AI Gateway (gemini-3.8-flash-high).
@@ -1270,6 +1271,9 @@ class DramaTranslator:
         # 20 lines per chunk ensures gemini-3.8-flash-high never merges, skips, or truncates dialogue lines
         chunk_size = 20
         text_chunks = [texts[i:i + chunk_size] for i in range(0, len(texts), chunk_size)]
+        total_lines = len(texts)
+        completed_lines_lock = asyncio.Lock()
+        completed_lines = [0]
 
         eff_cat = category
         if drama_title and any(w in str(drama_title) for w in ("神", "殿", "帝", "皇", "王", "仙", "剑", "古", "宫", "朝", "武", "封神", "hero", "ancient", "costume")):
@@ -1277,6 +1281,7 @@ class DramaTranslator:
 
         if mode == "movie_recap":
             context_directive = "Movie Recap Storyteller Style (សម្រាយរឿង Facebook & TikTok): Translate into thrilling, high-energy spoken Khmer recap narration by a charismatic Cambodian narrator (អ្នកសម្រាយរឿង ពិសិដ្ឋ/ស្រីមុំ). 100% Complete fidelity - never drop words."
+        else:
             context_directive = (
                 f"Master Cambodian television drama dubbing scriptwriter (អ្នកសរសេរអត្ថបទបញ្ចូលសំឡេងរឿងភាគទូរទស្សន៍អាជីព). "
                 f"Story genre: {eff_cat}. Apply authentic Cambodian television drama dubbing dialogue style (ភាសាបញ្ចូលសំឡេងរឿងភាគបែបខ្មែរ ពិរោះ រណ្តំចិត្ត ដូចទូរទស្សន៍ហង្សមាស បាយ័ន ស៊ីធីអិន). "
@@ -1294,26 +1299,41 @@ class DramaTranslator:
         sem = asyncio.Semaphore(8)
         async def _trans_chunk(t_chunk):
             async with sem:
+                ret = [""] * len(t_chunk)
                 try:
                     res = await asyncio.to_thread(
                         translate_khmer,
                         t_chunk,
                         category=eff_cat,
                         entity_glossary=custom_dict,
-                        context=context_directive
+                        context=context_directive,
+                        timeout=12.0
                     )
                     if isinstance(res, list):
                         if len(res) == len(t_chunk):
-                            return res
-                        if len(res) < len(t_chunk):
-                            padded = list(res) + [""] * (len(t_chunk) - len(res))
-                            return padded
-                        return res[:len(t_chunk)]
+                            ret = res
+                        elif len(res) < len(t_chunk):
+                            ret = list(res) + [""] * (len(t_chunk) - len(res))
+                        else:
+                            ret = res[:len(t_chunk)]
                     elif isinstance(res, str) and len(t_chunk) == 1:
-                        return [res]
+                        ret = [res]
                 except Exception as e:
                     print(f"Nisay chunk translation note: {e}")
-                return [""] * len(t_chunk)
+                    ret = [""] * len(t_chunk)
+                finally:
+                    async with completed_lines_lock:
+                        completed_lines[0] += len(t_chunk)
+                        c_done = min(completed_lines[0], total_lines)
+                    if progress_callback:
+                        try:
+                            if asyncio.iscoroutinefunction(progress_callback):
+                                await progress_callback(c_done, total_lines, f"AI translated {c_done}/{total_lines} lines")
+                            else:
+                                progress_callback(c_done, total_lines, f"AI translated {c_done}/{total_lines} lines")
+                        except Exception:
+                            pass
+                return ret
 
         chunk_tasks = [_trans_chunk(tc) for tc in text_chunks]
         chunk_results = await asyncio.gather(*chunk_tasks)
@@ -1377,7 +1397,6 @@ class DramaTranslator:
         return results
 
     async def translate_dialogues_groq(
-
         self,
         dialogues: List[Dict[str, Any]],
         mode: str = "drama_dubbing",
@@ -1385,7 +1404,8 @@ class DramaTranslator:
         voice_directive: str = "",
         active_system_prompt: str = "",
         chosen_single_voice: str = "piseth",
-        is_multi: bool = True
+        is_multi: bool = True,
+        progress_callback: Optional[Any] = None
     ) -> Optional[List[Dict[str, Any]]]:
         """Ultra-fast Qwen-3.8-27b / GPT-OSS-120b / Llama via Groq Cloud API for cinematic Khmer dubbing with Zero-Drop Guarantee."""
         active_key = self.get_active_groq_key()
@@ -1490,11 +1510,27 @@ Return JSON object with key "dialogues" containing an array with keys: id, start
 
         # Execute chunks with bounded concurrency (Semaphore=4) to prevent burst limits on long 50+ min movies
         sem = asyncio.Semaphore(4)
+        total_lines = len(dialogues)
+        completed_lines_lock = asyncio.Lock()
+        completed_lines = [0]
+
         async def _bounded_process_chunk(c, idx):
             async with sem:
                 if idx > 0 and idx % 4 == 0:
                     await asyncio.sleep(0.08)
-                return await _process_groq_chunk(c)
+                res = await _process_groq_chunk(c)
+                async with completed_lines_lock:
+                    completed_lines[0] += len(c)
+                    c_done = min(completed_lines[0], total_lines)
+                if progress_callback:
+                    try:
+                        if asyncio.iscoroutinefunction(progress_callback):
+                            await progress_callback(c_done, total_lines, f"AI translated {c_done}/{total_lines} lines")
+                        else:
+                            progress_callback(c_done, total_lines, f"AI translated {c_done}/{total_lines} lines")
+                    except Exception:
+                        pass
+                return res
 
         chunk_tasks = [_bounded_process_chunk(c, idx) for idx, c in enumerate(chunks)]
         results = await asyncio.gather(*chunk_tasks)
@@ -1527,7 +1563,8 @@ Return JSON object with key "dialogues" containing an array with keys: id, start
         source_lang: str = "auto",
         target_voice_override: Optional[str] = None,
         drama_title: Optional[str] = None,
-        episode_number: Optional[int] = None
+        episode_number: Optional[int] = None,
+        progress_callback: Optional[Any] = None
     ) -> List[Dict[str, Any]]:
         """
         Translate dialogue items into authentic Khmer drama dubbing lines.
@@ -1576,7 +1613,8 @@ Return JSON object with key "dialogues" containing an array with keys: id, start
                         category="chinese_general",
                         custom_dict=custom_dict,
                         mode=mode,
-                        drama_title=drama_title
+                        drama_title=drama_title,
+                        progress_callback=progress_callback
                     )
                     if nisay_res and len(nisay_res) == len(dialogues):
                         print(f"[OK] SN AI Cloud Server translated {len(nisay_res)} dialogues successfully!")
@@ -1594,7 +1632,8 @@ Return JSON object with key "dialogues" containing an array with keys: id, start
                     voice_directive=voice_directive,
                     active_system_prompt=active_system_prompt,
                     chosen_single_voice=chosen_single_voice,
-                    is_multi=is_multi
+                    is_multi=is_multi,
+                    progress_callback=progress_callback
                 )
                 if groq_res:
                     return groq_res
@@ -1775,6 +1814,16 @@ Return ONLY valid JSON array with keys: id, start, end, text_original, text_km, 
             tasks = [_translate_single(item, b_start + idx) for idx, item in enumerate(b_items)]
             chunk_results = await asyncio.gather(*tasks)
             all_translated.extend(chunk_results)
+            if progress_callback:
+                try:
+                    c_done = len(all_translated)
+                    t_tot = len(dialogues)
+                    if asyncio.iscoroutinefunction(progress_callback):
+                        await progress_callback(c_done, t_tot, f"AI translated {c_done}/{t_tot} lines")
+                    else:
+                        progress_callback(c_done, t_tot, f"AI translated {c_done}/{t_tot} lines")
+                except Exception:
+                    pass
         return all_translated
 
 

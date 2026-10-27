@@ -173,8 +173,8 @@ def translate_khmer(
     entity_glossary: Optional[Dict[str, str]] = None,
     context: Optional[str] = None,
     api_key: Optional[str] = None,
-    max_retries: int = 3,
-    timeout: int = 120
+    max_retries: int = 2,
+    timeout: float = 12.0
 ) -> Union[str, List[str]]:
     """
     Translate text or batch of texts into natural, high-fidelity Khmer
@@ -232,9 +232,9 @@ def translate_khmer(
         final_cached = [resolved_map[i] for i in range(len(payload_text))]
         return final_cached if is_batch else final_cached[0]
 
-    # Fast modern retry schedule: 1s, 2s, 3.5s
-    backoff_delays = [1.0, 2.0, 3.5]
-    max_retries = min(max_retries, 3)
+    # Ultra-Fast failover retry schedule: 0.8s, 1.5s
+    backoff_delays = [0.8, 1.5]
+    max_retries = min(max_retries, 2)
 
     session = get_nisay_session()
     last_error = None
@@ -256,7 +256,7 @@ def translate_khmer(
                 TRANSLATE_ENDPOINT,
                 headers=headers,
                 json=payload,
-                timeout=timeout
+                timeout=(3.05, min(float(timeout), 12.0))
             )
 
             if resp.status_code == 401 or resp.status_code == 403:

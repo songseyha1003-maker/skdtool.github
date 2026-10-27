@@ -24,8 +24,15 @@ def main():
     local_app_data = os.environ.get("LOCALAPPDATA", r"C:\Users\M\AppData\Local")
     installed_dir = Path(local_app_data) / "Programs" / "SN_TOOL"
 
+    curr_v = "1.1.7"
+    try:
+        with open(base_dir / "version.json", "r", encoding="utf-8") as vf:
+            curr_v = json.load(vf).get("version", "1.1.7")
+    except Exception:
+        pass
+
     print("=" * 65)
-    print("  🚀 SN TOOL - LOCAL COMPUTER UPDATE ENGINE (v1.1.6)")
+    print(f"  🚀 SN TOOL - LOCAL COMPUTER UPDATE ENGINE (v{curr_v})")
     print("=" * 65)
     print(f" Source Workspace: {base_dir}")
     print(f" Installed App Dir: {installed_dir}")
@@ -84,7 +91,7 @@ def main():
             for root_d, int_d in targets:
                 shutil.copy2(src, root_d / cfg)
                 shutil.copy2(src, int_d / cfg)
-    print("  [OK] version.json (v1.1.6) and launch configs updated!")
+    print(f"  [OK] version.json (v{curr_v}) and launch configs updated!")
 
     # 3. Update Static Assets (Web UI)
     print("\n[*] Updating Web UI static assets...")
@@ -174,7 +181,7 @@ def main():
         print("[*] Note: SN_TOOL.exe is currently active. Loose modules (.py / .pyc) and static assets updated successfully!")
 
     print("\n" + "=" * 65)
-    print("  🎉 LOCAL COMPUTER UPDATE TO v1.1.6 COMPLETE 100%!")
+    print(f"  🎉 LOCAL COMPUTER UPDATE TO v{curr_v} COMPLETE 100%!")
     print("=" * 65)
 
 if __name__ == "__main__":

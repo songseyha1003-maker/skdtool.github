@@ -749,14 +749,24 @@ class ProjectManager:
         gc.collect()
 
         # 4. Translate to Khmer Drama Dialogue (Strictly honors Piseth, Sreymom, or Dual Voice)
-        update_prog(62, f"4/7 AI translating script ({voice_label})...", f"Translating script to {voice_label}...")
+        total_d = len(dialogues)
+        def on_trans_prog(completed: int, total: int, msg: str = ""):
+            # Scale dynamically from 50% to 68%
+            pct = 50 + int((completed / max(1, total)) * 18)
+            pct = min(68, max(50, pct))
+            msg_km = f"៤/៧ AI កំពុងបកប្រែសាច់រឿង ({completed}/{total} ឃ្លា - {pct}%)..."
+            msg_en = f"Translating script: {completed}/{total} lines ({pct}%)"
+            update_prog(pct, msg_km, msg_en)
+
+        update_prog(50, f"៤/៧ AI កំពុងបកប្រែសាច់រឿង ({voice_label} 0/{total_d} ឃ្លា)...", f"Translating script to {voice_label} (0/{total_d})...")
         try:
             translated = await self.translator.translate_dialogues(
                 dialogues=dialogues,
                 mode=mode,
                 source_lang=source_lang,
                 target_voice_override=v_override,
-                drama_title=proj_title
+                drama_title=proj_title,
+                progress_callback=on_trans_prog
             )
         except Exception as te:
             print(f"Translation Exception: {te}")
@@ -769,7 +779,8 @@ class ProjectManager:
                     dialogues=dialogues,
                     mode=mode,
                     source_lang=source_lang,
-                    target_voice_override=v_override
+                    target_voice_override=v_override,
+                    progress_callback=on_trans_prog
                 )
             except Exception as te2:
                 print(f"Translation Fallback Exception: {te2}")
@@ -779,6 +790,8 @@ class ProjectManager:
                 "AI Script Translation returned 0 dialogues. "
                 "ការបកប្រែស្គ្រីបមិនទទួលបានជោគជ័យទេ។ សូមពិនិត្យមើលការភ្ជាប់ទៅកាន់ប្រព័ន្ធ AI។"
             )
+
+        update_prog(70, "៤/៧ AI បានបកប្រែសាច់រឿងរួចរាល់ 100%...", "AI script translation completed 100%")
 
         if not is_multi:
             chosen_v = "sreymom" if v_override == "sreymom" else "piseth"

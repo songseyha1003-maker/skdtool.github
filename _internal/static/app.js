@@ -10254,6 +10254,18 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                     }
                 }
 
+                // Keep user assured of continuous activity during translation stage (48% - 70%)
+                if (pct >= 48 && pct <= 70) {
+                    window._transPulseTick = (window._transPulseTick || 0) + 1;
+                    if (window._transPulseTick % 5 === 0) {
+                        const pulseDots = ".".repeat((window._transPulseTick / 5) % 4);
+                        const taskElem = document.getElementById('monitor-current-task');
+                        if (taskElem && (stepEn.includes("Translating") || stepEn.includes("បកប្រែ"))) {
+                            taskElem.innerHTML = `<i class="fa-solid fa-language fa-fade" style="color:#38bdf8; font-size:0.75rem;"></i> ${escapeHtml(stepEn)}${pulseDots}`;
+                        }
+                    }
+                }
+
                 // Log pipeline milestone when step transitions
                 if (stepEn && stepEn !== lastLoggedStep) {
                     lastLoggedStep = stepEn;

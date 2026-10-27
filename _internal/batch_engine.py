@@ -350,15 +350,22 @@ class BatchDubbingManager:
             clean_title = re.sub(r'[\s_\-]+', '_', clean_title).strip('_ ')
             drama_title = clean_title or "Drama_Series"
 
-        item["step"] = f"4/5 AI translating to Khmer {v_label} (Story Bible)..."
-        item["progress"] = 65
+        total_batch_lines = len(dialogues)
+        def on_batch_trans(completed: int, total: int, msg: str = ""):
+            pct = 50 + int((completed / max(1, total)) * 25)
+            item["progress"] = min(75, max(50, pct))
+            item["step"] = f"៤/៥ AI កំពុងបកប្រែសាច់រឿង ({completed}/{total} ឃ្លា - {item['progress']}%)..."
+
+        item["step"] = f"៤/៥ AI កំពុងបកប្រែសាច់រឿង {v_label} (0/{total_batch_lines} ឃ្លា)..."
+        item["progress"] = 50
         translated_dialogues = await self.translator.translate_dialogues(
             dialogues=dialogues,
             mode=item["drama_mode"],
             source_lang="auto",
             target_voice_override=v_override,
             drama_title=drama_title,
-            episode_number=ep_num
+            episode_number=ep_num,
+            progress_callback=on_batch_trans
         )
 
         # Record this episode's summary into the series memory
