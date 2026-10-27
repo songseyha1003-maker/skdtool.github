@@ -2603,14 +2603,27 @@ def power_merge_endpoint():
 
 @app.route("/api/power/split", methods=["POST"])
 def power_split_endpoint():
-    """Split video file into parts."""
+    """Split video file into parts, saving in a dedicated folder next to the source video."""
     data = request.get_json(force=True) or {}
     video_path = data.get("video_path", "")
     chunk_sec = max(60, int(data.get("chunk_duration_sec", 60)))
     if not video_path or not Path(video_path).exists():
         return jsonify({"success": False, "error": "Invalid source video path."}), 400
         
-    out_dir = f"data/exports/split_{int(time.time())}"
+    src_p = Path(video_path).resolve()
+    # Save directly into a clean subfolder next to the source video (e.g. D:\Videos\MyMovie_Split_Parts)
+    target_subfolder = src_p.parent / f"{src_p.stem}_Split_Parts"
+    try:
+        target_subfolder.mkdir(parents=True, exist_ok=True)
+        test_file = target_subfolder / f".sn_perm_test_{int(time.time())}"
+        test_file.touch()
+        test_file.unlink()
+        out_dir = str(target_subfolder.resolve())
+    except Exception:
+        out_dir_p = Path(f"data/exports/split_{int(time.time())}").resolve()
+        out_dir_p.mkdir(parents=True, exist_ok=True)
+        out_dir = str(out_dir_p)
+
     try:
         parts = split_video(video_path, chunk_sec, out_dir)
         play_windows_completion_sound()

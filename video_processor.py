@@ -874,12 +874,13 @@ def merge_videos(
 
 
 def split_video(video_path: str, chunk_duration_sec: int, output_dir: str) -> List[str]:
-    """Split a video into segments of chunk_duration_sec."""
+    """Split a video into segments of chunk_duration_sec with lossless stream copy and smart re-encode fallback."""
     in_p = Path(video_path)
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     out_pattern = str(out_dir / f"{in_p.stem}_EP%03d.mp4")
+    # 1. Primary: Ultra-fast Lossless Stream Copy
     cmd = [
         get_ffmpeg_path(),
         "-nostdin",
@@ -892,26 +893,80 @@ def split_video(video_path: str, chunk_duration_sec: int, output_dir: str) -> Li
         "-reset_timestamps", "1",
         out_pattern
     ]
-    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600, **get_silent_kwargs())
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1200, **get_silent_kwargs())
     parts = sorted(out_dir.glob(f"{in_p.stem}_EP*.mp4"))
+    
+    # 2. Resilient Fallback: If lossless copy produced 0 parts due to keyframe/timestamp mismatch, re-encode seamlessly
+    if not parts or proc.returncode != 0:
+        cmd_fallback = [
+            get_ffmpeg_path(),
+            "-nostdin",
+            "-y",
+            "-i", str(in_p),
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "23",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-segment_time", str(chunk_duration_sec),
+            "-f", "segment",
+            "-reset_timestamps", "1",
+            out_pattern
+        ]
+        subprocess.run(cmd_fallback, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2400, **get_silent_kwargs())
+        parts = sorted(out_dir.glob(f"{in_p.stem}_EP*.mp4"))
+
     if not parts:
         parts = sorted(out_dir.glob(f"{in_p.stem}_part*.mp4"))
     return [str(p) for p in parts]
 
 
 def batch_rename_files(file_paths: List[str], prefix: str = "Drama_EP", start_num: int = 1) -> List[Dict[str, str]]:
-    """Batch rename video files to a standardized format."""
+    """Batch rename video files to a standardized format with collision-proof 2-step renaming and adaptive zero-padding."""
     results = []
+    if not file_paths:
+        return results
+
+    total_count = len(file_paths)
+    max_num = start_num + total_count - 1
+    pad_len = 3 if max_num >= 100 else 2
+
+    # Step 1: Pre-calculate target names and create safe collision-free temporary mapping
+    rename_plan = []
+    temp_stage = []
+    
     for idx, fp in enumerate(file_paths, start=start_num):
-        p = Path(fp)
-        new_name = f"{prefix}{idx:02d}{p.suffix}"
-        new_path = p.parent / new_name
+        p = Path(fp).resolve()
+        new_name = f"{prefix}{idx:0{pad_len}d}{p.suffix}"
+        new_path = (p.parent / new_name).resolve()
+        rename_plan.append((p, new_path, new_name))
+
+    # Step 2: Safe intermediate rename to avoid in-place collisions on Windows
+    for idx, (orig_p, target_p, new_name) in enumerate(rename_plan):
+        if orig_p.exists() and orig_p != target_p:
+            tmp_p = orig_p.parent / f".sn_tmp_rename_{int(time.time())}_{idx:04d}_{orig_p.name}"
+            try:
+                orig_p.rename(tmp_p)
+                temp_stage.append((tmp_p, target_p, str(orig_p), new_name))
+            except Exception as e:
+                results.append({"old": str(orig_p), "new": str(orig_p), "error": str(e)})
+        else:
+            results.append({"old": str(orig_p), "new": str(target_p), "name": new_name})
+
+    # Step 3: Finalize to target names
+    for tmp_p, target_p, old_str, new_name in temp_stage:
         try:
-            if p.exists() and p != new_path:
-                p.rename(new_path)
-            results.append({"old": str(p), "new": str(new_path), "name": new_name})
+            if tmp_p.exists():
+                tmp_p.rename(target_p)
+            results.append({"old": old_str, "new": str(target_p), "name": new_name})
         except Exception as e:
-            results.append({"old": str(p), "new": str(p), "error": str(e)})
+            try:
+                if tmp_p.exists():
+                    tmp_p.rename(Path(old_str))
+            except Exception:
+                pass
+            results.append({"old": old_str, "new": old_str, "error": str(e)})
+
     return results
 
 
