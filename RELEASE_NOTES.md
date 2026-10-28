@@ -1,3 +1,14 @@
+# 🚀 SN TOOL STUDIO PRO - Official Release v1.1.9
+
+### ✨ មុខងារ និងការកែលម្អក្នុង Version 1.1.9៖
+- 🛡️ **Bulletproof Same-Drive Isolated Temp:** ប្រព័ន្ធទាញយកលែងពឹងផ្អែកលើ Disk C ទៀតហើយ។ Folder Temp ត្រូវបានបង្កើតឡើងនៅលើ Drive តែមួយជាមួយ Folder គោលដៅ ដោយមិនស៊ីទំហំ Disk C របស់ User សូម្បីតែ ១ Byte និងការពារបញ្ហា "No space left on device" ឬ "Failed គ្រប់ភាគ" ទាំងស្រុង។
+- ⚡ **95% Remux Zero-Freeze Guarantee:** ដោះស្រាយបញ្ហាគាំងត្រង់ 95% ដោយប្តូរពីការ Copy ឆ្លង Drive យឺតៗ មកជាការផ្លាស់ទីភ្លាមៗ (Instant 0.001s Atomic Volume Move) អមដោយប្រព័ន្ធ Auto-Retry 5 ដង ការពារការ Lock ឯកសារពី Windows Defender ឬ Antivirus។
+- 📁 **Resilient Drive & Folder Auto-Recovery:** ប្រព័ន្ធស្កេនពិនិត្យមើលសិទ្ធិសរសេរ (Write Permission) និងទំហំទំនេរ (Free Space) ដោយស្វ័យប្រវត្តិ។ ប្រសិនបើកុំព្យូទ័រ User គ្មាន Drive D ឬ Drive D ជាប់សិទ្ធិ វានឹងស្វ័យប្រវត្តិតម្រង់ទៅកាន់ `Downloads/SN_Dramas` ភ្លាមៗដោយគ្មាន Error ឡើយ។
+- 🔄 **Multi-Tier Fallback Stream Engine:** បន្ថែមប្រព័ន្ធប្តូរស្វ័យប្រវត្តិទៅ Direct Chunked Streaming នៅពេល HLS m3u8 playlist ជួបបញ្ហា Network Timeout ឬ CDN Restriction។
+- 🚀 **Continuous Performance & Stability:** បង្កើនល្បឿន និងស្ថេរភាពទូទៅនៃប្រព័ន្ធ Downloader។
+
+---
+
 # 🚀 SN TOOL STUDIO PRO - Official Release v1.1.8
 
 ### ✨ មុខងារ និងការកែលម្អក្នុង Version 1.1.8៖

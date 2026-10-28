@@ -1,10 +1,10 @@
 {
-  "version": "1.1.8",
+  "version": "1.1.9",
   "app_name": "SN TOOL - STUDIO PRO",
   "release_date": "2026-10-28",
-  "title": "SN TOOL STUDIO PRO - Official Update v1.1.8 (Unified Series Batch Dubbing Folder & Auto-Consolidation Pro)",
-  "subtitle": "A major update (v1.1.8) is available with Unified Series Batch Dubbing Folder, Auto-Consolidation Engine, and Intelligent Series Name Extraction.",
-  "release_notes": "• 📁 Unified Series Batch Dubbing Folder: Fixed episode separation issue where multiple folders were created per episode (e.g. EP001, EP002). All episodes now neatly export together into 1 unified series folder (e.g. D:/SN_Dramas/<Series_Name>/)!\n• 🔄 Auto-Consolidation Engine: Automatically moves previously scattered episode video files into the unified drama series directory and cleans up empty folders on disk!\n• 🎯 Intelligent Series Name Extraction: Accurately identifies genuine drama series titles across all episode naming schemes (_EP001, -ep01, .E05, 第01集, _01) without collision!\n• ⚡ Continuous Performance & Stability Improvements.",
+  "title": "SN TOOL STUDIO PRO - Official Update v1.1.9 (Bulletproof Downloader Engine & Same-Drive Zero-Freeze Pro)",
+  "subtitle": "A major update (v1.1.9) is available with Same-Drive Isolated Temp, 95% Remux Zero-Freeze Guarantee, and Resilient Folder Auto-Recovery.",
+  "release_notes": "• 🛡️ Bulletproof High-Speed Downloader Engine: Integrated Same-Drive Isolated Temp architecture that completely bypasses Disk C consumption during downloads, preventing 'No space left on device' failures across all client machines!\n• ⚡ 95% Remux Zero-Freeze Guarantee: Transitioned from cross-drive file copies to instant 0.001-second atomic volume moves (os.replace) with multi-attempt Windows Defender lock recovery, eliminating stalls at 95%!\n• 📁 Resilient Drive & Folder Auto-Recovery: Smart fallback that dynamically verifies write permissions and available free space, seamlessly defaulting to safe user Downloads/Videos if Drive D is missing or read-only!\n• 🔄 Multi-Tier Fallback Stream Engine: Added automatic chunked stream fallback when HLS m3u8 playlists encounter network timeouts or CDN restrictions.\n• 🚀 Continuous Performance & Stability Improvements.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }
