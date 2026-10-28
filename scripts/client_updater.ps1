@@ -65,7 +65,7 @@ if (Test-Path $licFile) {
 
 # 4. Download update package
 $updateUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
-$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v118.zip"
+$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v119.zip"
 
 Write-Host "[*] Downloading v1.1.9 update package from Cloud CDN..." -ForegroundColor Yellow
 
