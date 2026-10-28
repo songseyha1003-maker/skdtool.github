@@ -6,8 +6,8 @@
 $ProgressPreference = 'SilentlyContinue'
 
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  🚀 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.1.7+)" -ForegroundColor Cyan
-Write-Host "  ⚡ Ultra-Fast 50%-60% Translation Engine & Smart Auto-Failover Pro" -ForegroundColor Cyan
+Write-Host "  🚀 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.1.8+)" -ForegroundColor Cyan
+Write-Host "  📁 Unified Series Batch Dubbing Folder & Auto-Consolidation Pro" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -65,9 +65,9 @@ if (Test-Path $licFile) {
 
 # 4. Download update package
 $updateUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
-$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v117.zip"
+$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v118.zip"
 
-Write-Host "[*] Downloading v1.1.7 update package from Cloud CDN..." -ForegroundColor Yellow
+Write-Host "[*] Downloading v1.1.8 update package from Cloud CDN..." -ForegroundColor Yellow
 
 $downloadOk = $false
 try {
@@ -79,7 +79,7 @@ try {
         if ($zipSize -gt 10000000) {
             $downloadOk = $true
             $mb = [math]::Round($zipSize / 1MB, 2)
-            Write-Host "[OK] Downloaded v1.1.7 update package ($mb MB) successfully!" -ForegroundColor Green
+            Write-Host "[OK] Downloaded v1.1.8 update package ($mb MB) successfully!" -ForegroundColor Green
         }
     }
 } catch {
@@ -180,7 +180,7 @@ if (-not (Test-Path $batFile)) {
 
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Green
-Write-Host "  🎉 [SUCCESS] SN TOOL STUDIO PRO has been updated to v1.1.7!" -ForegroundColor Green
+Write-Host "  🎉 [SUCCESS] SN TOOL STUDIO PRO has been updated to v1.1.8!" -ForegroundColor Green
 Write-Host "========================================================================" -ForegroundColor Green
 Write-Host ""
 

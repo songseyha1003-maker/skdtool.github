@@ -24,10 +24,10 @@ def main():
     local_app_data = os.environ.get("LOCALAPPDATA", r"C:\Users\M\AppData\Local")
     installed_dir = Path(local_app_data) / "Programs" / "SN_TOOL"
 
-    curr_v = "1.1.7"
+    curr_v = "1.1.8"
     try:
         with open(base_dir / "version.json", "r", encoding="utf-8") as vf:
-            curr_v = json.load(vf).get("version", "1.1.7")
+            curr_v = json.load(vf).get("version", "1.1.8")
     except Exception:
         pass
 

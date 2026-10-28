@@ -90,21 +90,82 @@ def sanitize_export_path(p_str: Optional[str]) -> Optional[str]:
     return '/'.join(cleaned_parts)
 
 
+def extract_clean_series_name(raw_title: str) -> str:
+    """
+    Extracts authentic drama series title by stripping episode numbers, parts, and noise.
+    Example:
+      'Your_Majesty__Are_You_in_Love_Today_EP001.mp4' -> 'Your_Majesty__Are_You_in_Love_Today'
+      'Dubbed_Your_Majesty__Are_You_in_Love_Today_EP002' -> 'Your_Majesty__Are_You_in_Love_Today'
+      'Drama_Episode_12' -> 'Drama'
+      'Story_第01集' -> 'Story'
+      'EP001' -> '' (falls back to parent folder name)
+    """
+    if not raw_title:
+        return ""
+    t = str(raw_title).strip()
+    t = re.sub(r'(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'^(?:Dubbed_|Raw_Full_Movie_)+', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'_\d{9,12}$', '', t)
+    t = re.sub(r'_Full_Movie.*$', '', t, flags=re.IGNORECASE)
+    # Strip episode markers anywhere near the end (e.g. _EP001, -EP01, .E05, _Episode_12, _Part_3, 第01集)
+    t = re.sub(r'(?i)(?:[-_.\s]+(?:ep|episode|part|e|vol|ch|seq|第)[-_.\s]*\d+.*|\b(?:ep|episode|part)[-_.\s]*\d+.*|第\s*\d+\s*[集話部].*)', '', t)
+    # Strip trailing pure episode numbers like _01, _001, -05, but preserve 4-digit release years (19xx, 20xx)
+    def _strip_ep_num(m):
+        num_str = m.group(1)
+        if len(num_str) == 4 and (num_str.startswith('19') or num_str.startswith('20')):
+            return m.group(0)
+        return ''
+    t = re.sub(r'[-_.\s]+(\d{1,4})$', _strip_ep_num, t)
+    # If the title was strictly just an episode tag (e.g. EP001 or Episode 10), strip it so fallback kicks in
+    t = re.sub(r'(?i)^(?:ep|episode|part|第)?[-_.\s]*\d+.*$', '', t)
+    return t.strip('_ -.')
+
+
+def consolidate_scattered_episode_folders(target_drama_dir: Path, safe_title: str):
+    """
+    Consolidates previously scattered episode folders (e.g., from old version bug) into the unified drama folder.
+    Moves .mp4 videos into target_drama_dir and removes empty scattered directories.
+    """
+    try:
+        if not target_drama_dir or not safe_title or safe_title.lower() in ("drama_series", "full_movie", ""):
+            return
+        parent = target_drama_dir.parent
+        if not parent or not parent.exists():
+            return
+
+        target_drama_dir.mkdir(parents=True, exist_ok=True)
+        for folder in list(parent.iterdir()):
+            try:
+                if folder.is_dir() and folder.resolve() != target_drama_dir.resolve():
+                    f_clean = extract_clean_series_name(folder.name)
+                    if f_clean and f_clean.lower() == safe_title.lower():
+                        # Sibling folder belongs to this drama series! Consolidate videos
+                        for item in list(folder.iterdir()):
+                            if item.is_file() and item.suffix.lower() in (".mp4", ".mkv", ".mov"):
+                                dest_f = target_drama_dir / item.name
+                                if not dest_f.exists() or dest_f.stat().st_size < item.stat().st_size:
+                                    shutil.move(str(item), str(dest_f))
+                                    print(f"[Consolidate] Moved {item.name} -> {target_drama_dir.name}")
+                        # Remove if empty or only lingering temporary files
+                        remaining = [x for x in folder.iterdir() if x.suffix.lower() in (".mp4", ".mkv", ".mov")]
+                        if not remaining:
+                            shutil.rmtree(str(folder), ignore_errors=True)
+                            print(f"[Consolidate] Removed empty scattered folder: {folder.name}")
+            except Exception:
+                pass
+    except Exception as ce:
+        print(f"[Consolidate Folders Note] {ce}")
+
+
 def resolve_drama_export_directories(in_path: str, drama_title: str, custom_export_dir: Optional[str] = None) -> List[Path]:
     """
-    Resolves the single direct folder for exporting dubbed videos (strictly 1 folder level, NO nested subfolders).
+    Resolves the single direct folder for exporting dubbed videos (strictly 1 unified folder, NO separate per-episode folders).
     1. If user chose a custom_export_dir: sanitizes it and exports directly into it (zero subfolders).
     2. If user did not choose:
-       - If source video is a local file on disk: exports directly into the source video's parent folder.
-       - If source video is a temp upload: exports directly into D:/SN_Dramas/<DramaTitle> (or C:/SN_Dramas or data/exports).
+       - Exports directly into D:/SN_Dramas/<DramaTitle> (or C:/SN_Dramas or data/exports/<DramaTitle>).
     """
     # Extract clean series name (strip episode suffixes like EP_01, Episode 12, etc.)
-    raw_title = str(drama_title or "").strip()
-    raw_title = re.sub(r'(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$', '', raw_title, flags=re.IGNORECASE)
-    clean_series = re.sub(r'^(?:Dubbed_)+', '', raw_title, flags=re.IGNORECASE)
-    clean_series = re.sub(r'^Raw_Full_Movie_', '', clean_series, flags=re.IGNORECASE)
-    clean_series = re.sub(r'_Full_Movie.*$', '', clean_series, flags=re.IGNORECASE)
-    clean_series = re.sub(r'(?i)^(EP|Episode|Part|第)?[\s_\-]*\d+.*$', '', clean_series).strip('_ ')
+    clean_series = extract_clean_series_name(drama_title)
 
     generic_names = ("drama_series", "dubbed_drama_series_full_movie", "full_movie", "raw_full_movie", "")
     if not clean_series or clean_series.lower() in generic_names:
@@ -112,7 +173,7 @@ def resolve_drama_export_directories(in_path: str, drama_title: str, custom_expo
         try:
             p_in = Path(in_path).resolve()
             if p_in.parent.name.lower() not in ("batch_temp", "uploads", "cache", "temp", "exports", "sn_dramas", "downloads", "data"):
-                clean_series = p_in.parent.name
+                clean_series = extract_clean_series_name(p_in.parent.name) or p_in.parent.name
         except Exception:
             pass
 
@@ -132,22 +193,25 @@ def resolve_drama_export_directories(in_path: str, drama_title: str, custom_expo
             if is_bare_root and safe_title and safe_title.lower() not in ("drama_series", "full_movie"):
                 p_cust = p_cust / safe_title
             p_cust.mkdir(parents=True, exist_ok=True)
+            consolidate_scattered_episode_folders(p_cust, safe_title)
             return [p_cust]
         except Exception as ce:
             print(f"[Export Folder] Custom folder note ({custom_export_dir}): {ce}")
 
     # 2. When user did NOT pick a folder:
-    # Always create a dedicated folder FIRST for this drama series before dubbing!
+    # Always create ONE unified dedicated folder for this drama series before dubbing!
     for root_str in ("D:/SN_Dramas", "C:/SN_Dramas"):
         root_p = Path(root_str)
         if root_p.exists():
             root_drama = root_p / safe_title
             root_drama.mkdir(parents=True, exist_ok=True)
+            consolidate_scattered_episode_folders(root_drama, safe_title)
             return [root_drama]
 
     # Fallback to data/exports/<safe_title>
     export_drama_dir = EXPORTS_DIR / safe_title
     export_drama_dir.mkdir(parents=True, exist_ok=True)
+    consolidate_scattered_episode_folders(export_drama_dir, safe_title)
     return [export_drama_dir]
 
 
@@ -281,11 +345,9 @@ class BatchDubbingManager:
             p_in = Path(in_path)
             parent_folder = p_in.parent.name
             if parent_folder and parent_folder.lower() not in ("batch_temp", "uploads", "exports", "sn_dramas", "downloads", "data"):
-                early_title = parent_folder
+                early_title = extract_clean_series_name(parent_folder) or parent_folder
             else:
-                clean_t = re.sub(r'(?i)(?:EP|Episode|Part|第)?[\s_\-]*\d+[\s_\-]*(?:集|話|部)?', '', p_in.stem)
-                clean_t = re.sub(r'[\s_\-]+', '_', clean_t).strip('_ ')
-                early_title = clean_t or "Drama_Series"
+                early_title = extract_clean_series_name(p_in.stem) or "Drama_Series"
             target_dirs = resolve_drama_export_directories(in_path, early_title, custom_export_dir=item.get("custom_export_dir"))
             if target_dirs:
                 target_dirs[0].mkdir(parents=True, exist_ok=True)

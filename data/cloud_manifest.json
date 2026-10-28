@@ -1,10 +1,10 @@
 {
-  "version": "1.1.7",
+  "version": "1.1.8",
   "app_name": "SN TOOL - STUDIO PRO",
-  "release_date": "2026-10-27",
-  "title": "SN TOOL STUDIO PRO - Official Update v1.1.7 (Ultra-Fast 50%-60% Translation Engine & Smart Auto-Failover Pro)",
-  "subtitle": "A major update (v1.1.7) is available with Ultra-Fast 50%–60% Translation Engine, 12-Second Cloud Auto-Failover, and Power Tools Output directory fix.",
-  "release_notes": "• ⚡ Ultra-Fast 50%–60% Translation Engine: Dynamic live chunk progress reporting (50%–68%) with continuous line counter so the UI never appears frozen during script translation!\n• 🛡️ 12-Second Cloud Auto-Failover: Reduced API socket timeouts from 120s to 12s with automatic instantaneous failover, eliminating long 2-minute pipeline hangs!\n• 🔄 Smooth Micro-Progress Pipeline: Real-time visual ticks and animated pulse indicators during drama script translation across both Single-Video and Batch Engines!\n• 📂 Power Tools Output Directory Fix: Merged videos now output directly into the source drama directory and auto-highlight in Windows Explorer!\n• 🎙️ Speech-to-Text Upload Optimization: Reduced audio upload timeout from 300s to 40s with instant failover to ultra-fast 3-second Groq Whisper when needed!\n• 👄 Zero-Lag Lip-Sync Alignment: Synchronized Khmer dubbing directly to visual mouth opening with 130ms ADR anticipation lead - zero delay!",
+  "release_date": "2026-10-28",
+  "title": "SN TOOL STUDIO PRO - Official Update v1.1.8 (Unified Series Batch Dubbing Folder & Auto-Consolidation Pro)",
+  "subtitle": "A major update (v1.1.8) is available with Unified Series Batch Dubbing Folder, Auto-Consolidation Engine, and Intelligent Series Name Extraction.",
+  "release_notes": "• 📁 Unified Series Batch Dubbing Folder: Fixed episode separation issue where multiple folders were created per episode (e.g. EP001, EP002). All episodes now neatly export together into 1 unified series folder (e.g. D:/SN_Dramas/<Series_Name>/)!\n• 🔄 Auto-Consolidation Engine: Automatically moves previously scattered episode video files into the unified drama series directory and cleans up empty folders on disk!\n• 🎯 Intelligent Series Name Extraction: Accurately identifies genuine drama series titles across all episode naming schemes (_EP001, -ep01, .E05, 第01集, _01) without collision!\n• ⚡ Continuous Performance & Stability Improvements.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }

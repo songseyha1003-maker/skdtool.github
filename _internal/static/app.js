@@ -3432,20 +3432,32 @@ function updateExportLocationUI() {
     }
 }
 
-async function syncDramaExportFolder(dramaTitle) {
-    if (!dramaTitle || !dramaTitle.trim()) return;
-
-    // Clean drama title to form authentic dedicated folder name
+function extractCleanSeriesName(dramaTitle) {
+    if (!dramaTitle || !dramaTitle.trim()) return "";
     let clean = dramaTitle.trim()
         .replace(/(?:\.mp4|\.mkv|\.mov|\.avi|\.webm|\.flv|\.ts)+$/gi, '')
         .replace(/^(?:Dubbed_)+/i, '')
         .replace(/^(?:Raw_Full_Movie_)+/i, '')
-        .replace(/(?:_part|[-_]ep|[-_]e|\bep|\bepisode)[-_]?\d+.*$/i, '')
-        .replace(/[-_]+$/, '')
+        .replace(/_\d{9,12}$/, '')
+        .replace(/_Full_Movie.*$/i, '')
+        .replace(/(?:[-_.\s]+(?:ep|episode|part|e|vol|ch|seq|第)[-_.\s]*\d+.*|\b(?:ep|episode|part)[-_.\s]*\d+.*|第\s*\d+\s*[集話部].*)/gi, '')
+        .replace(/[-_.\s]+(\d{1,4})$/, (m, p1) => {
+            return (p1.length === 4 && (p1.startsWith('19') || p1.startsWith('20'))) ? m : '';
+        })
+        .replace(/^(?:ep|episode|part|第)?[-_.\s]*\d+.*$/i, '')
+        .replace(/[-_.\s]+$/, '')
         .trim();
     if (!clean || clean.toLowerCase() === "drama_series" || clean.toLowerCase() === "video") {
         clean = "Drama_Series";
     }
+    return clean;
+}
+
+async function syncDramaExportFolder(dramaTitle) {
+    if (!dramaTitle || !dramaTitle.trim()) return;
+
+    // Clean drama title to form authentic dedicated folder name (single unified folder)
+    const clean = extractCleanSeriesName(dramaTitle) || "Drama_Series";
 
     const autoFolder = `D:/SN_Dramas/${clean}`;
     defaultDramaExportFolder = autoFolder;
@@ -10556,6 +10568,20 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
     }
 
     const completedProjects = [];
+
+    // Ensure all episodes in the batch share ONE unified export folder!
+    let batchSeriesTitle = "Drama_Series";
+    if (files && files.length > 0) {
+        for (let fIdx = 0; fIdx < files.length; fIdx++) {
+            const fName = getMediaFileName(files[fIdx]) || "";
+            const candidate = extractCleanSeriesName(fName);
+            if (candidate && candidate !== "Drama_Series") {
+                batchSeriesTitle = candidate;
+                break;
+            }
+        }
+    }
+    await syncDramaExportFolder(batchSeriesTitle);
 
     for (let i = 0; i < totalBatchCount; i++) {
         const file = files[i];

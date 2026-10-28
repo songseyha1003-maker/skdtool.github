@@ -1,3 +1,13 @@
+# 🚀 SN TOOL STUDIO PRO - Official Release v1.1.8
+
+### ✨ មុខងារ និងការកែលម្អក្នុង Version 1.1.8៖
+- 📁 **Unified Series Batch Dubbing Folder:** ដោះស្រាយបញ្ហាបង្កើត Folder បែកខ្ញែកតាមភាគនីមួយៗ (`_EP001`, `_EP002`...)។ ឥឡូវនេះគ្រប់ភាគទាំងអស់របស់រឿងភាគ (ទោះជា 97 ភាគក៏ដោយ) នឹងត្រូវប្រមូលផ្តុំរក្សាទុកក្នុង Folder រួមតែមួយ (`D:\SN_Dramas\<ឈ្មោះរឿង>\`) យ៉ាងមានសណ្ដាប់ធ្នាប់។
+- 🔄 **Auto-Consolidation Engine:** ប្រព័ន្ធនឹងស្វ័យប្រវត្តិកើបយកវីដេអូពី Folder ចាស់ៗដែលធ្លាប់បែកខ្ញែកកាលពីមុនមកបញ្ចូលក្នុង Folder រួម និងលុប Folder ទទេចាស់ៗចោលដោយស្វ័យប្រវត្តិ។
+- 🎯 **Intelligent Series Name Extraction:** កំណត់ និងស្គាល់ឈ្មោះរឿងពិតប្រាកដបានយ៉ាងច្បាស់លាស់ គ្រប់ទម្រង់ឈ្មោះ File ទាំងអស់ (`_EP001`, `-ep01`, `.E05`, `_Episode_12`, `_Part_3`, `第01集`, `_001`...)។
+- ⚡ **Continuous Performance & Stability:** បង្កើនល្បឿន និងស្ថេរភាពទូទៅនៃប្រព័ន្ធ Batch Dubbing។
+
+---
+
 # 🚀 SN TOOL STUDIO PRO - Official Release v1.1.7
 
 ### ✨ មុខងារ និងការកែលម្អក្នុង Version 1.1.7៖

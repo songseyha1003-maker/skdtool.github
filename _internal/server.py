@@ -3204,8 +3204,8 @@ def auto_dub_video_endpoint():
 
                 # Create dedicated drama folder FIRST on disk before processing starts!
                 try:
-                    from batch_engine import resolve_drama_export_directories
-                    clean_series_name = clean_target.replace('Dubbed_', '')
+                    from batch_engine import resolve_drama_export_directories, extract_clean_series_name
+                    clean_series_name = extract_clean_series_name(clean_target)
                     drama_folders = resolve_drama_export_directories(v_path, clean_series_name, custom_export_dir=cust_dir)
                     if drama_folders:
                         drama_folders[0].mkdir(parents=True, exist_ok=True)
