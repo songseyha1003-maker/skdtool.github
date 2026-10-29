@@ -25,6 +25,16 @@ def package_update_zip():
     zip_path = base_dir / "SN_TOOL_UPDATE.zip"
     temp_zip = base_dir / "SN_TOOL_UPDATE.tmp.zip"
     
+    # 0. Automatically synchronize and recompile fresh distribution bytecode (.pyc)
+    sync_script = base_dir / "scripts" / "sync_dist.py"
+    if sync_script.exists():
+        print("[*] Recompiling fresh .pyc bytecode via sync_dist.py...")
+        try:
+            import subprocess
+            subprocess.run([sys.executable, str(sync_script)], check=True)
+        except Exception as e:
+            print(f"[!] Warning syncing dist: {e}")
+
     print(f"[*] Packaging clean in-app update patch: {zip_path.name}...")
     
     if temp_zip.exists():

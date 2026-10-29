@@ -1138,15 +1138,18 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
         try:
             ai_cache, ai_title_index = get_ai_streams_cache()
             if ai_cache:
-                keys = list(ai_cache.keys())
-                pick_idx = abs(hash(str(drama_id))) % len(keys)
+                import hashlib
+                multi_keys = [k for k, v in ai_cache.items() if v.get("play_url") and ("#" in v["play_url"] or "$$$" in v["play_url"])]
+                keys = multi_keys if (multi_keys and total_expected > 1) else list(ai_cache.keys())
+                hash_int = int(hashlib.md5(str(drama_id).encode("utf-8")).hexdigest(), 16)
+                pick_idx = hash_int % len(keys)
                 mirror_item = ai_cache[keys[pick_idx]]
                 if mirror_item and mirror_item.get("play_url"):
                     parsed_mirror = parse_vod_play_url(mirror_item["play_url"], "Universal HD Cluster")
                     if parsed_mirror:
                         stream_eps = parsed_mirror
                         found_stream_map = {it.get("episode_num"): it for it in stream_eps}
-                        if len(parsed_mirror) == 1 or not master_full_url:
+                        if len(parsed_mirror) == 1:
                             master_full_url = parsed_mirror[0].get("stream_url", "")
         except Exception:
             pass
