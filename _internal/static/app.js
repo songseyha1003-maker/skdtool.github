@@ -5462,11 +5462,29 @@ async function downloadAllQueueEpisodes() {
                             dlPollTimer = null;
                         }
 
-                        // Mark all episodes Completed when batch ends successfully
+                        const curComp = sData.stats?.completed ?? 0;
+                        const curFailed = sData.stats?.failed ?? 0;
+                        const curTot = sData.stats?.total ?? total;
+
+                        // Synchronize true episode states from backend
+                        if (sData.episodes && sData.episodes.length > 0) {
+                            dlEpisodesList = sData.episodes;
+                        } else if (dlEpisodesList && dlEpisodesList.length > 0) {
+                            dlEpisodesList.forEach(ep => {
+                                if (ep.status !== 'Completed') {
+                                    if (curComp === curTot && curTot > 0) {
+                                        ep.status = 'Completed';
+                                        ep.progress = 100;
+                                    } else if (curComp === 0) {
+                                        ep.status = 'Failed';
+                                        ep.progress = 0;
+                                    }
+                                }
+                            });
+                        }
+
                         if (dlEpisodesList && dlEpisodesList.length > 0) {
                             dlEpisodesList.forEach(ep => {
-                                ep.status = 'Completed';
-                                ep.progress = 100;
                                 updateEpisodeUIState(ep, false);
                             });
                         }
@@ -5477,27 +5495,49 @@ async function downloadAllQueueEpisodes() {
                         }
                         batchDownloadCompletedNotified = true;
 
-                        if (btnAll) {
-                            btnAll.disabled = false;
-                            btnAll.innerHTML = `<i class="fa-solid fa-circle-check" style="color:#4ade80;"></i> <span>Downloaded all episodes ${total}/${total} & Full Movie 100%</span>`;
-                            setTimeout(() => {
-                                btnAll.innerHTML = originalText || `<i class="fa-solid fa-bolt-lightning" style="color:#facc15;"></i> <span id="dl-q-download-all-text">⚡ Download All Episodes (EP 1 - ${total})</span>`;
-                            }, 6000);
-                        }
-                        if (catBtnAll) {
-                            catBtnAll.disabled = false;
-                            catBtnAll.innerHTML = `<i class="fa-solid fa-circle-check" style="color:#4ade80;"></i> <span>All ${total} episodes & Full Movie downloaded</span>`;
-                            setTimeout(() => {
-                                catBtnAll.innerHTML = `<i class="fa-solid fa-bolt-lightning" style="color:#facc15;"></i> <span id="dl-catalog-dl-all-text">⚡ Turbo High-Speed & 100% Full Series</span>`;
-                            }, 6000);
-                        }
+                        if (curComp === curTot && curTot > 0) {
+                            if (btnAll) {
+                                btnAll.disabled = false;
+                                btnAll.innerHTML = `<i class="fa-solid fa-circle-check" style="color:#4ade80;"></i> <span>Downloaded all episodes ${curComp}/${curTot} 100%</span>`;
+                                setTimeout(() => {
+                                    btnAll.innerHTML = originalText || `<i class="fa-solid fa-bolt-lightning" style="color:#facc15;"></i> <span id="dl-q-download-all-text">⚡ Download All Episodes (EP 1 - ${curTot})</span>`;
+                                }, 6000);
+                            }
+                            if (catBtnAll) {
+                                catBtnAll.disabled = false;
+                                catBtnAll.innerHTML = `<i class="fa-solid fa-circle-check" style="color:#4ade80;"></i> <span>All ${curTot} episodes downloaded</span>`;
+                                setTimeout(() => {
+                                    catBtnAll.innerHTML = `<i class="fa-solid fa-bolt-lightning" style="color:#facc15;"></i> <span id="dl-catalog-dl-all-text">⚡ Turbo High-Speed & 100% Full Series</span>`;
+                                }, 6000);
+                            }
 
-                        let movieMsg = "";
-                        if (sData.stats && sData.stats.full_movie_name) {
-                            movieMsg = ` 🎬 Full Movie: ${sData.stats.full_movie_name}`;
+                            let movieMsg = "";
+                            if (sData.stats && sData.stats.full_movie_name) {
+                                movieMsg = ` 🎬 Full Movie: ${sData.stats.full_movie_name}`;
+                            }
+                            showToast(`🎉 Downloaded all episodes ${curComp}/${curTot} 100% complete!${movieMsg}`);
+                            appendDownloaderLog(`[${new Date().toLocaleTimeString()}] All ${curTot} episodes completed 100%!${movieMsg}`);
+                        } else if (curComp > 0) {
+                            if (btnAll) {
+                                btnAll.disabled = false;
+                                btnAll.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color:#facc15;"></i> <span>Downloaded ${curComp}/${curTot} (${curFailed} failed)</span>`;
+                                setTimeout(() => {
+                                    btnAll.innerHTML = originalText || `<i class="fa-solid fa-bolt-lightning" style="color:#facc15;"></i> <span id="dl-q-download-all-text">⚡ Download All Episodes (EP 1 - ${curTot})</span>`;
+                                }, 6000);
+                            }
+                            showToast(`⚠️ Download finished: ${curComp}/${curTot} episodes completed, ${curFailed} failed.`);
+                            appendDownloaderLog(`[${new Date().toLocaleTimeString()}] Download partially completed: ${curComp}/${curTot} (${curFailed} failed).`);
+                        } else {
+                            if (btnAll) {
+                                btnAll.disabled = false;
+                                btnAll.innerHTML = `<i class="fa-solid fa-circle-xmark" style="color:#ef4444;"></i> <span>Download Failed (0/${curTot})</span>`;
+                                setTimeout(() => {
+                                    btnAll.innerHTML = originalText || `<i class="fa-solid fa-bolt-lightning" style="color:#facc15;"></i> <span id="dl-q-download-all-text">⚡ Download All Episodes (EP 1 - ${curTot})</span>`;
+                                }, 6000);
+                            }
+                            showToast(`❌ Download failed: 0/${curTot} episodes downloaded. Please check network/streams.`);
+                            appendDownloaderLog(`[${new Date().toLocaleTimeString()}] ❌ Download failed: 0/${curTot} episodes completed.`);
                         }
-                        showToast(`🎉 Downloaded all episodes ${total}/${total} 100% complete!${movieMsg}`);
-                        appendDownloaderLog(`[${new Date().toLocaleTimeString()}] All ${total} episodes completed 100%!${movieMsg}`);
 
                         const qVideo = document.getElementById('dl-q-video-elem');
                         if (qVideo) {

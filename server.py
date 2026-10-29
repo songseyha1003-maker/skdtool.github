@@ -1508,6 +1508,18 @@ def downloader_preview_endpoint(drama_id):
         for ep in drama_downloader.episodes:
             if ep.get("episode_number") == ep_num or ep.get("episode_num") == ep_num:
                 s_url = ep.get("stream_url") or ep.get("download_url")
+                if (not s_url or not str(s_url).startswith("http")) and drama:
+                    try:
+                        res_eps = get_drama_episodes(drama, resolve_streams=True)
+                        if res_eps:
+                            for re_ep in res_eps:
+                                if re_ep.get("episode_number") == ep_num or re_ep.get("episode_num") == ep_num:
+                                    s_url = re_ep.get("stream_url") or re_ep.get("download_url")
+                                    ep["stream_url"] = s_url
+                                    ep["download_url"] = s_url
+                                    break
+                    except Exception:
+                        pass
                 if (not s_url or not str(s_url).startswith("http")) and ep.get("vid") and ep.get("series_id"):
                     s_url = get_hongguo_episode_real_stream_url(ep["series_id"], ep["vid"])
                     if s_url:
