@@ -1,9 +1,9 @@
 {
-  "version": "1.2.0",
+  "version": "2.0.0",
   "app_name": "SN TOOL - STUDIO PRO",
   "release_date": "2026-10-29",
-  "title": "SN TOOL STUDIO PRO - Official Release v1.2.0 (Turbo Downloader Engine & AnyReel/Multi-Platform Fix)",
-  "release_notes": "• 🚀 Turbo Downloader Engine & Multi-Platform Resolution: Fully resolved stream candidate fetching for AnyReel, ShortMax, and English-title dramas, enabling seamless HD download across all 45+ episodes!\n• 🛡️ Accurate Download Queue Sync: Completely eliminated false 100% completion in the UI by synchronizing real disk and download thread statuses.\n• ⚡ Deterministic Multi-Episode Stream Cluster: Smart hash-based stream binding ensures each episode downloads its authentic distinct video file instead of single-stream master movies.\n• 📁 Auto-Player Preview On-Demand: Integrated live 9:16 stream resolver allowing real-time playback in SN Studio even before files finish downloading locally.\n• 🔄 1-Click OTA Client Update Verification: Full bytecode sync and update automation.",
+  "title": "SN TOOL STUDIO PRO - Official Release v2.0.0 (Grand Studio 2.0 & Turbo Downloader Engine)",
+  "release_notes": "• 🌟 SN TOOL STUDIO PRO 2.0.0 MILESTONE RELEASE: Major architectural upgrade delivering full stability, turbo download speeds, and seamless multi-platform streaming.\n• 🚀 Turbo Downloader Engine & Multi-Platform Resolution: Fully resolved stream candidate fetching for AnyReel, ShortMax, ReelShort, FreeReels, and English-title dramas, enabling seamless HD download across all 45+ episodes!\n• 🛡️ Accurate Download Queue Sync: Completely eliminated false 100% completion in the UI by synchronizing real disk and download thread statuses.\n• ⚡ Deterministic Multi-Episode Stream Cluster: Smart hash-based stream binding ensures each episode downloads its authentic distinct video file instead of single-stream master movies.\n• 📁 Auto-Player Preview On-Demand: Integrated live 9:16 stream resolver allowing real-time playback in SN Studio even before files finish downloading locally.\n• 🔄 1-Click OTA Client Update Verification: Full bytecode sync and update automation.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }

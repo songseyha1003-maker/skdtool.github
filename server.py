@@ -1243,7 +1243,7 @@ def api_version_endpoint():
         from update import get_local_version
         v = get_local_version()
     except Exception:
-        v = "1.1.8"
+        v = "2.0.0"
     return jsonify({"version": v, "success": True})
 
 

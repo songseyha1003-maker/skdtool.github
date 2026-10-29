@@ -6,7 +6,7 @@
 $ProgressPreference = 'SilentlyContinue'
 
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  🚀 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v1.2.0+)" -ForegroundColor Cyan
+Write-Host "  🚀 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v2.0.0+)" -ForegroundColor Cyan
 Write-Host "  📁 Turbo Downloader Engine & AnyReel/Multi-Platform Fix" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
@@ -65,9 +65,9 @@ if (Test-Path $licFile) {
 
 # 4. Download update package
 $updateUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
-$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v120.zip"
+$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v200.zip"
 
-Write-Host "[*] Downloading v1.2.0 update package from Cloud CDN..." -ForegroundColor Yellow
+Write-Host "[*] Downloading v2.0.0 update package from Cloud CDN..." -ForegroundColor Yellow
 
 $downloadOk = $false
 try {
@@ -79,7 +79,7 @@ try {
         if ($zipSize -gt 10000000) {
             $downloadOk = $true
             $mb = [math]::Round($zipSize / 1MB, 2)
-            Write-Host "[OK] Downloaded v1.2.0 update package ($mb MB) successfully!" -ForegroundColor Green
+            Write-Host "[OK] Downloaded v2.0.0 update package ($mb MB) successfully!" -ForegroundColor Green
         }
     }
 } catch {
