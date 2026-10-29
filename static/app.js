@@ -4300,6 +4300,28 @@ async function selectDramaCard(dramaId, openQueueMode = false) {
 
     // 2. INSTANT OPTIMISTIC FEEDBACK (< 1ms): Render immediate metadata from memory/catalog map
     const cachedDrama = (window.dlCatalogMap && window.dlCatalogMap.get(strDramaId)) || (dlDramaDetailCache.get(strDramaId)?.drama);
+    const isNewDrama = (!dlCurrentDrama || String(dlCurrentDrama.id) !== strDramaId);
+    if (isNewDrama) {
+        dlQueueActiveEpisodeNum = 1;
+        // Cleanly stop any existing video playback immediately so old drama never sticks!
+        const qVideo = document.getElementById('dl-q-video-elem');
+        if (qVideo) {
+            if (dlHlsInstance) {
+                try { dlHlsInstance.destroy(); } catch (e) {}
+                dlHlsInstance = null;
+            }
+            try {
+                qVideo.pause();
+                qVideo.removeAttribute('src');
+                qVideo.load();
+                if (cachedDrama && cachedDrama.poster) {
+                    qVideo.poster = cachedDrama.poster;
+                }
+            } catch (e) {}
+        }
+        const subtitlesElem = document.getElementById('dl-q-video-subtitles');
+        if (subtitlesElem) subtitlesElem.style.display = 'none';
+    }
     if (cachedDrama) {
         dlCurrentDrama = cachedDrama;
         const totalEps = cachedDrama.total_episodes || 80;
@@ -4977,22 +4999,103 @@ function toggleSelectAllQueueEpisodes() {
 
 let dlHlsInstance = null;
 
-function loadVideoWithHls(video, url, posterUrl) {
+let dlPreviewPlaySeq = 0;
+
+function loadVideoWithHls(video, url, posterUrl, autoPlay = true) {
+    if (!video) return;
+
+    // 1. Instantly detach and stop any active stream / buffer to prevent audio overlap or freeze
     if (dlHlsInstance) {
-        dlHlsInstance.destroy();
+        try {
+            dlHlsInstance.stopLoad();
+            dlHlsInstance.detachMedia();
+            dlHlsInstance.destroy();
+        } catch (e) {}
         dlHlsInstance = null;
     }
+
+    try {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+    } catch (e) {}
+
     if (posterUrl) video.poster = posterUrl;
+    if (!url) return;
+
+    const playOverlay = document.getElementById('dl-q-center-play');
+    const playBtnText = document.getElementById('dl-q-play-text');
+    const playBtnIcon = document.getElementById('dl-q-play-icon');
+
+    const setPlayingUI = (playing) => {
+        if (playing) {
+            if (playOverlay) playOverlay.classList.add('hidden');
+            if (playBtnText) playBtnText.textContent = 'Pause';
+            if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-pause';
+        } else {
+            if (playOverlay) playOverlay.classList.remove('hidden');
+            if (playBtnText) playBtnText.textContent = 'Play';
+            if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
+        }
+    };
+
+    // 2. High-performance Turbo HLS Engine with Instant Start & Auto Error-Recovery
     if (url && (url.includes('.m3u8') || url.includes('/hls/')) && window.Hls && Hls.isSupported()) {
-        dlHlsInstance = new Hls({ enableWorker: true });
+        dlHlsInstance = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+            backBufferLength: 30,
+            maxBufferLength: 15,
+            maxMaxBufferLength: 30,
+            maxBufferSize: 30 * 1024 * 1024,
+            maxBufferHole: 0.5,
+            highBufferWatchdogPeriod: 2,
+            nudgeOffset: 0.1,
+            nudgeMaxRetry: 5,
+            progressive: true
+        });
+
+        dlHlsInstance.on(Hls.Events.ERROR, function(event, data) {
+            if (data.fatal) {
+                switch(data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                        try { dlHlsInstance.startLoad(); } catch (e) {}
+                        break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                        try { dlHlsInstance.recoverMediaError(); } catch (e) {}
+                        break;
+                    default:
+                        try { dlHlsInstance.destroy(); } catch (e) {}
+                        break;
+                }
+            }
+        });
+
         dlHlsInstance.loadSource(url);
         dlHlsInstance.attachMedia(video);
+
+        dlHlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
+            if (autoPlay) {
+                video.play().then(() => setPlayingUI(true)).catch(() => setPlayingUI(false));
+            } else {
+                setPlayingUI(false);
+            }
+        });
     } else {
+        // Direct MP4 / WebM / Local File Playback
         video.src = url;
+        video.preload = "auto";
+        video.load();
+        if (autoPlay) {
+            video.play().then(() => setPlayingUI(true)).catch(() => setPlayingUI(false));
+        } else {
+            setPlayingUI(false);
+        }
     }
 }
 
 async function playQueueEpisode(epNum, autoPlay = true) {
+    const mySeq = ++dlPreviewPlaySeq;
     dlQueueActiveEpisodeNum = epNum;
 
     // Highlight active card in Image 2 4-Column Grid
@@ -5051,24 +5154,7 @@ async function playQueueEpisode(epNum, autoPlay = true) {
     // A. Check if the episode object already has an authentic video URL (e.g. from folder import or completed download)
     const rawUrl = epObj?.video_url || epObj?.stream_url;
     if (rawUrl) {
-        loadVideoWithHls(video, rawUrl, dlCurrentDrama?.poster || '');
-        video.currentTime = 0;
-        if (autoPlay) {
-            video.play().then(() => {
-                if (playOverlay) playOverlay.classList.add('hidden');
-                if (playBtnText) playBtnText.textContent = 'Pause';
-                if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-pause';
-            }).catch(() => {
-                if (playOverlay) playOverlay.classList.remove('hidden');
-                if (playBtnText) playBtnText.textContent = 'Play';
-                if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
-            });
-        } else {
-            video.pause();
-            if (playOverlay) playOverlay.classList.remove('hidden');
-            if (playBtnText) playBtnText.textContent = 'Play';
-            if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
-        }
+        loadVideoWithHls(video, rawUrl, dlCurrentDrama?.poster || '', autoPlay);
         return;
     }
 
@@ -5076,51 +5162,43 @@ async function playQueueEpisode(epNum, autoPlay = true) {
     try {
         const res = await fetch(`/api/downloader/preview/${dlCurrentDrama.id}?ep=${epNum}`);
         const data = await res.json();
+        
+        // Guard against race conditions: Discard response if user already clicked another episode or drama!
+        if (mySeq !== dlPreviewPlaySeq) {
+            return;
+        }
+
         const vUrl = data.video_url || data.stream_url;
         if (data.success && vUrl) {
-            loadVideoWithHls(video, vUrl, data.poster || dlCurrentDrama?.poster || '');
-            video.currentTime = 0;
-            if (autoPlay) {
-                video.play().then(() => {
-                    if (playOverlay) playOverlay.classList.add('hidden');
-                    if (playBtnText) playBtnText.textContent = 'Pause';
-                    if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-pause';
-                }).catch(() => {
-                    if (playOverlay) playOverlay.classList.remove('hidden');
-                    if (playBtnText) playBtnText.textContent = 'Play';
-                    if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
-                });
-            } else {
-                video.pause();
-                if (playOverlay) playOverlay.classList.remove('hidden');
-                if (playBtnText) playBtnText.textContent = 'Play';
-                if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
-            }
+            loadVideoWithHls(video, vUrl, data.poster || dlCurrentDrama?.poster || '', autoPlay);
             return;
         } else {
-            // Authentic video not yet downloaded / imported
+            // Video stream not yet downloaded
             if (dlHlsInstance) {
-                dlHlsInstance.destroy();
+                try { dlHlsInstance.destroy(); } catch (e) {}
                 dlHlsInstance = null;
             }
-            video.pause();
-            video.removeAttribute('src');
-            video.load();
+            try {
+                video.pause();
+                video.removeAttribute('src');
+                video.load();
+            } catch (e) {}
             if (dlCurrentDrama && dlCurrentDrama.poster) {
                 video.poster = dlCurrentDrama.poster;
             }
             if (playOverlay) playOverlay.classList.remove('hidden');
             if (playBtnText) playBtnText.textContent = 'Play';
             if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
-            showToast(`Episode ${epNum} is not downloaded locally yet — click Download to fetch`);
             return;
         }
     } catch (e) {
-        video.pause();
-        if (dlCurrentDrama && dlCurrentDrama.poster) {
-            video.poster = dlCurrentDrama.poster;
+        if (mySeq === dlPreviewPlaySeq) {
+            try { video.pause(); } catch (err) {}
+            if (dlCurrentDrama && dlCurrentDrama.poster) {
+                video.poster = dlCurrentDrama.poster;
+            }
+            if (playOverlay) playOverlay.classList.remove('hidden');
         }
-        if (playOverlay) playOverlay.classList.remove('hidden');
     }
 }
 

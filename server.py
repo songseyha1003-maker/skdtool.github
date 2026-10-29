@@ -1436,15 +1436,25 @@ def downloader_drama_detail_endpoint(drama_id):
 
 @app.route("/api/downloader/preview/<drama_id>", methods=["GET"])
 def downloader_preview_endpoint(drama_id):
-    """Get authentic preview video for a drama to play directly in 9:16 monitor."""
+    """Get authentic preview video for a drama to play directly in 9:16 monitor with zero stutter and zero cross-drama leaks."""
     ep_num = request.args.get("ep", 1, type=int)
     drama = hongguo_db.get_drama_by_id(drama_id)
     if not drama and drama_downloader.current_drama:
         if str(drama_downloader.current_drama.get("id")) == str(drama_id):
             drama = drama_downloader.current_drama
 
-    # 1. Check if active episodes manifest has a genuine video file for this episode
-    if drama_downloader.episodes:
+    if not drama:
+        return jsonify({
+            "success": False,
+            "error": "drama_not_found",
+            "message": f"Drama {drama_id} not found"
+        }), 404
+
+    curr_id = str(drama_downloader.current_drama.get("id") or "") if drama_downloader.current_drama else ""
+    is_same_drama = (curr_id == str(drama_id))
+
+    # 1. Check if active episodes manifest has a genuine video file for THIS specific drama
+    if is_same_drama and drama_downloader.episodes:
         for ep in drama_downloader.episodes:
             if ep.get("episode_number") == ep_num or ep.get("episode_num") == ep_num:
                 if ep.get("video_url") and ep.get("filepath") and Path(ep["filepath"]).exists():
@@ -1456,14 +1466,14 @@ def downloader_preview_endpoint(drama_id):
                         "episode": ep_num
                     })
 
-    # 2. Check if authentic video file exists in save location or imported folder
+    # 2. Check if authentic video file exists in save location specifically for THIS drama
     auth_src = find_authentic_episode_video(drama, ep_num)
     if auth_src and auth_src.exists():
         rel_or_abs = str(auth_src.resolve()).replace("\\", "/")
         return jsonify({
             "success": True,
             "video_url": f"/media/{rel_or_abs}",
-            "title": drama.get("title") if drama else "Hongguo Short Drama",
+            "title": drama.get("title") if drama else f"Episode {ep_num}",
             "poster": drama.get("poster") if drama else "posters/poster_sample_ceo.jpg",
             "episode": ep_num
         })
@@ -1503,23 +1513,21 @@ def downloader_preview_endpoint(drama_id):
                 "episode": ep_num
             })
 
-    # 3. If authentic live stream is available, provide direct stream URL for 9:16 preview
-    if drama_downloader.episodes:
-        for ep in drama_downloader.episodes:
+    # 3. Check / Resolve direct authentic live streams for THIS drama
+    target_eps = drama_downloader.episodes if is_same_drama else None
+    if not target_eps and drama:
+        try:
+            target_eps = get_drama_episodes(drama, resolve_streams=True)
+            if not is_same_drama and not drama_downloader.is_downloading:
+                drama_downloader.current_drama = drama
+                drama_downloader.episodes = target_eps
+        except Exception:
+            pass
+
+    if target_eps:
+        for ep in target_eps:
             if ep.get("episode_number") == ep_num or ep.get("episode_num") == ep_num:
                 s_url = ep.get("stream_url") or ep.get("download_url")
-                if (not s_url or not str(s_url).startswith("http")) and drama:
-                    try:
-                        res_eps = get_drama_episodes(drama, resolve_streams=True)
-                        if res_eps:
-                            for re_ep in res_eps:
-                                if re_ep.get("episode_number") == ep_num or re_ep.get("episode_num") == ep_num:
-                                    s_url = re_ep.get("stream_url") or re_ep.get("download_url")
-                                    ep["stream_url"] = s_url
-                                    ep["download_url"] = s_url
-                                    break
-                    except Exception:
-                        pass
                 if (not s_url or not str(s_url).startswith("http")) and ep.get("vid") and ep.get("series_id"):
                     s_url = get_hongguo_episode_real_stream_url(ep["series_id"], ep["vid"])
                     if s_url:
