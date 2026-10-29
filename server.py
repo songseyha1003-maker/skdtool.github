@@ -1714,6 +1714,51 @@ def downloader_status_endpoint():
     })
 
 
+
+_LAST_EXPLORER_OPEN_TIME = 0.0
+_LAST_EXPLORER_OPEN_PATH = ""
+
+def safe_open_explorer(target_path, highlight_file: bool = True) -> bool:
+    """Safely open Windows File Explorer with strict 3.5-second debounce cooldown to eliminate duplicate window spam."""
+    global _LAST_EXPLORER_OPEN_TIME, _LAST_EXPLORER_OPEN_PATH
+    import time
+    now = time.time()
+    try:
+        p = Path(target_path).resolve()
+    except Exception:
+        p = Path(target_path)
+    path_key = str(p).lower().replace("/", "\\")
+
+    # 3.5-second debounce window per folder/file path
+    if (now - _LAST_EXPLORER_OPEN_TIME < 3.5) and (_LAST_EXPLORER_OPEN_PATH == path_key):
+        return True
+
+    _LAST_EXPLORER_OPEN_TIME = now
+    _LAST_EXPLORER_OPEN_PATH = path_key
+
+    if sys.platform == "win32":
+        try:
+            import subprocess
+            if highlight_file and p.exists() and p.is_file():
+                subprocess.Popen(f'explorer.exe /select,"{str(p)}"', shell=True)
+            elif p.is_dir():
+                os.startfile(str(p))
+            else:
+                p.mkdir(parents=True, exist_ok=True)
+                os.startfile(str(p))
+            return True
+        except Exception:
+            return False
+    else:
+        try:
+            import subprocess
+            target_dir = p.parent if (p.exists() and p.is_file()) else p
+            subprocess.Popen(["xdg-open", str(target_dir)])
+            return True
+        except Exception:
+            return False
+
+
 @app.route("/api/downloader/open-folder", methods=["POST", "GET"])
 def downloader_open_folder_endpoint():
     """Open drama download folder directly in Windows File Explorer."""
@@ -1747,10 +1792,7 @@ def downloader_open_folder_endpoint():
 
     try:
         resolved_str = str(p.resolve()).replace("/", "\\")
-        if sys.platform == "win32":
-            os.startfile(resolved_str)
-        else:
-            subprocess.Popen(["xdg-open", resolved_str])
+        safe_open_explorer(p, highlight_file=False)
         return jsonify({"success": True, "path": resolved_str})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -2520,14 +2562,7 @@ def system_open_folder_endpoint():
         if not target_dir.exists():
             target_dir.mkdir(parents=True, exist_ok=True)
             
-        if sys.platform == "win32":
-            # If target is an existing file, reveal & highlight it directly in Windows Explorer
-            if p.exists() and p.is_file():
-                subprocess.Popen(["explorer.exe", f"/select,{str(p)}"])
-            else:
-                os.startfile(str(target_dir))
-        else:
-            subprocess.Popen(["xdg-open", str(target_dir)])
+        safe_open_explorer(p, highlight_file=True)
         return jsonify({"success": True, "path": str(target_dir).replace("\\", "/")})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -3339,27 +3374,12 @@ def open_project_folder_endpoint():
     from batch_engine import sanitize_export_path
     clean_target = sanitize_export_path(target_path) or target_path
 
-    if sys.platform == "win32":
-        try:
-            import subprocess
-            p = Path(clean_target).resolve()
-            if not p.exists() and Path(target_path).exists():
-                p = Path(target_path).resolve()
-            if p.is_file():
-                # Open Explorer and highlight the exact file!
-                subprocess.Popen(f'explorer.exe /select,"{str(p)}"', shell=True)
-                return jsonify({"success": True, "opened_path": str(p.parent), "selected_file": str(p)})
-            elif p.is_dir():
-                os.startfile(str(p))
-                return jsonify({"success": True, "opened_path": str(p)})
-            else:
-                # If neither exists yet, create parent directory and open
-                p.mkdir(parents=True, exist_ok=True)
-                os.startfile(str(p))
-                return jsonify({"success": True, "opened_path": str(p)})
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e)}), 500
-    return jsonify({"success": True, "opened_path": target_path})
+    p = Path(clean_target).resolve()
+    if not p.exists() and Path(target_path).exists():
+        p = Path(target_path).resolve()
+    ok = safe_open_explorer(p, highlight_file=True)
+    opened_dir = str(p.parent if p.is_file() else p)
+    return jsonify({"success": ok, "opened_path": opened_dir, "selected_file": str(p) if p.is_file() else None})
 
 
 @app.route("/api/projects/merge-episodes", methods=["POST"])

@@ -10353,8 +10353,13 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
 
         appendLiveTerminalLine(`Dubbing engine dispatched in background. Task ID: ${activeDubbingTaskId}`, "[Video 1/1]", "info");
 
+        let hasHandledAutoDubCompletion = false;
+        let isPollingAutoDub = false;
+
         if (activeDubbingPollTimer) clearInterval(activeDubbingPollTimer);
         activeDubbingPollTimer = setInterval(async () => {
+            if (isPollingAutoDub || hasHandledAutoDubCompletion) return;
+            isPollingAutoDub = true;
             elapsed += 1;
             try {
                 const sRes = await fetch(`/api/projects/auto-dub-status/${activeDubbingTaskId}`);
@@ -10422,6 +10427,8 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                 }
 
                 if (sData.status === "completed") {
+                    if (hasHandledAutoDubCompletion) return;
+                    hasHandledAutoDubCompletion = true;
                     clearInterval(activeDubbingPollTimer);
                     activeDubbingPollTimer = null;
                     activeDubbingTaskId = null;
@@ -10513,6 +10520,8 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                 }
             } catch (err) {
                 console.warn("Poll error:", err);
+            } finally {
+                isPollingAutoDub = false;
             }
         }, 1000);
 
@@ -11017,12 +11026,26 @@ function showDubbingSuccessNotification(data) {
     }
 }
 
+let lastOpenExportFolderTime = 0;
+let lastOpenExportFolderPath = "";
+
 async function openExportFolderDirect(targetPath) {
+    const now = Date.now();
+    let pathToOpen = targetPath || currentCustomExportFolder || '';
+    if (pathToOpen && typeof pathToOpen === 'string') {
+        pathToOpen = sanitizeExportFolderPath(pathToOpen) || pathToOpen;
+    }
+    const cleanKey = String(pathToOpen).trim().toLowerCase();
+
+    // 4-second strict client-side debounce to guarantee only ONE single Explorer window ever pops up
+    if ((now - lastOpenExportFolderTime < 4000) && (lastOpenExportFolderPath === cleanKey)) {
+        console.log("[Debounce] Suppressing duplicate Explorer open request:", pathToOpen);
+        return;
+    }
+    lastOpenExportFolderTime = now;
+    lastOpenExportFolderPath = cleanKey;
+
     try {
-        let pathToOpen = targetPath || currentCustomExportFolder || '';
-        if (pathToOpen && typeof pathToOpen === 'string') {
-            pathToOpen = sanitizeExportFolderPath(pathToOpen) || pathToOpen;
-        }
         const res = await fetch('/api/projects/open-folder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
