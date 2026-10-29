@@ -1479,13 +1479,9 @@ def downloader_preview_endpoint(drama_id):
         })
 
     # 2.5 Special handler for ShortMax preview video
-    is_shortmax = (drama and drama.get("platform_id") == "shortmax") or str(drama_id).startswith("shortmax_")
+    is_shortmax = (drama and (drama.get("platform_id") in ("shortmax", "shorttv") or str(drama_id).startswith("shortmax_") or str(drama_id).startswith("sm_")))
     if is_shortmax:
-        sp_id_str = str(drama_id).replace("shortmax_", "").strip()
-        try:
-            sp_id = int(sp_id_str)
-        except Exception:
-            sp_id = 0
+        sp_id = shortmax_service._extract_shortmax_id(drama)
         if sp_id:
             pv_path = shortmax_service.get_or_create_preview_video(sp_id, ep_num)
             if pv_path and pv_path.exists():
@@ -1515,42 +1511,220 @@ def downloader_preview_endpoint(drama_id):
 
     # 3. Check / Resolve direct authentic live streams for THIS drama
     target_eps = drama_downloader.episodes if is_same_drama else None
-    if not target_eps and drama:
-        try:
-            target_eps = get_drama_episodes(drama, resolve_streams=True)
-            if not is_same_drama and not drama_downloader.is_downloading:
-                drama_downloader.current_drama = drama
-                drama_downloader.episodes = target_eps
-        except Exception:
-            pass
 
+    # Check if requested episode already has an active stream URL
+    has_stream = False
     if target_eps:
         for ep in target_eps:
             if ep.get("episode_number") == ep_num or ep.get("episode_num") == ep_num:
-                s_url = ep.get("stream_url") or ep.get("download_url")
-                if (not s_url or not str(s_url).startswith("http")) and ep.get("vid") and ep.get("series_id"):
-                    s_url = get_hongguo_episode_real_stream_url(ep["series_id"], ep["vid"])
-                    if s_url:
-                        ep["stream_url"] = s_url
-                        ep["download_url"] = s_url
-                if s_url and str(s_url).startswith("http"):
-                    return jsonify({
-                        "success": True,
-                        "video_url": s_url,
-                        "stream_url": s_url,
-                        "is_live_stream": True,
-                        "title": ep.get("title") or (drama.get("title") if drama else f"Episode {ep_num}"),
-                        "poster": drama.get("poster") if drama else "posters/poster_sample_ceo.jpg",
-                        "episode": ep_num
-                    })
+                u = ep.get("stream_url") or ep.get("download_url") or ep.get("video_url")
+                if u and str(u).startswith("http"):
+                    has_stream = True
+                    break
+
+    # If stream is not yet resolved for this episode or this drama, resolve streams now!
+    if not has_stream and drama:
+        try:
+            resolved_eps = get_drama_episodes(drama, resolve_streams=True)
+            if resolved_eps:
+                stream_map = {e.get("episode_num") or e.get("episode_number"): e for e in resolved_eps}
+                if target_eps:
+                    for ep in target_eps:
+                        num = ep.get("episode_number") or ep.get("episode_num")
+                        if num in stream_map:
+                            res_e = stream_map[num]
+                            for k in ("stream_url", "download_url", "video_url", "master_stream_url", "is_master_full"):
+                                if res_e.get(k):
+                                    ep[k] = res_e[k]
+                else:
+                    target_eps = resolved_eps
+                    if not is_same_drama and not drama_downloader.is_downloading:
+                        drama_downloader.current_drama = drama
+                        drama_downloader.episodes = resolved_eps
+        except Exception as e:
+            print(f"[Preview Endpoint] Stream resolution error: {e}")
+
+    if target_eps:
+        # Build stream map of all resolved streams to send to client for instant subsequent clicks
+        resolved_stream_dict = {}
+        target_ep_obj = None
+        for ep in target_eps:
+            num = ep.get("episode_number") or ep.get("episode_num")
+            u = ep.get("video_url") or ep.get("stream_url") or ep.get("download_url")
+            if (not u or not str(u).startswith("http")) and ep.get("vid") and ep.get("series_id"):
+                real_u = get_hongguo_episode_real_stream_url(ep["series_id"], ep["vid"])
+                if real_u:
+                    ep["stream_url"] = real_u
+                    ep["download_url"] = real_u
+                    u = real_u
+            if num and u:
+                resolved_stream_dict[num] = u
+            if num == ep_num:
+                target_ep_obj = ep
+
+        s_url = resolved_stream_dict.get(ep_num)
+        is_master = False
+        if not s_url and resolved_stream_dict:
+            # Fallback to episode 1 or first available stream (e.g. Master Full Series Stream)
+            s_url = resolved_stream_dict.get(1) or next(iter(resolved_stream_dict.values()))
+            is_master = True
+
+        if s_url:
+            import urllib.parse
+            ep_title = target_ep_obj.get("title") if target_ep_obj else None
+            is_remote = str(s_url).startswith("http")
+            stream_playback_url = f"/api/downloader/stream-proxy?url={urllib.parse.quote(str(s_url))}" if is_remote else s_url
+            proxied_streams = {
+                n: (f"/api/downloader/stream-proxy?url={urllib.parse.quote(str(u))}" if str(u).startswith("http") else u)
+                for n, u in resolved_stream_dict.items()
+            }
+            return jsonify({
+                "success": True,
+                "video_url": stream_playback_url,
+                "stream_url": stream_playback_url,
+                "raw_stream_url": s_url,
+                "is_live_stream": is_remote,
+                "is_master_full": is_master or bool(target_ep_obj and target_ep_obj.get("is_master_full")),
+                "title": ep_title or (drama.get("title") if drama else f"Episode {ep_num}"),
+                "poster": drama.get("poster") if drama else "posters/poster_sample_ceo.jpg",
+                "episode": ep_num,
+                "resolved_streams": proxied_streams
+            })
 
     return jsonify({
         "success": False,
         "error": "no_video",
-        "message": f"Episode {ep_num} is not downloaded locally yet",
+        "message": f"Episode {ep_num} stream is currently unavailable",
         "poster": drama.get("poster") if drama else "posters/poster_sample_ceo.jpg",
         "episode": ep_num
     }), 404
+
+
+@app.route("/api/downloader/stream-proxy", methods=["GET"])
+def downloader_stream_proxy_endpoint():
+    """
+    High-performance CORS-free stream proxy for HLS (.m3u8) playlists and media segments.
+    Enables instant, zero-buffer preview for all drama CDN platforms (ReelShort, ShortMax, AnyReel, Hongguo).
+    """
+    raw_url = request.args.get("url", "").strip()
+    if not raw_url:
+        return "Missing URL", 400
+
+    import urllib.parse
+    import urllib.request
+    from flask import Response, stream_with_context
+
+    clean_url = urllib.parse.unquote(raw_url)
+    if not clean_url.startswith("http"):
+        return "Invalid URL scheme", 400
+
+    # Handle YouTube web links by resolving to direct media streams
+    if "youtube.com" in clean_url or "youtu.be" in clean_url:
+        try:
+            import yt_dlp
+            ydl_opts = {'quiet': True, 'no_warnings': True, 'socket_timeout': 5}
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                yt_info = ydl.extract_info(clean_url, download=False)
+                formats = yt_info.get('formats', [])
+                hls_format = next((f for f in formats if f.get('protocol') in ('m3u8_native', 'm3u8') and f.get('url')), None)
+                best_format = hls_format or next((f for f in formats if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('url')), None)
+                if best_format and best_format.get('url'):
+                    clean_url = best_format['url']
+        except Exception as yt_e:
+            print(f"[Stream Proxy] YouTube direct stream warning: {yt_e}")
+
+    # Determine intelligent anti-hotlink referer & origin per CDN platform
+    referer = "https://www.google.com/"
+    origin = None
+    if "shorttv.live" in clean_url or "shortmax" in clean_url:
+        referer = "https://www.shorttv.live/"
+        origin = "https://www.shorttv.live"
+    elif "crazymaplestudios.com" in clean_url or "reelshort" in clean_url:
+        referer = "https://www.reelshort.com/"
+        origin = "https://www.reelshort.com"
+    elif any(k in clean_url for k in ("hongguo", "byteimg", "snssdk", "bytedance", "toutiao")):
+        referer = "https://hongguoduanju.com/"
+    elif any(k in clean_url for k in ("bfllvip.com", "cdnlz", "modujx")):
+        referer = "https://www.google.com/"
+    else:
+        try:
+            p = urllib.parse.urlparse(clean_url)
+            referer = f"{p.scheme}://{p.netloc}/"
+        except Exception:
+            referer = "https://www.google.com/"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Referer": referer,
+        "Accept": "*/*"
+    }
+    if origin:
+        headers["Origin"] = origin
+
+    range_header = request.headers.get("Range")
+    if range_header:
+        headers["Range"] = range_header
+
+    try:
+        remote_resp = None
+        for attempt in range(2):
+            try:
+                req = urllib.request.Request(clean_url, headers=headers)
+                remote_resp = urllib.request.urlopen(req, timeout=12.0)
+                break
+            except Exception as net_err:
+                if attempt == 1:
+                    raise net_err
+                time.sleep(0.2)
+
+        content_type = remote_resp.headers.get("Content-Type", "")
+        is_m3u8 = (
+            ".m3u8" in clean_url.lower() or 
+            "mpegurl" in content_type.lower() or 
+            "application/x-mpegurl" in content_type.lower()
+        )
+
+        if is_m3u8:
+            raw_text = remote_resp.read().decode("utf-8", errors="ignore")
+            rewritten_lines = []
+            for line in raw_text.splitlines():
+                s = line.strip()
+                if s and not s.startswith("#"):
+                    full_target = urllib.parse.urljoin(clean_url, s)
+                    proxy_chunk_url = f"/api/downloader/stream-proxy?url={urllib.parse.quote(full_target)}"
+                    rewritten_lines.append(proxy_chunk_url)
+                else:
+                    rewritten_lines.append(line)
+            
+            output_body = "\r\n".join(rewritten_lines)
+            resp = Response(output_body, mimetype="application/vnd.apple.mpegurl")
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Headers"] = "*"
+            resp.headers["Cache-Control"] = "public, max-age=3600"
+            return resp
+
+        # Direct segment or binary stream
+        def generate():
+            while True:
+                chunk = remote_resp.read(64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+
+        resp = Response(stream_with_context(generate()), status=remote_resp.status)
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "*"
+        resp.headers["Content-Type"] = content_type or "video/MP2T"
+        
+        for h in ("Content-Length", "Content-Range", "Accept-Ranges"):
+            val = remote_resp.headers.get(h)
+            if val:
+                resp.headers[h] = val
+        return resp
+
+    except Exception as e:
+        print(f"[Stream Proxy Error] {e} for {clean_url[:80]}")
+        return jsonify({"error": str(e)}), 502
 
 
 @app.route("/api/downloader/import-folder", methods=["POST", "GET"])

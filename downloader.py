@@ -942,6 +942,18 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
                 if valid_cnt >= len(rs_eps) * 0.8:
                     drama["total_episodes"] = len(rs_eps)
                     return rs_eps
+                # Check if authentic direct ReelShort media stream (.m3u8/.mp4) already exists
+                first_direct = next((e["stream_url"] for e in rs_eps if e.get("stream_url") and (".m3u8" in e.get("stream_url", "") or ".mp4" in e.get("stream_url", ""))), "")
+                if first_direct:
+                    for e in rs_eps:
+                        if not e.get("stream_url"):
+                            e["stream_url"] = first_direct
+                            e["download_url"] = first_direct
+                            e["master_stream_url"] = first_direct
+                            e["is_master_full"] = True
+                    drama["total_episodes"] = len(rs_eps)
+                    return rs_eps
+
                 # Proactively resolve 1080p Master Stream for this ReelShort drama
                 rs_master = resolve_full_series_master_stream(raw_title, total_eps=len(rs_eps), drama_obj=drama)
                 if rs_master:
@@ -953,17 +965,6 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
                             e["is_master_full"] = True
                     drama["total_episodes"] = len(rs_eps)
                     return rs_eps
-                elif valid_cnt > 0:
-                    first_u = next((e["stream_url"] for e in rs_eps if e.get("stream_url")), "")
-                    if first_u:
-                        for e in rs_eps:
-                            e["master_stream_url"] = first_u
-                            if not e.get("stream_url"):
-                                e["stream_url"] = first_u
-                                e["download_url"] = first_u
-                                e["is_master_full"] = True
-                        drama["total_episodes"] = len(rs_eps)
-                        return rs_eps
         except Exception as rs_e:
             print(f"[ReelShort Resolver] Error: {rs_e}")
 
@@ -1003,9 +1004,21 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
         if drama_id in ai_cache:
             cached_ai_item = ai_cache[drama_id]
         else:
-            norm_t = normalize_drama_title(raw_title)
-            if norm_t and norm_t in ai_title_index:
-                cached_ai_item = ai_cache.get(ai_title_index[norm_t])
+            cand_titles = [raw_title, drama.get("title_cn"), drama.get("title"), drama.get("title_kh")]
+            for ct in cand_titles:
+                if not ct:
+                    continue
+                sub_cands = [ct]
+                m = re.search(r'《([^》]+)》', str(ct))
+                if m:
+                    sub_cands.append(m.group(1))
+                for sc in sub_cands:
+                    norm_t = normalize_drama_title(sc)
+                    if norm_t and norm_t in ai_title_index:
+                        cached_ai_item = ai_cache.get(ai_title_index[norm_t])
+                        break
+                if cached_ai_item:
+                    break
 
         if cached_ai_item and cached_ai_item.get("play_url"):
             parsed_eps = parse_vod_play_url(cached_ai_item["play_url"], "AI Stream Cluster")
@@ -1707,9 +1720,23 @@ def resolve_full_series_master_stream(drama_title: str, total_eps: int = 50, dra
         did = str(drama_obj.get("id") or "") if drama_obj else ""
         c_ai = ai_cache.get(did)
         if not c_ai:
-            norm_t = normalize_drama_title(clean_t)
-            if norm_t in ai_idx:
-                c_ai = ai_cache.get(ai_idx[norm_t])
+            candidates = [clean_t]
+            if drama_obj:
+                for fld in ("title_cn", "title", "title_kh"):
+                    v = drama_obj.get(fld)
+                    if v and v not in candidates:
+                        candidates.append(v)
+            for c in candidates:
+                m = re.search(r'《([^》]+)》', str(c))
+                sub_cands = [c]
+                if m: sub_cands.append(m.group(1))
+                for sc in sub_cands:
+                    norm_t = normalize_drama_title(sc)
+                    if norm_t and norm_t in ai_idx:
+                        c_ai = ai_cache.get(ai_idx[norm_t])
+                        break
+                if c_ai:
+                    break
         if c_ai and c_ai.get("play_url"):
             parsed = parse_vod_play_url(c_ai["play_url"], "AI Stream Cluster")
             if parsed:
@@ -1781,10 +1808,19 @@ def resolve_full_series_master_stream(drama_title: str, total_eps: int = 50, dra
                         is_long = dur >= 1200 # 20+ minutes full drama
                         # If authentic 20+ min drama movie with sim >= 0.65 or 10+ min with sim >= 0.80
                         if (sim >= 0.65 and is_long) or (sim >= 0.80 and dur >= 600):
-                            u = e.get("url")
-                            if u:
-                                _DRAMA_MASTER_STREAM_CACHE[cache_k] = u
-                                return u
+                            yt_watch = e.get("url")
+                            if yt_watch:
+                                try:
+                                    with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'socket_timeout': 5}) as direct_ydl:
+                                        yt_info = direct_ydl.extract_info(yt_watch, download=False)
+                                        formats = yt_info.get('formats', [])
+                                        hls_f = next((f for f in formats if f.get('protocol') in ('m3u8_native', 'm3u8') and f.get('url')), None)
+                                        direct_f = hls_f or next((f for f in formats if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('url')), None)
+                                        if direct_f and direct_f.get('url'):
+                                            _DRAMA_MASTER_STREAM_CACHE[cache_k] = direct_f['url']
+                                            return direct_f['url']
+                                except Exception:
+                                    pass
                 except Exception:
                     continue
     except Exception:
