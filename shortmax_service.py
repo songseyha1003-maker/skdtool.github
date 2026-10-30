@@ -163,7 +163,7 @@ def call_shortmax_api(endpoint: str, body: dict, lang: str = "en") -> Optional[D
                 if dec and dec.get('code') == 0:
                     return dec
         except Exception:
-            time.sleep(0.5)
+            time.sleep(0.2)
     return None
 
 
@@ -376,12 +376,12 @@ def _download_single_segment(args) -> Tuple[int, bytes]:
     req = urllib.request.Request(seg_url, headers=headers)
     for _ in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=15, context=_SSL_CTX) as resp:
+            with urllib.request.urlopen(req, timeout=10, context=_SSL_CTX) as resp:
                 raw_bytes = resp.read()
                 dec_bytes = decrypt_shortmax_ts_segment(raw_bytes, is_full="/hls-encrypted-full/" in seg_url)
                 return idx, dec_bytes
         except Exception:
-            time.sleep(0.5)
+            time.sleep(0.2)
     return idx, b''
 
 
@@ -496,7 +496,7 @@ def download_and_remux_shortmax_m3u8(
         total_segments = len(seg_urls)
         completed_segments = 0
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=16) as executor:
             for idx, dec_data in executor.map(_download_single_segment, tasks):
                 results[idx] = dec_data
                 completed_segments += 1

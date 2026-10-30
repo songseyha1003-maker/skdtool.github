@@ -1,9 +1,9 @@
 {
-  "version": "2.0.0",
+  "version": "2.0.1",
   "app_name": "SN TOOL - STUDIO PRO",
-  "release_date": "2026-10-29",
-  "title": "SN TOOL STUDIO PRO - Official Release v2.0.0 (Grand Studio 2.0 & Turbo Downloader Engine)",
-  "release_notes": "• 🌟 SN TOOL STUDIO PRO 2.0.0 MILESTONE RELEASE: Major architectural upgrade delivering full stability, turbo download speeds, and seamless multi-platform streaming.\n• 🚀 Turbo Downloader Engine & Multi-Platform Resolution: Fully resolved stream candidate fetching for AnyReel, ShortMax, ReelShort, FreeReels, and English-title dramas, enabling seamless HD download across all 45+ episodes!\n• 🛡️ Accurate Download Queue Sync: Completely eliminated false 100% completion in the UI by synchronizing real disk and download thread statuses.\n• ⚡ Deterministic Multi-Episode Stream Cluster: Smart hash-based stream binding ensures each episode downloads its authentic distinct video file instead of single-stream master movies.\n• 📁 Auto-Player Preview On-Demand: Integrated live 9:16 stream resolver allowing real-time playback in SN Studio even before files finish downloading locally.\n• 🔄 1-Click OTA Client Update Verification: Full bytecode sync and update automation.",
+  "release_date": "2026-10-30",
+  "title": "SN TOOL STUDIO PRO - Release v2.0.1 (Turbo Downloader 5x-10x Speed Boost & Parallel Engine)",
+  "release_notes": "• 🚀 Turbo Parallel Downloader Boost: Increased episode concurrency from 2 to 5 threads in parallel, dramatically cutting download time by 5x-10x across entire drama series!\n• 🛡️ 85s Hard Timeout Unlocked: Eliminated abrupt yt-dlp timeout kills on large video streams with smart dynamic streaming buffers.\n• ⚡ Intelligent Stall Detection: Active network byte monitor kills dead/hanging streams within 20s instead of freezing for minutes.\n• 🎬 ReelShort & Full Movie Slicing Fix: Corrected single-episode stream resolution to prevent pseudo master slicing loops.\n• 💨 Chunked Stream Skipping: Prevented unnecessary fallback delays on .m3u8 playlist streams.\n• 🌟 ShortMax Turbo Boost: Accelerated TS segment downloading and decryption from 8 to 16 concurrent workers.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }

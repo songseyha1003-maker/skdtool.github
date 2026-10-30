@@ -942,19 +942,8 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
                 if valid_cnt >= len(rs_eps) * 0.8:
                     drama["total_episodes"] = len(rs_eps)
                     return rs_eps
-                # Check if authentic direct ReelShort media stream (.m3u8/.mp4) already exists
-                first_direct = next((e["stream_url"] for e in rs_eps if e.get("stream_url") and (".m3u8" in e.get("stream_url", "") or ".mp4" in e.get("stream_url", ""))), "")
-                if first_direct:
-                    for e in rs_eps:
-                        if not e.get("stream_url"):
-                            e["stream_url"] = first_direct
-                            e["download_url"] = first_direct
-                            e["master_stream_url"] = first_direct
-                            e["is_master_full"] = True
-                    drama["total_episodes"] = len(rs_eps)
-                    return rs_eps
 
-                # Proactively resolve 1080p Master Stream for this ReelShort drama
+                # Proactively resolve authentic 1080p Master Stream for this ReelShort drama first
                 rs_master = resolve_full_series_master_stream(raw_title, total_eps=len(rs_eps), drama_obj=drama)
                 if rs_master:
                     for e in rs_eps:
@@ -963,6 +952,17 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
                             e["stream_url"] = rs_master
                             e["download_url"] = rs_master
                             e["is_master_full"] = True
+                    drama["total_episodes"] = len(rs_eps)
+                    return rs_eps
+
+                # Fallback: Populate preview stream for UI playback without falsely marking as master full
+                first_direct = next((e["stream_url"] for e in rs_eps if e.get("stream_url") and (".m3u8" in e.get("stream_url", "") or ".mp4" in e.get("stream_url", ""))), "")
+                if first_direct:
+                    for e in rs_eps:
+                        if not e.get("stream_url"):
+                            e["stream_url"] = first_direct
+                            e["download_url"] = first_direct
+                            e["preview_stream_url"] = first_direct
                     drama["total_episodes"] = len(rs_eps)
                     return rs_eps
         except Exception as rs_e:
@@ -1408,17 +1408,17 @@ def download_m3u8_stream_turbo(stream_url: str, dest_file: Path, timeout_sec: in
                 'paths': {'home': str(isolated_temp), 'temp': str(isolated_temp)},
                 'outtmpl': str(isolated_temp / f"{dest_file.stem}.%(ext)s"),
                 'concurrent_fragment_downloads': 16,
-                'retries': 5,
-                'fragment_retries': 5,
+                'retries': 3,
+                'fragment_retries': 3,
                 'skip_unavailable_fragments': True,
                 'nocheckcertificate': True,
-                'buffersize': 2097152,
-                'http_chunk_size': 20971520,
+                'buffersize': 1048576,
+                'http_chunk_size': 10485760,
                 'ffmpeg_location': ffmpeg_bin,
                 'merge_output_format': 'mp4',
                 'quiet': True,
                 'no_warnings': True,
-                'socket_timeout': 30,
+                'socket_timeout': 15,
                 'http_headers': {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Accept': '*/*',
@@ -1429,7 +1429,8 @@ def download_m3u8_stream_turbo(stream_url: str, dest_file: Path, timeout_sec: in
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 with ThreadPoolExecutor(max_workers=1) as ydl_pool:
                     ydl_fut = ydl_pool.submit(ydl.download, [stream_url])
-                    ydl_fut.result(timeout=min(timeout_sec, 85))
+                    effective_timeout = max(int(timeout_sec or 180), 180)
+                    ydl_fut.result(timeout=effective_timeout)
 
             cand_files = [c for c in isolated_temp.glob(f"{dest_file.stem}*") if c.is_file() and c.stat().st_size > 100000 and not any(x in c.name for x in [".part", ".ytdl", ".tmp"])]
             if cand_files:
@@ -1461,8 +1462,26 @@ def download_m3u8_stream_turbo(stream_url: str, dest_file: Path, timeout_sec: in
             ]
             proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **silent_kw)
             start_t = time.time()
+            last_sz = 0
+            last_growth_t = time.time()
+            max_ff_timeout = max(int(timeout_sec or 180), 180)
+
             while proc.poll() is None:
-                if time.time() - start_t > timeout_sec:
+                now = time.time()
+                cur_sz = temp_ffmpeg_out.stat().st_size if temp_ffmpeg_out.exists() else 0
+                if cur_sz > last_sz:
+                    last_sz = cur_sz
+                    last_growth_t = now
+
+                # Fast fail-over if connection stalled for > 20s without byte growth
+                if (now - last_growth_t > 20.0) and cur_sz > 0:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                    break
+
+                if now - start_t > max_ff_timeout:
                     try:
                         proc.kill()
                     except Exception:
@@ -1511,6 +1530,8 @@ def download_stream_turbo_chunked(stream_url: str, dest_file: Path, timeout_sec:
     Achieves 5MB-15MB/s download speed per episode with zero folder pollution.
     """
     if not stream_url or not stream_url.startswith("http"):
+        return False
+    if ".m3u8" in stream_url.lower():
         return False
     dest_file = Path(dest_file)
     dest_file.parent.mkdir(parents=True, exist_ok=True)
@@ -2966,7 +2987,7 @@ class DramaDownloadManager:
                                 sid,
                                 v_batch,
                                 drama_dest_dir,
-                                concurrency=2,
+                                concurrency=4,
                                 quality="1080p",
                                 log_callback=self.add_log
                             )
@@ -3172,8 +3193,9 @@ class DramaDownloadManager:
                         return False
                     success = download_m3u8_stream_turbo(attempt_url, dest_file, timeout_sec=180, progress_callback=single_ep_hook)
                     if not success or not dest_file.exists() or dest_file.stat().st_size < 1000000:
-                        # Resilient fallback: Try direct chunked streaming if m3u8 engine was blocked or timed out
-                        success = download_stream_turbo_chunked(attempt_url, dest_file, timeout_sec=90, progress_callback=single_ep_hook)
+                        # Resilient fallback: Try direct chunked streaming ONLY if not m3u8 (mp4/ts/etc.)
+                        if ".m3u8" not in attempt_url.lower():
+                            success = download_stream_turbo_chunked(attempt_url, dest_file, timeout_sec=60, progress_callback=single_ep_hook)
                     if success and dest_file.exists() and dest_file.stat().st_size > 1000000:
                         sz_mb = dest_file.stat().st_size / (1024 * 1024)
                         with self._lock:
@@ -3403,7 +3425,7 @@ class DramaDownloadManager:
                             if target_title:
                                 norm_target = clean_drama_title_for_comparison(target_title)
                                 if len(norm_target) >= 4:
-                                    cands, _ = hongguo_db.query_dramas(query=norm_target, limit=6)
+                                    cands, _ = hongguo_db.query_dramas(query=norm_target, limit=3)
                                     cur_id = self.current_drama.get("id", "") if self.current_drama else ""
                                     for cand_d in cands:
                                         if cand_d.get("id") == cur_id:
@@ -3604,8 +3626,8 @@ class DramaDownloadManager:
                         ep["progress"] = max(5, ep.get("progress", 0))
                     self._recalc_progress(selected_eps)
 
-                # Download this batch (max 2 concurrent threads to prevent PC freezing/lag)
-                max_w = min(2, len(pending_eps))
+                # Download this batch in parallel (Turbo Batch Engine: 5 concurrent threads)
+                max_w = min(5, len(pending_eps))
                 with ThreadPoolExecutor(max_workers=max_w) as pool:
                     futs = [pool.submit(download_single_ep, idx, ep, total) for idx, ep in enumerate(pending_eps)]
                     for f in as_completed(futs):
