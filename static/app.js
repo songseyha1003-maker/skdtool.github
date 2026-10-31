@@ -11801,12 +11801,15 @@ async function checkForAppUpdates(manual = false) {
             openModal('modal-update');
             if (manual) showToast(`New version available: v${latVer}`);
         } else {
-            // Already on latest official build: Do NOT pop up modal! Only log to Studio Processing & Activity Console!
-            if (badgeText) badgeText.textContent = "LATEST OFFICIAL BUILD";
-            if (subtitle) subtitle.textContent = `Official release notes and feature highlights for SN Tool Studio Pro (v${curVer}):`;
-            if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-rotate"></i> <span id="btn-do-update-text">Reinstall / Update (v${curVer})</span>`;
+            // Already on latest official build:
+            // When checked automatically on boot (manual = false), stay quiet.
+            // When user explicitly clicks the update icon (manual = true), open modal to allow updating/syncing the latest patch for v${curVer}!
+            if (badgeText) badgeText.textContent = "LATEST OFFICIAL BUILD & PATCH";
+            if (subtitle) subtitle.textContent = `Official release v${curVer} is active. Click below to sync and re-apply the latest patch fixes and engine improvements:`;
+            if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> <span id="btn-do-update-text">Update / Sync Now (v${curVer})</span>`;
             if (manual) {
-                showToast(`SN Tool Studio Pro v${curVer} is up to date!`);
+                openModal('modal-update');
+                showToast(`SN Tool v${curVer} patch ready to sync!`);
             }
         }
     } catch (err) {

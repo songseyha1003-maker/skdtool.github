@@ -1,9 +1,9 @@
 {
   "version": "2.0.1",
   "app_name": "SN TOOL - STUDIO PRO",
-  "release_date": "2026-10-30",
+  "release_date": "2026-10-31",
   "title": "SN TOOL STUDIO PRO - Release v2.0.1 (Turbo Downloader 5x-10x Speed Boost & Parallel Engine)",
-  "release_notes": "• 🚀 Turbo Parallel Downloader Boost: Increased episode concurrency from 2 to 5 threads in parallel, dramatically cutting download time by 5x-10x across entire drama series!\n• 🛡️ 85s Hard Timeout Unlocked: Eliminated abrupt yt-dlp timeout kills on large video streams with smart dynamic streaming buffers.\n• ⚡ Intelligent Stall Detection: Active network byte monitor kills dead/hanging streams within 20s instead of freezing for minutes.\n• 🎬 ReelShort & Full Movie Slicing Fix: Corrected single-episode stream resolution to prevent pseudo master slicing loops.\n• 💨 Chunked Stream Skipping: Prevented unnecessary fallback delays on .m3u8 playlist streams.\n• 🌟 ShortMax Turbo Boost: Accelerated TS segment downloading and decryption from 8 to 16 concurrent workers.",
+  "release_notes": "• 🚀 Turbo Parallel Downloader Boost: Increased episode concurrency from 2 to 5 threads in parallel, dramatically cutting download time by 5x-10x across entire drama series!\n• 🧹 Clean Temp Isolation: Downloader temporary folders are strictly kept in system temp, leaving drama folders 100% pristine.\n• 🎬 Full Movie Merged Clean Mode: When exporting Full Movie Merged, all separate episodes are automatically cleaned so strictly 1 full movie video remains.\n• 🛡️ 85s Hard Timeout Unlocked: Eliminated abrupt yt-dlp timeout kills on large video streams with smart dynamic streaming buffers.\n• ⚡ Intelligent Stall Detection: Active network byte monitor kills dead/hanging streams within 20s instead of freezing for minutes.\n• 🎬 ReelShort & Full Movie Slicing Fix: Corrected single-episode stream resolution to prevent pseudo master slicing loops.\n• 💨 Chunked Stream Skipping: Prevented unnecessary fallback delays on .m3u8 playlist streams.\n• 🌟 ShortMax Turbo Boost: Accelerated TS segment downloading and decryption from 8 to 16 concurrent workers.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }
