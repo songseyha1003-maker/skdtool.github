@@ -148,41 +148,22 @@ def safe_atomic_move(src: Path, dst: Path, max_retries: int = 5, retry_delay: fl
 
 def get_safe_isolated_temp(target_dest: Path) -> Path:
     """
-    Creates an isolated temporary folder on the SAME VOLUME/DRIVE as target_dest.
-    Major Benefits:
-    1. Zero bytes consumed from Disk C during download.
-    2. Atomic, instant file move (0.001s) on the same drive - completely eliminates 95% remux hang.
-    3. Prevents cross-drive permission locks and Windows Defender SmartScreen blocks.
+    Creates an isolated temporary folder strictly inside the OS-managed %TEMP% directory.
+    Guarantees:
+    1. Zero visible temporary folders in user drama directories (e.g. SN_Dramas).
+    2. Pristine user folder containing ONLY the drama poster and episode MP4 files.
+    3. Fully isolated, multi-threaded safe temporary workspace per download worker.
     """
-    target_dest = Path(target_dest)
-    target_dir = target_dest.parent if target_dest.suffix else target_dest
     sub_id = f"turbo_{uuid.uuid4().hex[:8]}"
-
-    # Attempt 1: Subfolder in the target folder's parent or target folder itself
-    for candidate_root in [target_dir.parent / ".sn_download_tmp", target_dir / ".sn_download_tmp"]:
-        try:
-            candidate_root.mkdir(parents=True, exist_ok=True)
-            test_f = candidate_root / f".p_{os.getpid()}_{uuid.uuid4().hex[:4]}"
-            test_f.write_text("ok", encoding="utf-8")
-            test_f.unlink(missing_ok=True)
-
-            try:
-                usage = shutil.disk_usage(str(candidate_root))
-                if usage.free > 300 * 1024 * 1024:
-                    sub_d = candidate_root / sub_id
-                    sub_d.mkdir(parents=True, exist_ok=True)
-                    return sub_d
-            except Exception:
-                sub_d = candidate_root / sub_id
-                sub_d.mkdir(parents=True, exist_ok=True)
-                return sub_d
-        except Exception:
-            continue
-
-    # Attempt 2: Fallback to system %TEMP%
     sys_temp = Path(tempfile.gettempdir()) / "sn_download_tmp" / sub_id
-    sys_temp.mkdir(parents=True, exist_ok=True)
-    return sys_temp
+    try:
+        sys_temp.mkdir(parents=True, exist_ok=True)
+        return sys_temp
+    except Exception:
+        # Resilient fallback to local app cache if system temp is restricted
+        app_cache_temp = Path(__file__).resolve().parent / "cache" / "download_tmp" / sub_id
+        app_cache_temp.mkdir(parents=True, exist_ok=True)
+        return app_cache_temp
 
 
 def resolve_safe_save_location(save_location: Optional[str] = None) -> Path:
@@ -1312,6 +1293,12 @@ def clean_stray_download_artifacts(dest_dir: Path):
     try:
         if dest_dir.is_file():
             dest_dir = dest_dir.parent
+
+        # Purge any lingering .sn_download_tmp in parent folder or drama folder
+        for tmp_dir in [dest_dir.parent / ".sn_download_tmp", dest_dir / ".sn_download_tmp"]:
+            if tmp_dir.exists():
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+
         for item in list(dest_dir.iterdir()):
             if item.is_dir():
                 if any(x in item.name.lower() for x in [".tmp", "tmp", "temp", "part", "frag"]):
