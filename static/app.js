@@ -3648,9 +3648,10 @@ async function confirmAndExecuteExport() {
         const exportBtn = document.getElementById('btn-tab-export');
         if (exportBtn) exportBtn.classList.remove('export-ready-pulse');
 
-        // If user chose full movie merged or both, and sibling episodes were detected in directory
-        if ((chosenMode === 'full' || chosenMode === 'both') && siblings && siblings.length > 1) {
-            showToast(`Auto-combining all ${siblings.length} episodes from "${folderTitle}" into full movie...`);
+        // If sibling episodes were detected in directory, process all episodes based on chosenMode
+        if (siblings && siblings.length > 1) {
+            const modeDesc = (chosenMode === 'full') ? 'Full Movie Merged' : ((chosenMode === 'both') ? 'Both Episodes & Full Movie' : 'Separate Episodes');
+            showToast(`Exporting all ${siblings.length} episodes from "${folderTitle}" (${modeDesc})...`);
             startStudioBatchDubbingPipeline(siblings, chosenMode);
             return;
         }
@@ -11026,7 +11027,7 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
         appendLiveTerminalLine(`Export Mode: "${outputMode.toUpperCase()}" ➜ Concat/Merging all ${completedProjects.length} episodes into One Full Video...`, "[Full Movie Merge]", "info");
         updateExportProgressUI(96, totalElapsedSeconds, 30, `Merging ${completedProjects.length} episodes into Full Movie...`);
 
-        const videoPaths = completedProjects.map(p => p.output_video_file || p.output_file).filter(Boolean);
+        const videoPaths = completedProjects.map(p => p.final_exported_video_path || p.output_video_file || p.output_file).filter(Boolean);
         let seriesTitle = "Drama_Series";
         if (files && files[0]) {
             const f0Name = getMediaFileName(files[0]);
@@ -11041,13 +11042,18 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                 body: JSON.stringify({
                     video_paths: videoPaths,
                     series_title: seriesTitle,
-                    custom_export_dir: currentCustomExportFolder || defaultDramaExportFolder || undefined
+                    custom_export_dir: currentCustomExportFolder || defaultDramaExportFolder || undefined,
+                    cleanup_separate_episodes: (outputMode === 'full')
                 })
             });
             const mData = await mRes.json();
             if (mData.success) {
                 appendLiveTerminalLine(`✓ Full Movie merged successfully: "${mData.merged_filename}"`, "[Full Movie Merge]", "success");
                 showToast(`Full movie merged successfully: ${mData.merged_filename}`);
+
+                if (outputMode === 'full') {
+                    appendLiveTerminalLine(`✓ Strict "Full Movie Merged" mode: purged intermediate separate episodes. Output folder contains strictly 1 Full Movie video!`, "[Full Movie Merge]", "success");
+                }
 
                 const mainVideo = document.getElementById('main-video');
                 if (mainVideo && mData.video_url) {
@@ -11100,10 +11106,13 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
 
     // Show success notification banner
     if (completedProjects.length > 0) {
+        const lastProject = (outputMode === 'full' && currentDubbedProject) ? currentDubbedProject : completedProjects[completedProjects.length - 1];
         showDubbingSuccessNotification({
-            project: completedProjects[completedProjects.length - 1],
-            batch_count: completedProjects.length,
-            total_count: totalBatchCount
+            project: lastProject,
+            batch_count: (outputMode === 'full') ? 1 : completedProjects.length,
+            total_count: (outputMode === 'full') ? 1 : totalBatchCount,
+            final_exported_filename: (outputMode === 'full' && currentDubbedProject && currentDubbedProject.merged_filename) ? currentDubbedProject.merged_filename : undefined,
+            final_exported_video_path: (outputMode === 'full' && currentDubbedProject && currentDubbedProject.output_video_file) ? currentDubbedProject.output_video_file : undefined
         });
     }
 }

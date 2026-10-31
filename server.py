@@ -3562,6 +3562,7 @@ def merge_episodes_endpoint():
     data = request.get_json(force=True) or {}
     video_paths = data.get("video_paths", [])
     series_title = data.get("series_title", "Drama_Series")
+    cleanup_separate = bool(data.get("cleanup_separate_episodes") or data.get("full_movie_only") or data.get("delete_episodes"))
 
     clean_title = re.sub(r'^(?:Dubbed_)+', '', str(series_title), flags=re.IGNORECASE)
     clean_title = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', clean_title).strip('_ ')
@@ -3621,12 +3622,44 @@ def merge_episodes_endpoint():
     try:
         from video_processor import merge_videos
         final_path = merge_videos(resolved_paths, str(out_file), auto_trim_freeze=True)
+        final_p = Path(final_path).resolve()
+
+        # If user strictly requested "Full Movie Merged", clean up intermediate separate episodes!
+        cleaned_separate_count = 0
+        if cleanup_separate and final_p.exists() and final_p.stat().st_size > 10000:
+            for rp in resolved_paths:
+                try:
+                    p_rp = Path(rp).resolve()
+                    if p_rp != final_p and p_rp.exists():
+                        p_rp.unlink(missing_ok=True)
+                        cleaned_separate_count += 1
+                except Exception as ce:
+                    print(f"Cleanup error for {rp}: {ce}")
+
+            # Check destination directory and purge any separate episode files (Dubbed_EP_*.mp4)
+            out_parent = final_p.parent
+            if out_parent.exists():
+                for ep_cand in list(out_parent.glob("Dubbed_*.mp4")):
+                    if ep_cand.resolve() != final_p and "_Full_Movie" not in ep_cand.name:
+                        try:
+                            ep_cand.unlink(missing_ok=True)
+                            cleaned_separate_count += 1
+                        except Exception:
+                            pass
+                for srt_cand in list(out_parent.glob("Dubbed_*.srt")):
+                    if srt_cand.resolve() != final_p.with_suffix(".srt").resolve() and "_Full_Movie" not in srt_cand.name:
+                        try:
+                            srt_cand.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+
         play_windows_completion_sound()
         return jsonify({
             "success": True,
             "merged_path": str(final_path),
             "merged_filename": output_filename,
-            "video_url": f"/media/{str(final_path).replace('\\', '/')}"
+            "video_url": f"/media/{str(final_path).replace('\\', '/')}",
+            "cleaned_separate_count": cleaned_separate_count
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
