@@ -656,11 +656,44 @@ def unrevoke_license_key(target_key: str) -> Tuple[bool, str]:
     return True, f"✅ Successfully unbanned Key {cleaned}!"
 
 
+DELETED_KEYS_FILE = Path("data/deleted_keys.json")
+
+def get_deleted_keys() -> set:
+    candidates = [
+        DELETED_KEYS_FILE,
+        Path("deleted_keys.json"),
+        resolve_file_path("data/deleted_keys.json"),
+        resolve_file_path("deleted_keys.json")
+    ]
+    for c in candidates:
+        if c.exists():
+            try:
+                with open(c, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        return set(k.strip().upper() for k in data if k)
+            except Exception:
+                pass
+    return set()
+
+def record_deleted_key(key: str):
+    keys = get_deleted_keys()
+    cleaned = key.strip().upper()
+    if cleaned:
+        keys.add(cleaned)
+        try:
+            DELETED_KEYS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(DELETED_KEYS_FILE, "w", encoding="utf-8") as f:
+                json.dump(list(keys), f, indent=2)
+        except Exception:
+            pass
+
 def delete_license_key_record(target_key: str) -> Tuple[bool, str]:
     """Delete a key record completely from history, custom keys, and revocations."""
     cleaned = target_key.strip().upper()
     if not cleaned:
         return False, "Please select Key to delete"
+    record_deleted_key(cleaned)
 
     # Remove from admin_key_history.json
     if ADMIN_HISTORY_FILE.exists():
@@ -1258,6 +1291,7 @@ def sync_and_load_admin_history() -> List[Dict[str, Any]]:
     """
     history: List[Dict[str, Any]] = []
     seen_keys = set()
+    deleted_keys = get_deleted_keys()
 
     if ADMIN_HISTORY_FILE.exists():
         try:
@@ -1266,7 +1300,7 @@ def sync_and_load_admin_history() -> List[Dict[str, Any]]:
                 if isinstance(raw_hist, list):
                     for r in raw_hist:
                         k = r.get("license_key", "").strip().upper()
-                        if k and k not in seen_keys:
+                        if k and k not in seen_keys and k not in deleted_keys:
                             history.append(r)
                             seen_keys.add(k)
         except Exception:
@@ -1305,8 +1339,8 @@ def sync_and_load_admin_history() -> List[Dict[str, Any]]:
 
         # Also add any new users recorded in Cloud Heartbeat that were not previously in history
         for k, hb in cloud_heartbeats.items():
-            if k not in seen_keys and k.strip().upper():
-                cleaned_k = k.strip().upper()
+            cleaned_k = k.strip().upper()
+            if cleaned_k and cleaned_k not in seen_keys and cleaned_k not in deleted_keys:
                 new_entry = {
                     "license_key": cleaned_k,
                     "client_name": hb.get("client_name") or "User",

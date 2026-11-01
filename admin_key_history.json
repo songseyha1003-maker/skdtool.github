@@ -41,31 +41,5 @@
     "signature": "578382",
     "status": "ACTIVE",
     "last_renewed": "2026-10-21 16:55:13"
-  },
-  {
-    "license_key": "SN-TEST-KEY-001",
-    "client_name": "Test Client",
-    "plan": "PRO",
-    "created_at": "2026-11-01 14:05:55",
-    "expires_at": "LIFETIME",
-    "expiry_timestamp": 0,
-    "bound_hwid": "HWID-TEST-12345",
-    "last_active": "2026-11-01 14:05:55",
-    "use_count": 1,
-    "last_active_hwid": "HWID-TEST-12345",
-    "status": "ACTIVE"
-  },
-  {
-    "license_key": "SN-BRAND-NEW-KEY-999",
-    "client_name": "New Customer A",
-    "plan": "PRO",
-    "created_at": "2026-11-01 14:14:54",
-    "expires_at": "LIFETIME",
-    "expiry_timestamp": 0,
-    "bound_hwid": "CLIENT-PC-NEW-HWID",
-    "last_active": "2026-11-01 14:14:54",
-    "use_count": 1,
-    "last_active_hwid": "CLIENT-PC-NEW-HWID",
-    "status": "ACTIVE"
   }
 ]
