@@ -102,6 +102,12 @@ def admin_generate_key():
     else:
         record = generate_license_key(client_name=client_name, duration_days=duration_days, hwid=hwid, plan=plan)
 
+    # Immediately push to GitHub registry so remote users can verify instantly
+    try:
+        push_online_registry_async()
+    except Exception:
+        pass
+
     enriched = calculate_key_live_status(record)
     return jsonify({"success": True, "key_record": enriched})
 
@@ -116,6 +122,10 @@ def admin_custom_key():
     hwid = data.get("hwid") or None
     plan = data.get("plan", "CUSTOM")
     rec = register_custom_key(custom_key, client_name, duration_days, hwid, plan)
+    try:
+        push_online_registry_async()
+    except Exception:
+        pass
     enriched = calculate_key_live_status(rec)
     return jsonify({"success": True, "key_record": enriched})
 

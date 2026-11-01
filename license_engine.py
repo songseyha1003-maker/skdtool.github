@@ -1152,21 +1152,27 @@ def calculate_key_live_status(key_record: Dict[str, Any]) -> Dict[str, Any]:
     return rec
 
 
+DEFAULT_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwryQfTL5KD0w3ROhqR62o-asrCCT24GlU1X1mqpX9h-l7YPKUZd8SsNJCD91kYpFgi/exec"
+
 def get_heartbeat_config() -> Dict[str, Any]:
-    """Load Cloud Telemetry & Heartbeat configuration."""
+    """Load Cloud Telemetry & Heartbeat configuration with built-in default fallback."""
     candidates = [
         HEARTBEAT_CONFIG_FILE,
         Path("heartbeat_config.json"),
-        Path(__file__).resolve().parent / "data" / "heartbeat_config.json"
+        Path(__file__).resolve().parent / "data" / "heartbeat_config.json",
+        resolve_file_path("data/heartbeat_config.json"),
+        resolve_file_path("heartbeat_config.json")
     ]
     for c in candidates:
         if c.exists():
             try:
                 with open(c, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    cfg = json.load(f)
+                    if isinstance(cfg, dict) and cfg.get("webhook_url"):
+                        return cfg
             except Exception:
                 pass
-    return {"enabled": True, "webhook_url": ""}
+    return {"enabled": True, "webhook_url": DEFAULT_WEBHOOK_URL}
 
 
 def save_heartbeat_config(cfg: Dict[str, Any]) -> bool:
@@ -1294,6 +1300,28 @@ def sync_and_load_admin_history() -> List[Dict[str, Any]]:
                     r["use_count"] = max(int(r.get("use_count", 0)), int(hb.get("use_count", 0)))
                 if hb.get("hwid") and hb["hwid"] not in ("ANY", ""):
                     r["last_active_hwid"] = hb["hwid"]
+                if hb.get("client_name") and not r.get("client_name"):
+                    r["client_name"] = hb["client_name"]
+
+        # Also add any new users recorded in Cloud Heartbeat that were not previously in history
+        for k, hb in cloud_heartbeats.items():
+            if k not in seen_keys and k.strip().upper():
+                cleaned_k = k.strip().upper()
+                new_entry = {
+                    "license_key": cleaned_k,
+                    "client_name": hb.get("client_name") or "User",
+                    "plan": "PRO",
+                    "created_at": hb.get("last_active", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                    "expires_at": "LIFETIME",
+                    "expiry_timestamp": 0,
+                    "bound_hwid": hb.get("hwid") or "ANY",
+                    "last_active": hb.get("last_active", "Never"),
+                    "use_count": int(hb.get("use_count", 0)),
+                    "last_active_hwid": hb.get("hwid", ""),
+                    "status": "ACTIVE"
+                }
+                history.append(new_entry)
+                seen_keys.add(cleaned_k)
 
     # Save consolidated back to ADMIN_HISTORY_FILE
     try:
@@ -1307,12 +1335,22 @@ def sync_and_load_admin_history() -> List[Dict[str, Any]]:
     return enriched
 
 
-def touch_license_activity(license_key: str, hwid: Optional[str] = None):
+def touch_license_activity(license_key: str, hwid: Optional[str] = None, client_name: Optional[str] = None):
     """Update last active timestamp and usage count when client uses the application."""
     if not license_key:
         return
     cleaned_key = license_key.strip().upper()
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if not client_name:
+        try:
+            lic_file = resolve_file_path("license.key")
+            if lic_file.exists():
+                with open(lic_file, "r", encoding="utf-8") as f:
+                    lic_data = json.load(f)
+                    client_name = lic_data.get("client_name")
+        except Exception:
+            pass
 
     # Update in ADMIN_HISTORY_FILE
     if ADMIN_HISTORY_FILE.exists():
@@ -1324,6 +1362,8 @@ def touch_license_activity(license_key: str, hwid: Optional[str] = None):
                 if r.get("license_key", "").strip().upper() == cleaned_key:
                     r["last_active"] = now_str
                     r["use_count"] = int(r.get("use_count", 0)) + 1
+                    if client_name and not r.get("client_name"):
+                        r["client_name"] = client_name
                     if hwid and hwid not in ("ANY", ""):
                         r["last_active_hwid"] = hwid
                     changed = True
@@ -1335,7 +1375,7 @@ def touch_license_activity(license_key: str, hwid: Optional[str] = None):
             pass
 
     # Fire background Cloud Heartbeat ping
-    send_cloud_heartbeat_async(cleaned_key, hwid=hwid)
+    send_cloud_heartbeat_async(cleaned_key, hwid=hwid, client_name=client_name)
 
 
 def verify_license_key(input_key: str, current_hwid: Optional[str] = None) -> Tuple[bool, str, Dict[str, Any]]:
@@ -1550,6 +1590,8 @@ def activate_license_on_device(license_key: str, client_name: Optional[str] = No
         except Exception:
             pass
 
+    # Fire immediate Cloud Heartbeat on new device activation
+    send_cloud_heartbeat_async(cleaned_key, hwid=current_hwid, client_name=final_client_name)
     return True, f"🎉 License Key activated successfully! Welcome {final_client_name}!", data_to_save
 
 
