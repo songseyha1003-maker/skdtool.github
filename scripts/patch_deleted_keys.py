@@ -105,3 +105,4 @@ def record_deleted_key(key: str):
 
 if __name__ == "__main__":
     patch_deleted_keys_support()
+

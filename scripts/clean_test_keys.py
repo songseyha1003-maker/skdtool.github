@@ -40,3 +40,4 @@ def clean_test_users():
 
 if __name__ == "__main__":
     clean_test_users()
+

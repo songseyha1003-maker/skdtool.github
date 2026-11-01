@@ -48,7 +48,8 @@ from license_engine import (
     CUSTOM_KEYS_FILE,
     REVOKED_KEYS_FILE,
     get_heartbeat_config,
-    save_heartbeat_config
+    save_heartbeat_config,
+    push_all_to_cloud_sheet
 )
 
 admin_app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
@@ -241,6 +242,24 @@ def admin_test_heartbeat():
             })
     except Exception as e:
         return jsonify({"success": False, "error": f"Connection test failed: {e}"}), 500
+
+
+
+@admin_app.route("/api/admin/cloud-sync-push", methods=["POST"])
+def admin_cloud_sync_push():
+    ok, msg, count = push_all_to_cloud_sheet()
+    return jsonify({"success": ok, "message": msg, "count": count})
+
+
+@admin_app.route("/api/admin/cloud-sync-pull", methods=["POST"])
+def admin_cloud_sync_pull():
+    records = sync_and_load_admin_history()
+    return jsonify({
+        "success": True,
+        "message": f"Successfully synchronized {len(records)} records from Cloud Sheet!",
+        "count": len(records),
+        "records": records
+    })
 
 ADMIN_PORT = 8888
 ADMIN_URL = f"http://127.0.0.1:{ADMIN_PORT}/admin"

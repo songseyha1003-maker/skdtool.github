@@ -237,3 +237,4 @@ def get_heartbeat_config() -> Dict[str, Any]:
 
 if __name__ == "__main__":
     update_files()
+

@@ -1779,6 +1779,9 @@
                     </div>
 
                     <div class="page-actions-group">
+                        <button type="button" class="btn-action-light" id="btn-cloud-sync" onclick="handleCloudSync()" style="color:#2563eb; border-color:#bfdbfe; font-weight:700;" title="Push all customers and pull latest usage from Google Sheet">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Sync Google Sheet
+                        </button>
                         <button type="button" class="btn-action-light" onclick="fetchKeysHistory()">
                             <i class="fa-solid fa-rotate-right"></i> Refresh
                         </button>
@@ -2367,6 +2370,12 @@
                                 </button>
                                 <button type="button" class="btn-action-light" onclick="handleTestHeartbeat()" style="white-space:nowrap; padding: 10px 16px;">
                                     <i class="fa-solid fa-satellite-dish"></i> Test Connection
+                                <button type="button" class="btn-action-light" onclick="handleCloudPush()" style="white-space:nowrap; padding: 10px 16px; color:#16a34a; font-weight:700; border-color:#bbf7d0;">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i> Push to Google Sheet
+                                </button>
+                                <button type="button" class="btn-action-light" onclick="handleCloudPull()" style="white-space:nowrap; padding: 10px 16px; color:#2563eb; font-weight:700; border-color:#bfdbfe;">
+                                    <i class="fa-solid fa-cloud-arrow-down"></i> Pull from Google Sheet
+                                </button>
                                 </button>
                             </div>
                         </div>
@@ -3422,20 +3431,33 @@ Welcome to SN TOOL - STUDIO PRO Official ✨
         // ==========================================================================
         // 🛰️ CLOUD TELEMETRY & HEARTBEAT SYNC MANAGER
         // ==========================================================================
-        const GOOGLE_APPS_SCRIPT_TEMPLATE = `// SN TOOL - Cloud Telemetry & Heartbeat Webhook
-// Automatically logs client activity and syncs with Admin Dashboard
+        const GOOGLE_APPS_SCRIPT_TEMPLATE = `// =========================================================================
+//  SN TOOL PRO - ENTERPRISE CLOUD TELEMETRY & SYNC ENGINE (v2.0)
+//  Self-Healing Headers, Bidirectional Sync, Auto-Formatting & Realtime Tracker
+// =========================================================================
 
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "get_all";
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = sheet.getDataRange().getValues();
+  
+  if (action === "ping") {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      status: "online",
+      version: "2.0.0",
+      sheet_name: sheet.getName(),
+      total_rows: sheet.getLastRow(),
+      timestamp: new Date()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
   
   if (action === "get_all") {
+    var data = sheet.getDataRange().getValues();
     var heartbeats = {};
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
       var key = String(row[0] || "").trim().toUpperCase();
-      if (key) {
+      if (key && key !== "LICENSE KEY") {
         var dateVal = row[2];
         var formattedDate = dateVal;
         if (dateVal instanceof Date) {
@@ -3450,11 +3472,14 @@ function doGet(e) {
         };
       }
     }
-    return ContentService.createTextOutput(JSON.stringify({ success: true, heartbeats: heartbeats }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      count: Object.keys(heartbeats).length,
+      heartbeats: heartbeats
+    })).setMimeType(ContentService.MimeType.JSON);
   }
   
-  return ContentService.createTextOutput(JSON.stringify({ success: true, status: "online", timestamp: new Date() }))
+  return ContentService.createTextOutput(JSON.stringify({ success: true, status: "ready" }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -3462,23 +3487,106 @@ function doPost(e) {
   try {
     var contents = e.postData.contents;
     var postData = JSON.parse(contents);
+    var action = postData.action || "heartbeat";
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var nowFormatted = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
+
+    // =====================================================================
+    // 1. ACTION: SYNC_ALL / CLEAN_RESET (Mass Sync & Beautiful Auto-Formatting)
+    // =====================================================================
+    if (action === "sync_all" || action === "clean_reset") {
+      var customers = postData.customers || [];
+      sheet.clear();
+      
+      // Setup Beautiful Dark Header
+      var headers = [["License Key", "Client Name", "Last Active", "Use Count", "HWID", "Plan", "Status"]];
+      var headerRange = sheet.getRange(1, 1, 1, 7);
+      headerRange.setValues(headers)
+        .setFontWeight("bold")
+        .setFontSize(11)
+        .setBackground("#0f172a")
+        .setFontColor("#f8fafc")
+        .setHorizontalAlignment("center")
+        .setVerticalAlignment("middle");
+      
+      sheet.setFrozenRows(1);
+      sheet.setRowHeight(1, 38);
+
+      if (customers.length > 0) {
+        var rows = [];
+        for (var i = 0; i < customers.length; i++) {
+          var c = customers[i];
+          rows.push([
+            String(c.license_key || "").toUpperCase(),
+            String(c.client_name || "Customer"),
+            String(c.last_active || "Never"),
+            Number(c.use_count) || 0,
+            String(c.bound_hwid || c.hwid || "ANY"),
+            String(c.plan || "PRO"),
+            String(c.status || "ACTIVE")
+          ]);
+        }
+        var dataRange = sheet.getRange(2, 1, rows.length, 7);
+        dataRange.setValues(rows).setVerticalAlignment("middle");
+        
+        // Alignment formatting
+        sheet.getRange(2, 3, rows.length, 1).setHorizontalAlignment("center");
+        sheet.getRange(2, 4, rows.length, 1).setHorizontalAlignment("center").setFontWeight("bold");
+        sheet.getRange(2, 6, rows.length, 2).setHorizontalAlignment("center");
+        
+        // Zebra striping
+        for (var r = 0; r < rows.length; r++) {
+          sheet.setRowHeight(r + 2, 30);
+          if (r % 2 === 1) {
+            sheet.getRange(r + 2, 1, 1, 7).setBackground("#f8fafc");
+          }
+        }
+      }
+      sheet.autoResizeColumns(1, 7);
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        message: "Sheet completely synchronized and formatted!",
+        synced_count: customers.length
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // =====================================================================
+    // 2. ACTION: DELETE (Remove key when deleted on Admin Dashboard)
+    // =====================================================================
+    if (action === "delete") {
+      var delKey = String(postData.license_key || "").trim().toUpperCase();
+      var data = sheet.getDataRange().getValues();
+      for (var i = 1; i < data.length; i++) {
+        if (String(data[i][0]).trim().toUpperCase() === delKey) {
+          sheet.deleteRow(i + 1);
+          return ContentService.createTextOutput(JSON.stringify({ success: true, deleted: delKey }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ success: true, not_found: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // =====================================================================
+    // 3. ACTION: HEARTBEAT (Client App Automatic Telemetry Ping)
+    // =====================================================================
     var key = String(postData.license_key || "").trim().toUpperCase();
     var hwid = String(postData.hwid || "").trim();
     var clientName = String(postData.client_name || "").trim();
-    var now = new Date();
-    var nowFormatted = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
     
     if (!key) {
       return ContentService.createTextOutput(JSON.stringify({ success: false, error: "No license_key" }))
         .setMimeType(ContentService.MimeType.JSON);
     }
     
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    // Self-heal header if missing or damaged
     var data = sheet.getDataRange().getValues();
-    
-    if (data.length === 0 || data[0][0] !== "License Key") {
-      sheet.getRange(1, 1, 1, 5).setValues([["License Key", "Client Name", "Last Active", "Use Count", "HWID"]]);
-      sheet.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#f1f5f9");
+    if (data.length === 0 || String(data[0][0]).trim().toUpperCase() !== "LICENSE KEY") {
+      sheet.insertRowsBefore(1, 1);
+      sheet.getRange(1, 1, 1, 7).setValues([["License Key", "Client Name", "Last Active", "Use Count", "HWID", "Plan", "Status"]])
+        .setFontWeight("bold").setBackground("#0f172a").setFontColor("#f8fafc").setHorizontalAlignment("center");
+      sheet.setFrozenRows(1);
+      sheet.setRowHeight(1, 38);
       data = sheet.getDataRange().getValues();
     }
     
@@ -3494,21 +3602,31 @@ function doPost(e) {
       var currentCount = Number(sheet.getRange(foundRow, 4).getValue()) || 0;
       sheet.getRange(foundRow, 3).setValue(nowFormatted);
       sheet.getRange(foundRow, 4).setValue(currentCount + 1);
-      if (hwid) sheet.getRange(foundRow, 5).setValue(hwid);
-      if (clientName && !sheet.getRange(foundRow, 2).getValue()) {
+      if (hwid && (!sheet.getRange(foundRow, 5).getValue() || sheet.getRange(foundRow, 5).getValue() === "ANY")) {
+        sheet.getRange(foundRow, 5).setValue(hwid);
+      }
+      if (clientName && (!sheet.getRange(foundRow, 2).getValue() || sheet.getRange(foundRow, 2).getValue() === "User")) {
         sheet.getRange(foundRow, 2).setValue(clientName);
       }
     } else {
-      sheet.appendRow([key, clientName, nowFormatted, 1, hwid]);
+      sheet.appendRow([key, clientName || "User", nowFormatted, 1, hwid || "ANY", "PRO", "ACTIVE"]);
+      var lastR = sheet.getLastRow();
+      sheet.setRowHeight(lastR, 30);
+      sheet.getRange(lastR, 4).setHorizontalAlignment("center").setFontWeight("bold");
     }
     
-    return ContentService.createTextOutput(JSON.stringify({ success: true, last_active: nowFormatted }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      last_active: nowFormatted,
+      license_key: key
+    })).setMimeType(ContentService.MimeType.JSON);
+
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
-}`;
+}
+`;
 
         async function loadHeartbeatConfig() {
             try {
@@ -3579,6 +3697,72 @@ function doPost(e) {
                 }
             } catch (e) {
                 alert("Error testing webhook:\n" + e.message);
+            }
+        }
+
+
+        // Cloud Sync Push & Pull handlers (Enterprise Telemetry Engine v2.0)
+        async function handleCloudSync() {
+            const btn = document.getElementById('btn-cloud-sync');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Syncing...';
+            }
+
+            try {
+                // 1. Push all valid local customers to Google Sheet
+                const pushRes = await fetch('/api/admin/cloud-sync-push', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const pushData = await pushRes.json();
+
+                // 2. Pull telemetry back into dashboard
+                const pullRes = await fetch('/api/admin/cloud-sync-pull', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const pullData = await pullRes.json();
+
+                if (pushData.success && pullData.success) {
+                    showToast(`🎉 Cloud Sync Complete! ${pushData.count || 3} customers synced with Google Sheet!`);
+                } else {
+                    showToast(pushData.message || pullData.message || "⚠️ Cloud Sync finished with warnings");
+                }
+                await fetchKeysHistory();
+            } catch (err) {
+                showToast("❌ Cloud Sync failed: " + err.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
+        }
+
+        async function handleCloudPush() {
+            try {
+                showToast("⏳ Pushing customer list to Google Sheet...");
+                const res = await fetch('/api/admin/cloud-sync-push', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`🎉 ${data.message || 'Pushed successfully!'}`);
+                } else {
+                    showToast(`❌ ${data.error || 'Failed to push'}`);
+                }
+            } catch (err) {
+                showToast("❌ Network error while pushing to cloud");
+            }
+        }
+
+        async function handleCloudPull() {
+            try {
+                showToast("⏳ Pulling live telemetry from Google Sheet...");
+                const res = await fetch('/api/admin/cloud-sync-pull', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`🎉 ${data.message || 'Pulled successfully!'}`);
+                    await fetchKeysHistory();
+                } else {
+                    showToast(`❌ ${data.error || 'Failed to pull'}`);
+                }
+            } catch (err) {
+                showToast("❌ Network error while pulling from cloud");
             }
         }
 

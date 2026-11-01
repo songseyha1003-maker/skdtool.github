@@ -607,6 +607,21 @@ def revoke_license_key(target_key: str, reason: str = "Banned by Admin") -> Tupl
     except Exception:
         pass
 
+    # Fire async delete to Google Sheet
+    def _delete_cloud_row():
+        try:
+            cfg = get_heartbeat_config()
+            wh = cfg.get("webhook_url", "").strip()
+            if wh:
+                import urllib.request
+                body = json.dumps({"action": "delete", "license_key": cleaned}).encode("utf-8")
+                req = urllib.request.Request(wh, data=body, headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+        except Exception:
+            pass
+    threading.Thread(target=_delete_cloud_row, daemon=True).start()
+
     return True, f"🚫 Successfully revoked Key {cleaned}!"
 
 
@@ -652,6 +667,21 @@ def unrevoke_license_key(target_key: str) -> Tuple[bool, str]:
         push_online_registry_async()
     except Exception:
         pass
+
+    # Fire async delete to Google Sheet
+    def _delete_cloud_row():
+        try:
+            cfg = get_heartbeat_config()
+            wh = cfg.get("webhook_url", "").strip()
+            if wh:
+                import urllib.request
+                body = json.dumps({"action": "delete", "license_key": cleaned}).encode("utf-8")
+                req = urllib.request.Request(wh, data=body, headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+        except Exception:
+            pass
+    threading.Thread(target=_delete_cloud_row, daemon=True).start()
 
     return True, f"✅ Successfully unbanned Key {cleaned}!"
 
@@ -744,6 +774,21 @@ def delete_license_key_record(target_key: str) -> Tuple[bool, str]:
         push_online_registry_async()
     except Exception:
         pass
+
+    # Fire async delete to Google Sheet
+    def _delete_cloud_row():
+        try:
+            cfg = get_heartbeat_config()
+            wh = cfg.get("webhook_url", "").strip()
+            if wh:
+                import urllib.request
+                body = json.dumps({"action": "delete", "license_key": cleaned}).encode("utf-8")
+                req = urllib.request.Request(wh, data=body, headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+        except Exception:
+            pass
+    threading.Thread(target=_delete_cloud_row, daemon=True).start()
 
     return True, f"🗑️ Successfully deleted Key {cleaned}!"
 
@@ -1257,6 +1302,85 @@ def send_cloud_heartbeat_async(license_key: str, hwid: Optional[str] = None, cli
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
 
+
+def push_all_to_cloud_sheet() -> Tuple[bool, str, int]:
+    """
+    Push all local active customers from admin_key_history.json to Google Sheet.
+    Uses 'sync_all' action to cleanly format and rebuild the sheet with beautiful styles.
+    """
+    cfg = get_heartbeat_config()
+    webhook_url = cfg.get("webhook_url", "").strip()
+    if not cfg.get("enabled", True) or not webhook_url:
+        return False, "Google Sheet Webhook not configured", 0
+
+    history = []
+    if ADMIN_HISTORY_FILE.exists():
+        try:
+            with open(ADMIN_HISTORY_FILE, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        except Exception:
+            history = []
+
+    deleted_keys = get_deleted_keys()
+    valid_customers = []
+    for r in history:
+        k = r.get("license_key", "").strip().upper()
+        if k and k not in deleted_keys:
+            valid_customers.append({
+                "license_key": k,
+                "client_name": r.get("client_name") or "Customer",
+                "last_active": r.get("last_active") or "Never",
+                "use_count": int(r.get("use_count", 0)),
+                "bound_hwid": r.get("bound_hwid") or r.get("active_hwid") or "ANY",
+                "plan": r.get("plan") or "PRO",
+                "status": r.get("status") or "ACTIVE"
+            })
+
+    try:
+        import urllib.request
+        payload = {
+            "action": "sync_all",
+            "customers": valid_customers
+        }
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            webhook_url,
+            data=body,
+            headers={"Content-Type": "application/json", "User-Agent": "SN_TOOL_Admin_Sync/2.0"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if data.get("success"):
+                return True, data.get("message", f"Synced {len(valid_customers)} customers to Google Sheet!"), len(valid_customers)
+            
+            # Fallback for v1.0 Apps Script (push individually)
+            synced_count = 0
+            for c in valid_customers:
+                try:
+                    c_body = json.dumps({
+                        "license_key": c["license_key"],
+                        "client_name": c["client_name"],
+                        "hwid": c["bound_hwid"],
+                        "action": "heartbeat"
+                    }).encode("utf-8")
+                    c_req = urllib.request.Request(
+                        webhook_url,
+                        data=c_body,
+                        headers={"Content-Type": "application/json", "User-Agent": "SN_TOOL_Admin_Sync/2.0"},
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(c_req, timeout=6) as c_resp:
+                        c_data = json.loads(c_resp.read().decode("utf-8"))
+                        if c_data.get("success"):
+                            synced_count += 1
+                except Exception:
+                    pass
+            if synced_count > 0:
+                return True, f"Synchronized {synced_count} customers to Google Sheet!", synced_count
+            return False, data.get("error", "Google Sheet returned error"), 0
+    except Exception as e:
+        return False, f"Failed to connect to Google Sheet Webhook: {e}", 0
 
 def fetch_cloud_heartbeats() -> Dict[str, Dict[str, Any]]:
     """
