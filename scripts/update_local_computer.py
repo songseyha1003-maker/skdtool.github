@@ -43,10 +43,14 @@ def main():
         print("[*] Creating installation directory...")
         installed_dir.mkdir(parents=True, exist_ok=True)
 
+    d_sn_tool = Path(r"D:\SN_TOOL")
     targets = [
         (installed_dir, installed_dir / "_internal"),
         (base_dir / "dist" / "SN_TOOL", base_dir / "dist" / "SN_TOOL" / "_internal")
     ]
+    if d_sn_tool.exists():
+        targets.append((d_sn_tool, d_sn_tool / "_internal"))
+        print(f"[*] Detected active installation at: {d_sn_tool}")
 
     for root_d, int_d in targets:
         root_d.mkdir(parents=True, exist_ok=True)
@@ -97,9 +101,16 @@ def main():
     print("\n[*] Updating Web UI static assets...")
     for root_d, int_d in targets:
         for target_static in [root_d / "static", int_d / "static"]:
-            if target_static.exists():
-                shutil.rmtree(target_static)
-            shutil.copytree(base_dir / "static", target_static)
+            target_static.mkdir(parents=True, exist_ok=True)
+            for sroot, _, sfiles in os.walk(base_dir / "static"):
+                rel = Path(sroot).relative_to(base_dir / "static")
+                dest_dir = target_static / rel
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                for sf in sfiles:
+                    try:
+                        shutil.copy2(Path(sroot) / sf, dest_dir / sf)
+                    except Exception:
+                        pass
     print("  [OK] Static assets updated successfully!")
 
     # 4. Update Data Files (Carefully preserving user projects & license.key!)
