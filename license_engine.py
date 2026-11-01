@@ -214,6 +214,7 @@ CUSTOM_KEYS_FILE = Path("custom_keys.json")
 LICENSE_CONFIG_FILE = Path("license_config.json")
 REVOKED_KEYS_FILE = Path("revoked_keys.json")
 ONLINE_KEYS_LOCAL_FILE = Path("data/license_keys_online.json")
+HEARTBEAT_CONFIG_FILE = Path("data/heartbeat_config.json")
 
 
 def resolve_file_path(relative_path: str) -> Path:
@@ -1151,6 +1152,99 @@ def calculate_key_live_status(key_record: Dict[str, Any]) -> Dict[str, Any]:
     return rec
 
 
+def get_heartbeat_config() -> Dict[str, Any]:
+    """Load Cloud Telemetry & Heartbeat configuration."""
+    candidates = [
+        HEARTBEAT_CONFIG_FILE,
+        Path("heartbeat_config.json"),
+        Path(__file__).resolve().parent / "data" / "heartbeat_config.json"
+    ]
+    for c in candidates:
+        if c.exists():
+            try:
+                with open(c, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+    return {"enabled": True, "webhook_url": ""}
+
+
+def save_heartbeat_config(cfg: Dict[str, Any]) -> bool:
+    """Save Cloud Telemetry & Heartbeat configuration."""
+    try:
+        HEARTBEAT_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(HEARTBEAT_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+
+def send_cloud_heartbeat_async(license_key: str, hwid: Optional[str] = None, client_name: Optional[str] = None):
+    """
+    Fire-and-forget background Cloud Heartbeat.
+    Ensures zero delay or UI freeze for the client application.
+    """
+    if not license_key:
+        return
+    cfg = get_heartbeat_config()
+    webhook_url = cfg.get("webhook_url", "").strip()
+    if not cfg.get("enabled", True) or not webhook_url:
+        return
+
+    def _worker():
+        try:
+            import urllib.request
+            client_hwid = hwid or get_machine_hwid()
+            payload = {
+                "action": "heartbeat",
+                "license_key": license_key.strip().upper(),
+                "hwid": client_hwid,
+                "client_name": client_name or "",
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            body = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                webhook_url,
+                data=body,
+                headers={"Content-Type": "application/json", "User-Agent": "SN_TOOL_Client/2.0"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                pass
+        except Exception:
+            pass
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+
+def fetch_cloud_heartbeats() -> Dict[str, Dict[str, Any]]:
+    """
+    Fetch consolidated client usage telemetry from Cloud Webhook.
+    Returns dict mapping: LICENSE_KEY -> { last_active, use_count, hwid, client_name }
+    """
+    cfg = get_heartbeat_config()
+    webhook_url = cfg.get("webhook_url", "").strip()
+    if not cfg.get("enabled", True) or not webhook_url:
+        return {}
+    try:
+        import urllib.request
+        delimiter = "&" if "?" in webhook_url else "?"
+        req_url = f"{webhook_url}{delimiter}action=get_all"
+        req = urllib.request.Request(
+            req_url,
+            headers={"User-Agent": "SN_TOOL_Admin/2.0"}
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if data and data.get("success") and "heartbeats" in data:
+                return data["heartbeats"]
+    except Exception:
+        pass
+    return {}
+
+
 def sync_and_load_admin_history() -> List[Dict[str, Any]]:
     """
     Load admin key history, sync missing items from generated_keys_log.txt and custom_keys.json,
@@ -1185,6 +1279,21 @@ def sync_and_load_admin_history() -> List[Dict[str, Any]]:
                             seen_keys.add(cleaned_k)
         except Exception:
             pass
+
+    # Synchronize telemetry from Cloud Heartbeat Webhook if configured
+    cloud_heartbeats = fetch_cloud_heartbeats()
+    if cloud_heartbeats and isinstance(cloud_heartbeats, dict):
+        for r in history:
+            k = r.get("license_key", "").strip().upper()
+            if k in cloud_heartbeats:
+                hb = cloud_heartbeats[k]
+                r_active = hb.get("last_active")
+                if r_active:
+                    r["last_active"] = r_active
+                if "use_count" in hb:
+                    r["use_count"] = max(int(r.get("use_count", 0)), int(hb.get("use_count", 0)))
+                if hb.get("hwid") and hb["hwid"] not in ("ANY", ""):
+                    r["last_active_hwid"] = hb["hwid"]
 
     # Save consolidated back to ADMIN_HISTORY_FILE
     try:
@@ -1224,6 +1333,9 @@ def touch_license_activity(license_key: str, hwid: Optional[str] = None):
                     json.dump(history, f, indent=2, ensure_ascii=False)
         except Exception:
             pass
+
+    # Fire background Cloud Heartbeat ping
+    send_cloud_heartbeat_async(cleaned_key, hwid=hwid)
 
 
 def verify_license_key(input_key: str, current_hwid: Optional[str] = None) -> Tuple[bool, str, Dict[str, Any]]:

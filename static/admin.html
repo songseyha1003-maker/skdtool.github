@@ -2169,6 +2169,8 @@
                             <button type="button" class="filter-pill-btn" data-filter="ACTIVE" onclick="setFilter('ACTIVE', this)">🟢 Active</button>
                             <button type="button" class="filter-pill-btn" data-filter="EXPIRING_SOON" onclick="setFilter('EXPIRING_SOON', this)" style="color:#b45309; font-weight:800;">⚠️ Expiring Soon</button>
                             <button type="button" class="filter-pill-btn" data-filter="EXPIRED" onclick="setFilter('EXPIRED', this)" style="color:#b91c1c; font-weight:800;">🔴 Expired</button>
+                            <button type="button" class="filter-pill-btn" data-filter="HAS_USED" onclick="setFilter('HAS_USED', this)" style="color:#16a34a; font-weight:800;">⚡ Has Logged In</button>
+                            <button type="button" class="filter-pill-btn" data-filter="NEVER_USED" onclick="setFilter('NEVER_USED', this)" style="color:#64748b; font-weight:800;">⏸️ Never Used</button>
                             <button type="button" class="filter-pill-btn" data-filter="LIFETIME" onclick="setFilter('LIFETIME', this)">👑 Lifetime</button>
                             <button type="button" class="filter-pill-btn" data-filter="1Y" onclick="setFilter('1Y', this)">📅 1 Year</button>
                             <button type="button" class="filter-pill-btn" data-filter="3M" onclick="setFilter('3M', this)">📅 3 Months</button>
@@ -2340,6 +2342,54 @@
                             <span class="stat-badge-pill stat-pill-blue">SECURE</span>
                         </div>
                     </div>
+
+                    <!-- Card 3: Cloud Telemetry & Client Activity Tracker (Cloud Heartbeat) -->
+                    <div class="content-card" style="grid-column: 1 / -1; margin-top: 10px;">
+                        <div class="card-header-bar">
+                            <div class="card-header-title">
+                                <i class="fa-solid fa-cloud-bolt" style="color:var(--primary);"></i>
+                                <span>Cloud Telemetry & Client Activity Tracker (Cloud Heartbeat)</span>
+                            </div>
+                            <span id="heartbeat-badge-status" class="stat-badge-pill stat-pill-amber">NOT LINKED</span>
+                        </div>
+
+                        <div class="settings-row" style="flex-direction:column; align-items:flex-start; gap:10px;">
+                            <div class="settings-info" style="width:100%;">
+                                <span class="settings-label">Google Sheet Webhook URL (Cloud Heartbeat Endpoint)</span>
+                                <span class="settings-desc">
+                                    Whenever clients open SN TOOL anywhere, their activity (last active time, total launches, and HWID) pings this webhook to update your Dashboard.
+                                </span>
+                            </div>
+                            <div style="display:flex; width:100%; gap:10px; margin-top:4px;">
+                                <input type="url" id="cfg-heartbeat-url" class="admin-input-control" placeholder="https://script.google.com/macros/s/AKfycb.../exec" style="flex:1; font-family:var(--font-mono); font-size:0.85rem; padding: 10px 14px; border:1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-title);">
+                                <button type="button" class="btn-action-primary" onclick="handleSaveHeartbeat()" style="white-space:nowrap; padding: 10px 18px; font-weight:700;">
+                                    <i class="fa-solid fa-floppy-disk"></i> Save Webhook
+                                </button>
+                                <button type="button" class="btn-action-light" onclick="handleTestHeartbeat()" style="white-space:nowrap; padding: 10px 16px;">
+                                    <i class="fa-solid fa-satellite-dish"></i> Test Connection
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="settings-row" style="background:var(--bg-subtle); padding:16px; border-radius:var(--radius-sm); border:1px solid var(--border-color); flex-direction:column; align-items:flex-start; gap:12px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; width:100%; flex-wrap:wrap; gap:10px;">
+                                <strong style="color:var(--text-title); font-size:0.88rem;">
+                                    <i class="fa-solid fa-book-open" style="color:var(--primary);"></i>
+                                    របៀបបង្កើត Google Sheet Webhook ដោយឥតគិតថ្លៃ (Free Setup in 1 Minute):
+                                </strong>
+                                <button type="button" class="btn-record-action" onclick="copyGoogleAppsScriptCode()" style="font-weight:700; color:var(--primary); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; background:var(--bg-card); cursor:pointer;">
+                                    <i class="fa-solid fa-copy"></i> Copy Google Apps Script Code
+                                </button>
+                            </div>
+                            <ol style="margin:0; padding-left:20px; font-size:0.8rem; color:var(--text-muted); line-height:1.7;">
+                                <li>ចូលទៅកាន់ <strong><a href="https://sheets.new" target="_blank" style="color:var(--primary); font-weight:700; text-decoration:none;">sheets.new</a></strong> ដើម្បីបង្កើត Google Sheet ថ្មីមួយ។</li>
+                                <li>ចុចលើ <strong>Extensions</strong> ➡️ <strong>Apps Script</strong>។</li>
+                                <li>លុបកូដចាស់ចោល រួចចុចប៊ូតុង <strong>"Copy Google Apps Script Code"</strong> ខាងលើនេះមក Paste ចូល។</li>
+                                <li>ចុច <strong>Deploy</strong> ➡️ <strong>New deployment</strong> ➡️ ជ្រើសរើស <strong>Web app</strong> (កំណត់ <em>Execute as: Me</em>, <em>Who has access: Anyone</em>) រួចចុច <strong>Deploy</strong>។</li>
+                                <li>Copy <strong>Web App URL</strong> យកមក Paste ក្នុងប្រអប់ខាងលើ រួចចុច <strong>Save Webhook</strong> ជាការស្រេច!</li>
+                            </ol>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -2469,6 +2519,7 @@
             fetchGateStatus();
             fetchKeysHistory();
             fetchAdminHwid();
+            loadHeartbeatConfig();
             updateDeliveryCardUI(currentRecord);
         });
 
@@ -2981,6 +3032,8 @@ Welcome to SN TOOL - STUDIO PRO Official ✨
                 if (currentFilter === "EXPIRING_SOON" && !item.is_expiring_soon) return false;
                 if (currentFilter === "EXPIRED" && !item.is_expired) return false;
                 if (currentFilter === "REVOKED" && liveStatus !== "REVOKED") return false;
+                if (currentFilter === "NEVER_USED" && (Number(item.use_count) > 0 || (item.last_active && item.last_active !== "Never" && item.last_active !== "Never Used"))) return false;
+                if (currentFilter === "HAS_USED" && (!item.use_count || Number(item.use_count) === 0)) return false;
                 if (currentFilter === "LIFETIME" && !planUpper.includes("LIFETIME") && liveStatus !== "LIFETIME") return false;
                 if (currentFilter === "1Y" && (!planUpper.includes("1Y") && !planUpper.includes("365"))) return false;
                 if (currentFilter === "3M" && (!planUpper.includes("3M") && !planUpper.includes("90"))) return false;
@@ -3065,8 +3118,8 @@ Welcome to SN TOOL - STUDIO PRO Official ✨
                         <div class="record-meta-line" style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-size:0.75rem; color:var(--text-muted); margin-top:4px;">
                             <span class="record-meta-item"><i class="fa-solid fa-box-open" style="color:var(--primary);"></i> <strong>${planText}</strong></span>
                             <span class="record-meta-item"><i class="fa-solid fa-hourglass-half" style="color:${isExpiringSoon ? '#d97706' : (isExpired ? '#dc2626' : 'inherit')};"></i> Expires: <strong>${expiryText}</strong></span>
-                            <span class="record-meta-item" title="Last access time"><i class="fa-solid fa-clock" style="color:#0284c7;"></i> Last Active: <strong>${lastActive}</strong></span>
-                            <span class="record-meta-item" title="Total access count"><i class="fa-solid fa-arrow-right-to-bracket" style="color:#16a34a;"></i> <strong>${useCount} times</strong></span>
+                            <span class="record-meta-item" title="Last access time"><i class="fa-solid fa-clock" style="color:#0284c7;"></i> Last Active: <strong style="${(lastActive && lastActive !== 'Never' && lastActive !== 'Never Used') ? 'color:#0284c7; font-weight:700;' : 'color:#94a3b8;'}">${lastActive}</strong></span>
+                            <span class="record-meta-item" title="Total access count"><i class="fa-solid fa-arrow-right-to-bracket" style="color:${useCount > 0 ? '#16a34a' : '#94a3b8'};"></i> <strong style="${useCount > 0 ? 'color:#16a34a; font-weight:800;' : 'color:#94a3b8;'}">${useCount > 0 ? `${useCount} times` : '0 times (Never Used)'}</strong></span>
                             <span class="record-meta-item"><i class="fa-solid fa-desktop"></i> Machine: <code>${hwidText}</code></span>
                             <span class="record-meta-item"><i class="fa-solid fa-calendar-plus"></i> Created: ${dateText}</span>
                         </div>
@@ -3364,6 +3417,181 @@ Welcome to SN TOOL - STUDIO PRO Official ✨
             toast._timeout = setTimeout(() => {
                 toast.classList.remove('show');
             }, 2600);
+        }
+
+        // ==========================================================================
+        // 🛰️ CLOUD TELEMETRY & HEARTBEAT SYNC MANAGER
+        // ==========================================================================
+        const GOOGLE_APPS_SCRIPT_TEMPLATE = `// SN TOOL - Cloud Telemetry & Heartbeat Webhook
+// Automatically logs client activity and syncs with Admin Dashboard
+
+function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "get_all";
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = sheet.getDataRange().getValues();
+  
+  if (action === "get_all") {
+    var heartbeats = {};
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var key = String(row[0] || "").trim().toUpperCase();
+      if (key) {
+        var dateVal = row[2];
+        var formattedDate = dateVal;
+        if (dateVal instanceof Date) {
+          formattedDate = Utilities.formatDate(dateVal, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+        }
+        heartbeats[key] = {
+          license_key: key,
+          client_name: String(row[1] || ""),
+          last_active: String(formattedDate || "Never"),
+          use_count: Number(row[3]) || 0,
+          hwid: String(row[4] || "")
+        };
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({ success: true, heartbeats: heartbeats }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ success: true, status: "online", timestamp: new Date() }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    var contents = e.postData.contents;
+    var postData = JSON.parse(contents);
+    var key = String(postData.license_key || "").trim().toUpperCase();
+    var hwid = String(postData.hwid || "").trim();
+    var clientName = String(postData.client_name || "").trim();
+    var now = new Date();
+    var nowFormatted = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+    
+    if (!key) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, error: "No license_key" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = sheet.getDataRange().getValues();
+    
+    if (data.length === 0 || data[0][0] !== "License Key") {
+      sheet.getRange(1, 1, 1, 5).setValues([["License Key", "Client Name", "Last Active", "Use Count", "HWID"]]);
+      sheet.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#f1f5f9");
+      data = sheet.getDataRange().getValues();
+    }
+    
+    var foundRow = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim().toUpperCase() === key) {
+        foundRow = i + 1;
+        break;
+      }
+    }
+    
+    if (foundRow > 0) {
+      var currentCount = Number(sheet.getRange(foundRow, 4).getValue()) || 0;
+      sheet.getRange(foundRow, 3).setValue(nowFormatted);
+      sheet.getRange(foundRow, 4).setValue(currentCount + 1);
+      if (hwid) sheet.getRange(foundRow, 5).setValue(hwid);
+      if (clientName && !sheet.getRange(foundRow, 2).getValue()) {
+        sheet.getRange(foundRow, 2).setValue(clientName);
+      }
+    } else {
+      sheet.appendRow([key, clientName, nowFormatted, 1, hwid]);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({ success: true, last_active: nowFormatted }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+        async function loadHeartbeatConfig() {
+            try {
+                const res = await fetch('/api/admin/heartbeat-config');
+                if (res.ok) {
+                    const data = await res.json();
+                    const cfg = data.config || {};
+                    const input = document.getElementById('cfg-heartbeat-url');
+                    const badge = document.getElementById('heartbeat-badge-status');
+                    if (input) input.value = cfg.webhook_url || '';
+                    if (badge) {
+                        if (cfg.webhook_url && cfg.webhook_url.trim().length > 10) {
+                            badge.className = 'stat-badge-pill stat-pill-green';
+                            badge.textContent = 'LINKED & ACTIVE';
+                        } else {
+                            badge.className = 'stat-badge-pill stat-pill-amber';
+                            badge.textContent = 'NOT LINKED';
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed loading heartbeat config:", e);
+            }
+        }
+
+        async function handleSaveHeartbeat() {
+            const input = document.getElementById('cfg-heartbeat-url');
+            const url = input ? input.value.trim() : '';
+            try {
+                const res = await fetch('/api/admin/heartbeat-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ webhook_url: url, enabled: true })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("Cloud Heartbeat Webhook saved successfully!", "success");
+                    loadHeartbeatConfig();
+                    fetchKeysHistory();
+                } else {
+                    showToast("Failed saving webhook: " + (data.error || "Unknown error"), "error");
+                }
+            } catch (e) {
+                showToast("Error saving webhook: " + e.message, "error");
+            }
+        }
+
+        async function handleTestHeartbeat() {
+            const input = document.getElementById('cfg-heartbeat-url');
+            const url = input ? input.value.trim() : '';
+            if (!url) {
+                showToast("Please enter a Webhook URL first", "warning");
+                return;
+            }
+            showToast("Testing connection to Cloud Webhook...");
+            try {
+                const res = await fetch('/api/admin/test-heartbeat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ webhook_url: url })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("✅ Connection Successful! Webhook is online.", "success");
+                    loadHeartbeatConfig();
+                } else {
+                    alert("Connection test failed:\n" + (data.error || "Could not reach webhook"));
+                }
+            } catch (e) {
+                alert("Error testing webhook:\n" + e.message);
+            }
+        }
+
+        function copyGoogleAppsScriptCode() {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_TEMPLATE).then(() => {
+                    showToast("📋 Copied Google Apps Script code to clipboard! Ready to paste into Google Sheet.", "success");
+                }).catch(() => {
+                    prompt("Copy the Google Apps Script code below:", GOOGLE_APPS_SCRIPT_TEMPLATE);
+                });
+            } else {
+                prompt("Copy the Google Apps Script code below:", GOOGLE_APPS_SCRIPT_TEMPLATE);
+            }
         }
     </script>
 </body>

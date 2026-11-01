@@ -46,7 +46,9 @@ from license_engine import (
     ADMIN_HISTORY_FILE,
     GENERATED_KEYS_LOG,
     CUSTOM_KEYS_FILE,
-    REVOKED_KEYS_FILE
+    REVOKED_KEYS_FILE,
+    get_heartbeat_config,
+    save_heartbeat_config
 )
 
 admin_app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
@@ -190,6 +192,45 @@ def admin_sync_online():
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@admin_app.route("/api/admin/heartbeat-config", methods=["GET", "POST"])
+def admin_heartbeat_config():
+    if request.method == "POST":
+        data = request.get_json(force=True) or {}
+        cfg = {
+            "enabled": bool(data.get("enabled", True)),
+            "webhook_url": str(data.get("webhook_url", "")).strip()
+        }
+        ok = save_heartbeat_config(cfg)
+        return jsonify({"success": ok, "config": cfg})
+    return jsonify({"success": True, "config": get_heartbeat_config()})
+
+
+@admin_app.route("/api/admin/test-heartbeat", methods=["POST"])
+def admin_test_heartbeat():
+    data = request.get_json(force=True) or {}
+    url = str(data.get("webhook_url", "")).strip()
+    if not url:
+        cfg = get_heartbeat_config()
+        url = cfg.get("webhook_url", "").strip()
+    if not url:
+        return jsonify({"success": False, "error": "No Webhook URL configured"}), 400
+
+    try:
+        import urllib.request
+        delimiter = "&" if "?" in url else "?"
+        req_url = f"{url}{delimiter}action=ping"
+        req = urllib.request.Request(req_url, headers={"User-Agent": "SN_TOOL_Admin_Test/2.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            raw = resp.read().decode("utf-8")
+            return jsonify({
+                "success": True,
+                "message": "Successfully reached Cloud Webhook endpoint!",
+                "raw_response": raw[:200]
+            })
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Connection test failed: {e}"}), 500
 
 ADMIN_PORT = 8888
 ADMIN_URL = f"http://127.0.0.1:{ADMIN_PORT}/admin"
