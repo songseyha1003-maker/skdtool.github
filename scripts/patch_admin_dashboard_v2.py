@@ -40,3 +40,4 @@ def admin_cloud_sync_pull():
 
 if __name__ == "__main__":
     patch_admin_dashboard()
+

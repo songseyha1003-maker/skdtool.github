@@ -10,7 +10,10 @@
     "bound_hwid": "09935A76E7AE4525",
     "raw_payload": "SN:29D:5129:0DFD:3EC1",
     "signature": "1D6E52",
-    "status": "ACTIVE"
+    "status": "ACTIVE",
+    "last_active": "2026-11-01 16:29:06",
+    "use_count": 3,
+    "last_active_hwid": "09935A76E7AE4525"
   },
   {
     "license_key": "SN-30D-5129-5580-C9CC-704A7D",
@@ -24,9 +27,9 @@
     "raw_payload": "SN:30D:5129:5580:C9CC",
     "signature": "704A7D",
     "status": "ACTIVE",
-    "last_active": "2026-11-01 14:06:51",
-    "use_count": 1,
-    "last_active_hwid": "HWID-CLIENT-PC-01"
+    "last_active": "2026-11-01 16:29:08",
+    "use_count": 3,
+    "last_active_hwid": "C844A3A4B66AF891"
   },
   {
     "license_key": "SN-7D-5110-3693-679C-578382",
@@ -40,6 +43,9 @@
     "raw_payload": "SN:7D:5110:3693:679C",
     "signature": "578382",
     "status": "ACTIVE",
-    "last_renewed": "2026-10-21 16:55:13"
+    "last_renewed": "2026-10-21 16:55:13",
+    "last_active": "2026-11-01 17:38:30",
+    "use_count": 308,
+    "last_active_hwid": "E53CEFB948DFC356"
   }
 ]
