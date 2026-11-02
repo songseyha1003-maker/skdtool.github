@@ -11802,14 +11802,14 @@ async function checkForAppUpdates(manual = false) {
             if (manual) showToast(`New version available: v${latVer}`);
         } else {
             // Already on latest official build:
-            // When checked automatically on boot (manual = false), stay quiet.
-            // When user explicitly clicks the update icon (manual = true), open modal to allow updating/syncing the latest patch for v${curVer}!
-            if (badgeText) badgeText.textContent = "LATEST OFFICIAL BUILD & PATCH";
-            if (subtitle) subtitle.textContent = `Official release v${curVer} is active. Click below to sync and re-apply the latest patch fixes and engine improvements:`;
-            if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> <span id="btn-do-update-text">Update / Sync Now (v${curVer})</span>`;
+            if (badgeText) badgeText.textContent = "UP TO DATE";
+            if (subtitle) subtitle.textContent = `SN Tool v${curVer} is currently active and fully up to date. All neural engines and features are optimal.`;
+            if (btnUpdate) {
+                btnUpdate.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span id="btn-do-update-text">Already Up to Date (v${curVer})</span>`;
+                btnUpdate.disabled = true;
+            }
             if (manual) {
-                openModal('modal-update');
-                showToast(`SN Tool v${curVer} patch ready to sync!`);
+                showToast(`✅ You are up to date! SN Tool v${curVer} is the latest version.`);
             }
         }
     } catch (err) {
