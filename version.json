@@ -1,9 +1,9 @@
 {
-  "version": "2.0.1",
+  "version": "2.0.2",
   "app_name": "SN TOOL - STUDIO PRO",
-  "release_date": "2026-10-31",
-  "title": "SN TOOL STUDIO PRO - Release v2.0.1 (Turbo Downloader 5x-10x Speed Boost & Parallel Engine)",
-  "release_notes": "• 🚀 Turbo Parallel Downloader Boost: Increased episode concurrency from 2 to 5 threads in parallel, dramatically cutting download time by 5x-10x across entire drama series!\n• 🧹 Clean Temp Isolation: Downloader temporary folders are strictly kept in system temp, leaving drama folders 100% pristine.\n• 🎬 Full Movie Merged Clean Mode: When exporting Full Movie Merged, all separate episodes are automatically cleaned so strictly 1 full movie video remains.\n• 🛡️ 85s Hard Timeout Unlocked: Eliminated abrupt yt-dlp timeout kills on large video streams with smart dynamic streaming buffers.\n• ⚡ Intelligent Stall Detection: Active network byte monitor kills dead/hanging streams within 20s instead of freezing for minutes.\n• 🎬 ReelShort & Full Movie Slicing Fix: Corrected single-episode stream resolution to prevent pseudo master slicing loops.\n• 💨 Chunked Stream Skipping: Prevented unnecessary fallback delays on .m3u8 playlist streams.\n• 🌟 ShortMax Turbo Boost: Accelerated TS segment downloading and decryption from 8 to 16 concurrent workers.",
+  "release_date": "2026-11-02",
+  "title": "SN TOOL STUDIO PRO - Release v2.0.2 (Next-Gen AI Dubbing Brain & Turbo 1080p Downloader)",
+  "release_notes": "• 🧠 Next-Gen AI Dubbing Brain: Integrated Enterprise Character Knowledge Graph with automated Chinese-to-Khmer phonetic mapping and cross-episode storyline continuity!\n• 🎭 Emotion-Adaptive Voice Modulation: Intelligent dialogue emotion inference (Angry, Sad, Tender, Panic, Authoritative) with dynamic neural pitch and tempo modulation for cinema-grade acting!\n• ⚡ Turbo 1080p Self-Healing Downloader: Ultra-fast stream resolution with Smart Resumption and Fragment Self-Healing—zero corrupted video files even during network drops!\n• 🎬 1-Click Drama Social Card & Synopsis: Automated Khmer drama metadata cards and viral synopses ready for instant posting to Facebook, TikTok, and Telegram!\n• 🚀 Core Engine Throughput & Latency Boost: Massive pipeline memory optimization, accelerated subtitle rendering, and seamless multi-episode workflow stability.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }

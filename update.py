@@ -15,7 +15,7 @@ import urllib.error
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
-CURRENT_VERSION = "2.0.1"
+CURRENT_VERSION = "2.0.2"
 APP_NAME = "SN TOOL - STUDIO PRO"
 DEFAULT_UPDATE_ZIP_URL = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
 
@@ -258,6 +258,15 @@ def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any
                 if not chunk:
                     break
                 out_f.write(chunk)
+
+        # 🛡️ SYSTEM 13: Secure Update Package Integrity Verification
+        try:
+            import license_engine
+            upg_ok, upg_msg = license_engine.verify_update_package_integrity(dest_file)
+            if not upg_ok:
+                return {"success": False, "error": f"Security check failed on downloaded update: {upg_msg}"}
+        except ImportError:
+            pass
 
         # Create detached PowerShell updater script
         ps1_file = app_dir / "apply_update.ps1"

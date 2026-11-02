@@ -1252,6 +1252,7 @@ class DramaTranslator:
         custom_dict: Optional[Dict[str, str]] = None,
         mode: str = "drama_dubbing",
         drama_title: Optional[str] = None,
+        episode_number: Optional[int] = None,
         progress_callback: Optional[Any] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -1279,6 +1280,22 @@ class DramaTranslator:
         if drama_title and any(w in str(drama_title) for w in ("神", "殿", "帝", "皇", "王", "仙", "剑", "古", "宫", "朝", "武", "封神", "hero", "ancient", "costume")):
             eff_cat = "chinese_historical"
 
+        # 🧠 Inject Master Series Bible & Character Graph if drama_title is provided
+        series_context = ""
+        if drama_title:
+            try:
+                from series_memory import series_memory
+                series_context = series_memory.get_series_prompt_injection(drama_title, current_episode_num=episode_number)
+                char_glossary = series_memory.get_character_glossary(drama_title)
+                if char_glossary:
+                    if custom_dict is None:
+                        custom_dict = {}
+                    for k, v in char_glossary.items():
+                        if k not in custom_dict:
+                            custom_dict[k] = v
+            except Exception as e:
+                print(f"Series memory note in Nisay: {e}")
+
         if mode == "movie_recap":
             context_directive = "Movie Recap Storyteller Style (សម្រាយរឿង Facebook & TikTok): Translate into thrilling, high-energy spoken Khmer recap narration by a charismatic Cambodian narrator (អ្នកសម្រាយរឿង ពិសិដ្ឋ/ស្រីមុំ). 100% Complete fidelity - never drop words."
         else:
@@ -1294,6 +1311,8 @@ class DramaTranslator:
                 "For short lines (<= 5 source characters or shouts), translate into 1-3 PUNCHY, natural spoken words (e.g. 'ឈប់ភ្លាម!', 'ទៅណា?!', 'មិនទាន់គ្រប់ទេ!'). "
                 "NEVER bloat short lines into long explanatory paragraphs! Spoken audio must match mouth duration."
             )
+        if series_context:
+            context_directive = series_context + "\n\n" + context_directive
 
         # ⚡ High-Throughput Parallel Translation Workers (8 concurrent chunks):
         sem = asyncio.Semaphore(8)
@@ -1382,6 +1401,12 @@ class DramaTranslator:
                 duration_sec=dur_sec
             )
 
+            try:
+                from series_memory import series_memory
+                item_emotion = series_memory.infer_dialogue_emotion(final_text_km, orig_text)
+            except Exception:
+                item_emotion = "neutral"
+
             results.append({
                 "id": itm.get("id", idx + 1),
                 "start": start,
@@ -1391,7 +1416,8 @@ class DramaTranslator:
                 "text_km": final_text_km,
                 "voice": chosen_voice,
                 "rate_percent": rate_percent,
-                "pitch_hz": pitch_hz
+                "pitch_hz": pitch_hz,
+                "emotion": item_emotion
             })
 
         return results
@@ -1497,6 +1523,11 @@ Return JSON object with key "dialogues" containing an array with keys: id, start
                                         item["voice"],
                                         duration_sec=dur_sec
                                     )
+                                    try:
+                                        from series_memory import series_memory
+                                        item["emotion"] = series_memory.infer_dialogue_emotion(item["text_km"], orig_line)
+                                    except Exception:
+                                        item["emotion"] = "neutral"
                             return items
                     elif resp.status_code in (401, 403, 429):
                         self.rotate_groq_key()
@@ -1614,6 +1645,7 @@ Return JSON object with key "dialogues" containing an array with keys: id, start
                         custom_dict=custom_dict,
                         mode=mode,
                         drama_title=drama_title,
+                        episode_number=episode_number,
                         progress_callback=progress_callback
                     )
                     if nisay_res and len(nisay_res) == len(dialogues):
@@ -1730,6 +1762,11 @@ Return ONLY valid JSON array with keys: id, start, end, text_original, text_km, 
                                         item["voice"],
                                         duration_sec=dur_sec
                                     )
+                                    try:
+                                        from series_memory import series_memory
+                                        item["emotion"] = series_memory.infer_dialogue_emotion(item["text_km"], orig_line)
+                                    except Exception:
+                                        item["emotion"] = "neutral"
                             return items
                     return None
 

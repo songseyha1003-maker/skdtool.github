@@ -49,6 +49,11 @@ ENV/
 Thumbs.db
 Desktop.ini
 
+# Security Keys & Secrets (STRICTLY PRIVATE TO ADMIN SERVER)
+*.pem
+data/admin_private_key.pem
+data/.sys_anchor
+
 # VS Code
 .vscode/*
 !.vscode/settings.json

@@ -1,0 +1,89 @@
+{
+  "series_id": "总裁的替嫁娇妻",
+  "title": "《总裁的替嫁娇妻》EP01",
+  "created_at": 1793590260.6774282,
+  "genre_tropes": [
+    "Billionaire CEO / មហាសេដ្ឋីប្រធានក្រុមហ៊ុន",
+    "Contract Marriage / រៀបការតាមកិច្ចសន្យា"
+  ],
+  "character_roster": {
+    "male_lead": {
+      "name_zh": "顾北辰",
+      "name_km": "គូប៉ីឆេន",
+      "voice": "piseth",
+      "role": "Male Lead (តួឯកប្រុស)",
+      "pronoun_self": "ខ្ញុំ / បង",
+      "pronoun_call_female_lead": "អូន / នាង"
+    },
+    "female_lead": {
+      "name_zh": "林浅",
+      "name_km": "លីនឈៀន",
+      "voice": "sreymom",
+      "role": "Female Lead (តួឯកស្រី)",
+      "pronoun_self": "ខ្ញុំ / អូន",
+      "pronoun_call_male_lead": "បង / លោក"
+    },
+    "villain_or_rival": {
+      "name_zh": "តួឈ្នានីស",
+      "name_km": "តួឈ្នានីស",
+      "voice": "piseth",
+      "role": "Antagonist / Rival (តួកាច/តួឈ្នានីស)",
+      "pronoun_call_leads": "ឯង / មីស្រីថោកទាប / អាគម្រក់"
+    },
+    "elder": {
+      "name_zh": "ចាស់ទុំក្នុងគ្រួសារ",
+      "name_km": "ចាស់ទុំក្នុងគ្រួសារ",
+      "voice": "piseth",
+      "role": "Elder / Parent (ចាស់ទុំ/ឪពុកម្តាយ)",
+      "pronoun_call_leads": "កូន / ឯង / កូនប្រសា"
+    }
+  },
+  "male_lead": {
+    "name_zh": "顾北辰",
+    "name_km": "គូប៉ីឆេន",
+    "voice": "piseth",
+    "role": "Male Lead (តួឯកប្រុស)",
+    "pronoun_self": "ខ្ញុំ / បង",
+    "pronoun_call_female_lead": "អូន / នាង"
+  },
+  "female_lead": {
+    "name_zh": "林浅",
+    "name_km": "លីនឈៀន",
+    "voice": "sreymom",
+    "role": "Female Lead (តួឯកស្រី)",
+    "pronoun_self": "ខ្ញុំ / អូន",
+    "pronoun_call_male_lead": "បង / លោក"
+  },
+  "villain_or_rival": {
+    "name_zh": "តួឈ្នានីស",
+    "name_km": "តួឈ្នានីស",
+    "voice": "piseth",
+    "role": "Antagonist / Rival (តួកាច/តួឈ្នានីស)",
+    "pronoun_call_leads": "ឯង / មីស្រីថោកទាប / អាគម្រក់"
+  },
+  "elder": {
+    "name_zh": "ចាស់ទុំក្នុងគ្រួសារ",
+    "name_km": "ចាស់ទុំក្នុងគ្រួសារ",
+    "voice": "piseth",
+    "role": "Elder / Parent (ចាស់ទុំ/ឪពុកម្តាយ)",
+    "pronoun_call_leads": "កូន / ឯង / កូនប្រសា"
+  },
+  "glossary": {
+    "总裁": "លោកប្រធាន",
+    "董事长": "លោកប្រធានក្រុមប្រឹក្សា",
+    "少爷": "អ្នកប្រុសធំ",
+    "夫人": "លោកស្រីធំ",
+    "特助": "ជំនួយការពិសេស",
+    "契约婚姻": "រៀបការក្លែងក្លាយតាមកិច្ចសន្យា",
+    "替嫁": "រៀបការជំនួស",
+    "入赘": "កូនប្រសារចូលស្តី",
+    "赘婿": "កូនប្រសារអាស្រ័យផ្ទះ",
+    "闪婚": "រៀបការផ្លេកបន្ទោរ",
+    "民政局": "ការិយាល័យចុះសំបុត្រអាពាហ៍ពិពាហ៍",
+    "顾北辰": "គូប៉ីឆេន",
+    "林浅": "លីនឈៀន"
+  },
+  "episode_summaries": {
+    "1": "លោកប្រធានគូប៉ីឆេនបានដឹងការពិតហើយ | នាងលីនឈៀនរត់គេចខ្លួនបាត់ទៅហើយ"
+  }
+}

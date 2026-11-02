@@ -313,3 +313,24 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+@admin_app.route("/api/server/authorize-lease", methods=["POST"])
+def server_authorize_lease():
+    data = request.get_json(force=True) or {}
+    key = data.get("license_key", "").strip()
+    hwid = data.get("hwid", "").strip()
+    plan = data.get("plan", "PRO")
+
+    if not key or not hwid:
+        return jsonify({"success": False, "error": "Missing license_key or hwid"}), 400
+
+    if key in get_revoked_keys():
+        return jsonify({"success": False, "error": "License key revoked by administrator"}), 403
+
+    is_valid, msg, rec = verify_license_key(key, hwid)
+    if not is_valid:
+        return jsonify({"success": False, "error": msg}), 403
+
+    res = generate_server_lease_token(key, hwid, plan=rec.get("plan", plan))
+    return jsonify(res)
+
