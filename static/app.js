@@ -3341,7 +3341,7 @@ function startAudioPlaybackVUMeter() {
 let exportJobTimer = null;
 let exportPercent = 0;
 let exportElapsedSec = 0;
-let currentExportOutputMode = 'separate'; // 'separate' | 'full' | 'both'
+let currentExportOutputMode = localStorage.getItem('sn_export_output_mode') || 'separate'; // 'separate' | 'full' | 'both'
 function sanitizeExportFolderPath(rawPath) {
     if (!rawPath || typeof rawPath !== 'string') return "";
     let clean = rawPath.trim().replace(/\\/g, '/').replace(/\/+$/, '');
@@ -3623,6 +3623,7 @@ function openExportOptionsModal() {
 
 function selectExportOutputMode(mode) {
     currentExportOutputMode = mode;
+    try { localStorage.setItem('sn_export_output_mode', mode); } catch (e) {}
     const optSep = document.getElementById('export-opt-separate');
     const optFull = document.getElementById('export-opt-full');
     const optBoth = document.getElementById('export-opt-both');
@@ -10725,46 +10726,62 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
         }
         if (!seriesTitle) seriesTitle = "Drama_Series";
 
-        const videoPaths = files.map(f => getMediaFilePath(f)).filter(Boolean);
+        // Robust path & filename extraction for single-pass Full Movie Merged dubbing
+        let videoPaths = files.map(f => getMediaFilePath(f)).filter(Boolean);
+        const fileNames = files.map(f => getMediaFileName(f)).filter(Boolean);
+        const folderHint = currentCustomExportFolder || defaultDramaExportFolder || stagedVideoFolderTitle || (files[0] && files[0].folder_name) || '';
+
+        if (videoPaths.length !== totalBatchCount && folderHint) {
+            videoPaths = files.map(f => {
+                const p = getMediaFilePath(f);
+                if (p) return p;
+                const fn = getMediaFileName(f);
+                return `${folderHint.replace(/\\/g, '/').replace(/\/+$/, '')}/${fn}`;
+            }).filter(Boolean);
+        }
+
+        appendLiveTerminalLine(`▶ Lossless stream-copying ${totalBatchCount} episodes into unified container...`, '[Full Movie Mode]', 'info');
+
         let mergedSourcePath = null;
         let mergedSourceName = null;
-        let mergedSizeMb = "?";
+        let mergedSizeMb = '?';
 
-        if (videoPaths.length === totalBatchCount) {
-            appendLiveTerminalLine(`▶ Lossless stream-copying ${totalBatchCount} episodes into unified container...`, "[Full Movie Mode]", "info");
-            try {
-                const mRes = await fetch("/api/projects/pre-merge-raw-episodes", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        video_paths: videoPaths,
-                        series_title: seriesTitle
-                    })
-                });
-                const mData = await mRes.json();
-                if (mData.success && mData.merged_path) {
-                    if (mData.series_title && mData.series_title !== "Drama_Series") {
-                        seriesTitle = mData.series_title;
-                    }
-                    mergedSourcePath = mData.merged_path;
-                    mergedSourceName = mData.merged_filename;
-                    mergedSizeMb = mData.size_mb;
-                    if (mData.trimmed_count > 0) {
-                        appendLiveTerminalLine(`✓ Pre-merge AI Freeze Detector: trimmed ${mData.trimmed_count} frozen outros (-${mData.total_seconds_saved}s), creating seamless "${mergedSourceName}" (${mergedSizeMb} MB, ${totalBatchCount} eps)`, "[Full Movie Mode]", "success");
-                    } else {
-                        appendLiveTerminalLine(`✓ Fast Pre-merge complete: "${mergedSourceName}" (${mergedSizeMb} MB, ${totalBatchCount} episodes unified, 100% active scenes)`, "[Full Movie Mode]", "success");
-                    }
-                } else {
-                    appendLiveTerminalLine(`Pre-merge warning: ${mData.error || 'Server note'}. Falling back to batch merge.`, "[Full Movie Mode]", "warning");
+        try {
+            const mRes = await fetch('/api/projects/pre-merge-raw-episodes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    video_paths: videoPaths,
+                    file_names: fileNames,
+                    folder_path: folderHint,
+                    custom_export_dir: currentCustomExportFolder || defaultDramaExportFolder || undefined,
+                    series_title: seriesTitle,
+                    auto_trim_freeze: false
+                })
+            });
+            const mData = await mRes.json();
+            if (mData.success && mData.merged_path) {
+                if (mData.series_title && mData.series_title !== 'Drama_Series') {
+                    seriesTitle = mData.series_title;
                 }
-            } catch (mErr) {
-                appendLiveTerminalLine(`Pre-merge network note: ${mErr.message}. Falling back to batch merge.`, "[Full Movie Mode]", "warning");
+                mergedSourcePath = mData.merged_path;
+                mergedSourceName = mData.merged_filename;
+                mergedSizeMb = mData.size_mb;
+                if (mData.trimmed_count > 0) {
+                    appendLiveTerminalLine(`✓ Pre-merge AI Freeze Detector: trimmed ${mData.trimmed_count} frozen outros (-${mData.total_seconds_saved}s), creating seamless "${mergedSourceName}" (${mergedSizeMb} MB, ${mData.episodes_count || totalBatchCount} eps)`, '[Full Movie Mode]', 'success');
+                } else {
+                    appendLiveTerminalLine(`✓ Fast Pre-merge complete: "${mergedSourceName}" (${mergedSizeMb} MB, ${mData.episodes_count || totalBatchCount} episodes unified, 100% active scenes)`, '[Full Movie Mode]', 'success');
+                }
+            } else {
+                appendLiveTerminalLine(`Pre-merge note: ${mData.error || 'Server response'}.`, '[Full Movie Mode]', 'warning');
             }
+        } catch (mErr) {
+            appendLiveTerminalLine(`Pre-merge network note: ${mErr.message}.`, '[Full Movie Mode]', 'warning');
         }
 
         if (mergedSourcePath) {
-            appendLiveTerminalLine(`▶ Step 2/2: Starting Full-Movie Automated AI Dubbing on unified video...`, "[Full Movie Mode]", "info");
-            appendLiveTerminalLine(`Single-pass transcription & translation for seamless storytelling across scenes!`, "[Full Movie Mode]", "info");
+            appendLiveTerminalLine(`▶ Step 2/2: Starting Full-Movie Automated AI Dubbing on unified video...`, '[Full Movie Mode]', 'info');
+            appendLiveTerminalLine(`Single-pass transcription & translation for seamless storytelling across scenes!`, '[Full Movie Mode]', 'info');
             updateExportProgressUI(10, 0, 150, `Step 2/2: Dubbing full movie "${seriesTitle}" with Piseth & Sreymom...`);
 
             const fullMovieFile = {
@@ -10776,8 +10793,15 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
             };
 
             await startAutoDubbingPipeline(fullMovieFile, `Dubbed_${seriesTitle}_Full_Movie`);
-            return;
+            return; // STRICT RETURN: Dub only the full movie! Never execute sequential episodes!
         }
+
+        // STRICT SAFETY GUARD FOR FULL MOVIE MODE:
+        // If pre-merge on raw files could not resolve source media, do NOT secretly dub 99 separate episodes into the user's export folder!
+        showToast('Error: Could not pre-merge episodes into a unified full movie. Please check folder path.');
+        appendLiveTerminalLine(`❌ Strict Full Movie Mode stopped: Cannot locate episode media to merge into Full Movie. Sequential separate dubbing was prevented.`, '[Full Movie Mode]', 'error');
+        resetEngineMonitorToStandby();
+        return;
     }
 
     // =========================================================================

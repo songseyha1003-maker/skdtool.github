@@ -3636,22 +3636,31 @@ def merge_episodes_endpoint():
                 except Exception as ce:
                     print(f"Cleanup error for {rp}: {ce}")
 
-            # Check destination directory and purge any separate episode files (Dubbed_EP_*.mp4)
-            out_parent = final_p.parent
-            if out_parent.exists():
-                for ep_cand in list(out_parent.glob("Dubbed_*.mp4")):
-                    if ep_cand.resolve() != final_p and "_Full_Movie" not in ep_cand.name:
-                        try:
-                            ep_cand.unlink(missing_ok=True)
-                            cleaned_separate_count += 1
-                        except Exception:
-                            pass
-                for srt_cand in list(out_parent.glob("Dubbed_*.srt")):
-                    if srt_cand.resolve() != final_p.with_suffix(".srt").resolve() and "_Full_Movie" not in srt_cand.name:
-                        try:
-                            srt_cand.unlink(missing_ok=True)
-                        except Exception:
-                            pass
+            # Check destination directories and purge any separate episode files (Dubbed_EP_*.mp4)
+            dirs_to_clean = [final_p.parent]
+            if sanitized_cust and Path(sanitized_cust).exists():
+                dirs_to_clean.append(Path(sanitized_cust).resolve())
+            for root_dir in ('D:/SN_Dramas', 'C:/SN_Dramas'):
+                cand = Path(root_dir) / clean_title
+                if cand.exists():
+                    dirs_to_clean.append(cand.resolve())
+
+            for d_clean in set(dirs_to_clean):
+                if d_clean.exists():
+                    for ep_cand in list(d_clean.glob('Dubbed_*.mp4')):
+                        if ep_cand.resolve() != final_p and '_Full_Movie' not in ep_cand.name:
+                            try:
+                                ep_cand.unlink(missing_ok=True)
+                                cleaned_separate_count += 1
+                            except Exception:
+                                pass
+                    for srt_cand in list(d_clean.glob('Dubbed_*.srt')):
+                        if srt_cand.resolve() != final_p.with_suffix('.srt').resolve() and '_Full_Movie' not in srt_cand.name:
+                            try:
+                                srt_cand.unlink(missing_ok=True)
+                                cleaned_separate_count += 1
+                            except Exception:
+                                pass
 
         play_windows_completion_sound()
         return jsonify({
@@ -3673,33 +3682,109 @@ def pre_merge_raw_episodes_endpoint():
     """
     data = request.get_json(force=True) or {}
     video_paths = data.get("video_paths", [])
+    file_names = data.get("file_names", [])
     series_title = data.get("series_title", "Drama_Series")
+    folder_path = data.get("folder_path") or data.get("custom_export_dir")
+    auto_trim = bool(data.get("auto_trim_freeze", False))
 
     clean_title = re.sub(r'^(?:Dubbed_)+', '', str(series_title), flags=re.IGNORECASE)
+    clean_title = re.sub(r'^(?:Raw_Full_Movie_)+', '', clean_title, flags=re.IGNORECASE)
     clean_title = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', clean_title).strip('_ ')
     if not clean_title or clean_title.lower() in ("drama_series", "full_movie"):
         clean_title = "Drama_Series"
 
-    if not video_paths:
-        return jsonify({"success": False, "error": "No video paths provided"}), 400
-
     resolved_paths = []
+
+    # 1. First, check direct paths if provided
     for vp in video_paths:
+        if not vp:
+            continue
         p = Path(vp)
-        if p.exists():
+        if p.exists() and p.is_file():
             resolved_paths.append(str(p.resolve()))
             continue
         p_base = (BASE_DIR / vp).resolve()
-        if p_base.exists():
+        if p_base.exists() and p_base.is_file():
             resolved_paths.append(str(p_base))
             continue
+        if folder_path and (Path(folder_path) / p.name).exists() and (Path(folder_path) / p.name).is_file():
+            resolved_paths.append(str((Path(folder_path) / p.name).resolve()))
+            continue
         p_uploads = (Path("data/uploads") / p.name).resolve()
-        if p_uploads.exists():
+        if p_uploads.exists() and p_uploads.is_file():
             resolved_paths.append(str(p_uploads))
             continue
 
+    # 2. If video_paths were missing or only contained relative filenames, search candidate folders
+    names_to_find = [Path(fn).name for fn in file_names if fn] or [Path(vp).name for vp in video_paths if vp]
+    if (len(resolved_paths) < len(names_to_find) or len(resolved_paths) == 0) and names_to_find:
+        candidate_dirs = []
+        if folder_path:
+            p_fold = Path(folder_path)
+            candidate_dirs.append(p_fold)
+            candidate_dirs.append(p_fold.parent)
+        for root_str in ("D:/SN_Dramas", "C:/SN_Dramas"):
+            rp = Path(root_str)
+            if rp.exists():
+                candidate_dirs.append(rp)
+                if clean_title and clean_title.lower() != "drama_series":
+                    candidate_dirs.append(rp / clean_title)
+                try:
+                    for sub in rp.iterdir():
+                        if sub.is_dir() and sub not in candidate_dirs:
+                            candidate_dirs.append(sub)
+                except Exception:
+                    pass
+        candidate_dirs.append(Path("data/uploads"))
+        candidate_dirs.append(BASE_DIR)
+
+        resolved_by_name = []
+        for fn in names_to_find:
+            found_p = None
+            for cdir in candidate_dirs:
+                cand = (cdir / fn).resolve()
+                if cand.exists() and cand.is_file():
+                    found_p = str(cand)
+                    break
+                if not found_p and cdir.exists():
+                    try:
+                        for m in cdir.rglob(fn):
+                            if m.is_file() and m.stat().st_size > 50000:
+                                found_p = str(m.resolve())
+                                break
+                    except Exception:
+                        pass
+                if found_p:
+                    break
+            if found_p and found_p not in resolved_by_name:
+                resolved_by_name.append(found_p)
+        if len(resolved_by_name) >= 2 or (len(resolved_by_name) > len(resolved_paths)):
+            resolved_paths = resolved_by_name
+
+    # 3. If still not resolved or empty, but folder_path is provided: scan folder_path directly on disk!
+    if (not resolved_paths or len(resolved_paths) < 2) and folder_path:
+        f_dir = Path(folder_path)
+        if f_dir.exists():
+            valid_exts = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".ts"}
+            scanned = []
+            for item in f_dir.rglob("*"):
+                if item.is_file() and item.suffix.lower() in valid_exts:
+                    if not item.name.startswith("Dubbed_") and not item.name.startswith("Raw_"):
+                        scanned.append(item)
+            if scanned:
+                def natural_sort_key(s):
+                    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s.name)]
+                scanned.sort(key=natural_sort_key)
+                resolved_paths = [str(x.resolve()) for x in scanned]
+
     if not resolved_paths:
         return jsonify({"success": False, "error": "None of the episode files were found on disk"}), 404
+
+    # Natural numerical sort to guarantee Ep1 -> Ep2 -> ... -> Ep99 order
+    def sort_resolved(p_str):
+        name = Path(p_str).name
+        return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', name)]
+    resolved_paths.sort(key=sort_resolved)
 
     # If series title was generic, resolve authentic drama name from the source episode folder!
     if clean_title.lower() in ("drama_series", "full_movie", "") and resolved_paths:
@@ -3721,7 +3806,7 @@ def pre_merge_raw_episodes_endpoint():
         out_filename = f"Raw_Full_Movie_{clean_title}_{int(time.time())}.mp4"
         out_file = upload_dir / out_filename
 
-        merge_res = merge_videos(resolved_paths, str(out_file), auto_trim_freeze=True, return_details=True)
+        merge_res = merge_videos(resolved_paths, str(out_file), auto_trim_freeze=auto_trim, return_details=True)
         final_path = merge_res["output_file"]
         file_size_mb = round(Path(final_path).stat().st_size / (1024 * 1024), 2)
         play_windows_completion_sound()
