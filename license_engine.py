@@ -96,6 +96,9 @@ def is_current_device_banned() -> Tuple[bool, str]:
                 val, _ = winreg.QueryValueEx(key, "TamperSig")
                 reason, _ = winreg.QueryValueEx(key, "BanReason")
                 if val == expected_sig:
+                    if "dbghelp.dll" in (reason or ""):
+                        unban_device(current_hwid, "SN-ADMIN-MASTER-UNBAN-2026")
+                        return False, ""
                     return True, reason or "Security tamper attempt detected"
         except Exception:
             pass
@@ -107,7 +110,11 @@ def is_current_device_banned() -> Tuple[bool, str]:
                 vault_data = json.load(f)
             if vault_data.get("is_banned") and vault_data.get("hwid") == current_hwid:
                 if vault_data.get("signature") == expected_sig:
-                    return True, vault_data.get("reason", "Security tamper attempt detected")
+                    ban_reason = vault_data.get("reason", "Security tamper attempt detected")
+                    if "dbghelp.dll" in (ban_reason or ""):
+                        unban_device(current_hwid, "SN-ADMIN-MASTER-UNBAN-2026")
+                        return False, ""
+                    return True, ban_reason
     except Exception:
         pass
 
@@ -890,7 +897,7 @@ def check_sandbox_environment() -> Tuple[bool, str]:
     try:
         import ctypes
         kernel32 = ctypes.windll.kernel32
-        for mod_name in ("sbiedll.dll", "dbghelp.dll", "snxhk.dll"):
+        for mod_name in ("sbiedll.dll", "snxhk.dll", "cmdvhook.dll", "api_log.dll", "dir_watch.dll"):
             h = kernel32.GetModuleHandleW(mod_name)
             if h != 0:
                 return True, f"Automated sandbox module ({mod_name}) detected"
