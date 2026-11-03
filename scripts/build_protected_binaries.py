@@ -10,6 +10,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+# Ensure UTF-8 output on Windows consoles
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 def build():
@@ -51,6 +59,14 @@ setup(
 
     if setup_file.exists():
         setup_file.unlink()
+    # Clean up intermediate generated .c files
+    for mod in ['license_engine.c', 'series_memory.c']:
+        c_path = BASE_DIR / mod
+        if c_path.exists():
+            try:
+                c_path.unlink()
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     build()
