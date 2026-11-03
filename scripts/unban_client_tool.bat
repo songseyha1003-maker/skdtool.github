@@ -13,3 +13,4 @@ echo [SUCCESS] Your computer has been unlocked!
 echo You can now open SN TOOL normally.
 echo.
 pause
+
