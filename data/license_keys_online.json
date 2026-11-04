@@ -91,18 +91,5 @@
     "last_active": "2026-11-03 08:13:01",
     "use_count": 11,
     "last_active_hwid": "C844A3A4B66AF891"
-  },
-  "SN-PRO-526A-3693-F457-DBD7A0": {
-    "license_key": "SN-PRO-526A-3693-F457-DBD7A0",
-    "client_name": "Developer",
-    "plan": "PRO",
-    "created_at": "2026-11-02 14:56:57",
-    "expires_at": "LIFETIME",
-    "expiry_timestamp": 0,
-    "bound_hwid": "E53CEFB948DFC356",
-    "last_active": "2026-11-02 14:56:57",
-    "use_count": 6,
-    "last_active_hwid": "E53CEFB948DFC356",
-    "status": "ACTIVE"
   }
 }
