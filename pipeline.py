@@ -3,6 +3,7 @@ Unified Drama Voice Translation & Facebook Movie Recap Pipeline Manager (V2.0 Pr
 """
 import os
 import sys
+import re
 import json
 import uuid
 import asyncio
