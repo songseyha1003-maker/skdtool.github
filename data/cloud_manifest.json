@@ -1,10 +1,10 @@
 {
-  "version": "2.0.2",
+  "version": "2.0.3",
   "app_name": "SN TOOL - STUDIO PRO",
-  "release_date": "2026-11-02",
-  "title": "SN TOOL STUDIO PRO - Release v2.0.2 (Next-Gen AI Dubbing Brain & Turbo 1080p Downloader)",
-  "subtitle": "Official build v2.0.2 featuring Next-Gen AI Dubbing Brain, emotion-adaptive voices, and Turbo 1080p Downloader.",
-  "release_notes": "• 🧠 Next-Gen AI Dubbing Brain: Integrated Enterprise Character Knowledge Graph with automated Chinese-to-Khmer phonetic mapping and cross-episode storyline continuity!\n• 🎭 Emotion-Adaptive Voice Modulation: Intelligent dialogue emotion inference (Angry, Sad, Tender, Panic, Authoritative) with dynamic neural pitch and tempo modulation for cinema-grade acting!\n• ⚡ Turbo 1080p Self-Healing Downloader: Ultra-fast stream resolution with Smart Resumption and Fragment Self-Healing—zero corrupted video files even during network drops!\n• 🎬 1-Click Drama Social Card & Synopsis: Automated Khmer drama metadata cards and viral synopses ready for instant posting to Facebook, TikTok, and Telegram!\n• 🚀 Core Engine Throughput & Latency Boost: Massive pipeline memory optimization, accelerated subtitle rendering, and seamless multi-episode workflow stability.",
+  "release_date": "2026-11-04",
+  "title": "SN TOOL STUDIO PRO - Official Update v2.0.3 (False-Positive Hotfix & Stability Upgrade)",
+  "subtitle": "Official build v2.0.3 featuring security false-positive hotfix and stable translation pipeline.",
+  "release_notes": "• 🛡️ Hotfix Security Sentinel: Eliminated false-positive dbghelp.dll sandbox detection and enabled auto-healing hardware protection.\n• ⚡ Turbo Pipeline Stability: Optimized translation engine memory allocation and smooth episode processing.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }
