@@ -100,3 +100,4 @@ def build_icon():
 
 if __name__ == "__main__":
     build_icon()
+
