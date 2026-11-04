@@ -45,3 +45,4 @@ sys.path.insert(0, str(BASE_DIR))
 import license_engine
 license_engine.build_core_manifest()
 print("✅ Rebuilt core manifest")
+
