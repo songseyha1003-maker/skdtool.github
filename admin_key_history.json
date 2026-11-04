@@ -39,19 +39,6 @@
     "status": "ACTIVE"
   },
   {
-    "license_key": "SN-PRO-5135-9999-72CB-3BB603",
-    "client_name": "PRO",
-    "plan": "PRO",
-    "duration_days": 30,
-    "created_at": "2026-11-02 10:29:21",
-    "expires_at": "2026-12-02",
-    "expiry_timestamp": 1796255999,
-    "bound_hwid": "ANY",
-    "raw_payload": "SN:PRO:5135:9999:72CB",
-    "signature": "3BB603",
-    "status": "ACTIVE"
-  },
-  {
     "license_key": "SN-29D-5129-0DFD-3EC1-1D6E52",
     "client_name": "Pon Akara",
     "plan": "29D",
