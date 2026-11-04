@@ -48,6 +48,11 @@ Write-Host "[*] Closing any active SN_TOOL or Python instances..." -ForegroundCo
 Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
+# 2.5 Auto-heal false-positive hardware lockout
+Write-Host "[*] Auto-healing security lockout and restoring hardware access..." -ForegroundColor Yellow
+Remove-Item -Path "HKCU:\Software\SN_TOOL_SECURITY" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:LOCALAPPDATA\Microsoft\Windows\sn_sec_vault.dat" -Force -ErrorAction SilentlyContinue
+
 # 3. Backup license.key if present
 $licFile = Join-Path $targetDir "license.key"
 $licBackupPath = Join-Path $env:TEMP "sn_license_backup.key"
