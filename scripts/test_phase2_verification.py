@@ -26,8 +26,8 @@ def run_phase2_tests():
 
     mgr = DramaDownloadManager()
 
-    # 1. Test generate_drama_metadata_card
-    print("\n[TEST 1] Testing Drama Social Card & Khmer Synopsis Generation...")
+    # 1. Test clean download directory (no extra metadata/txt clutter)
+    print("\n[TEST 1] Verifying Clean Download Directory (No extra .json/.txt files)...")
     test_dir = Path("scratch/test_drama_dir")
     test_dir.mkdir(parents=True, exist_ok=True)
 
@@ -44,22 +44,9 @@ def run_phase2_tests():
     info_p = test_dir / "drama_info.json"
     syn_p = test_dir / "synopsis_khmer.txt"
 
-    assert info_p.exists(), "drama_info.json was not created!"
-    assert syn_p.exists(), "synopsis_khmer.txt was not created!"
-
-    with open(info_p, "r", encoding="utf-8") as f:
-        info_data = json.load(f)
-    print(f"  ✅ Title: {info_data.get('title')}")
-    print(f"  ✅ Platform: {info_data.get('platform')}")
-    print(f"  ✅ Episodes: {info_data.get('total_episodes')}")
-    print(f"  ✅ Quality: {info_data.get('quality')}")
-
-    syn_content = syn_p.read_text(encoding="utf-8")
-    assert "រឿងភាគ៖" in syn_content, "Missing Khmer title in synopsis card"
-    assert "1080p Full HD" in syn_content, "Missing 1080p quality tag"
-    print("  ✅ Social synopsis card rendered with clean formatting:")
-    for line in syn_content.splitlines()[:5]:
-        print(f"     {line}")
+    assert not info_p.exists(), "drama_info.json should not be created!"
+    assert not syn_p.exists(), "synopsis_khmer.txt should not be created!"
+    print("  ✅ Clean download verified: No clutter files created!")
 
     # 2. Test Stream Resolution with Smart Fallback
     print("\n[TEST 2] Testing Smart Stream Resolution across Platforms...")

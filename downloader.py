@@ -2642,66 +2642,10 @@ class DramaDownloadManager:
 
     def generate_drama_metadata_card(self, drama_dest_dir: Path, total_episodes: int = 0):
         """
-        Auto-generates a clean metadata package in the drama folder:
-        - drama_info.json: structured metadata
-        - synopsis_khmer.txt: natural Khmer synopsis ready for social media posting (Facebook/TikTok/Telegram)
+        Disabled per user preference: preserves completely clean download folders
+        containing exclusively episode video files and poster (no extra .json/.txt).
         """
-        if not self.current_drama or not drama_dest_dir.exists():
-            return
-
-        d = self.current_drama
-        title_cn = d.get("title_cn") or d.get("title", "Drama Series")
-        title_km = d.get("title_km") or title_cn
-        synopsis_raw = d.get("synopsis") or d.get("description") or ""
-        platform = str(d.get("platform_id") or "Short Drama").upper()
-
-        synopsis_km = synopsis_raw
-        if any('\u4e00' <= c <= '\u9fff' for c in synopsis_raw):
-            try:
-                from nisay_translate import translate_khmer
-                trans_syn = translate_khmer(synopsis_raw[:350], category="chinese_general", timeout=6.0)
-                if isinstance(trans_syn, str) and trans_syn:
-                    synopsis_km = trans_syn
-            except Exception:
-                synopsis_km = synopsis_raw
-
-        if not synopsis_km:
-            synopsis_km = f"រឿងភាគខ្លីដ៏ល្អមើល ដំណើររឿងជក់ចិត្ត និងទាក់ទាញអារម្មណ៍ ពេញលេញ {total_episodes} ភាគ ១០០%។"
-
-        info_data = {
-            "title": title_km,
-            "title_original": title_cn,
-            "platform": platform,
-            "total_episodes": total_episodes,
-            "quality": "1080p Full HD",
-            "synopsis_khmer": synopsis_km,
-            "generated_at": time.strftime("%Y-%m-%d %H:%M:%S")
-        }
-
-        info_path = drama_dest_dir / "drama_info.json"
-        try:
-            with open(info_path, "w", encoding="utf-8") as f:
-                json.dump(info_data, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
-
-        syn_card = f"""🎬 【រឿងភាគ៖ {title_km}】
-📺 ចំនួនភាគ៖ {total_episodes} ភាគ (ពេញលេញ ១០០%)
-🌟 គុណភាព៖ 1080p Full HD
-📱 វេទិកា៖ {platform}
-
-📖 សង្ខេបសាច់រឿង៖
-{synopsis_km}
-
-👉 ទាញយក និងបញ្ចូលសំឡេងដោយ៖ SN TOOL - STUDIO PRO
-"""
-        syn_path = drama_dest_dir / "synopsis_khmer.txt"
-        try:
-            with open(syn_path, "w", encoding="utf-8") as f:
-                f.write(syn_card.strip())
-            self.add_log(f"📋 Generated Drama Social Card & Khmer Synopsis: {syn_path.name}")
-        except Exception:
-            pass
+        return
 
     def start_download_batch(self, episode_ids: List[str], save_location: str, save_poster: bool = True, auto_merge_full: bool = False):
         """Start downloading selected episodes as real video files in a background worker."""
