@@ -3,6 +3,7 @@ Automated Batch & Folder Auto-Dubbing Engine
 Processes entire folders of drama episodes end-to-end with zero manual typing.
 """
 import sys
+import json
 import os
 import re
 import shutil

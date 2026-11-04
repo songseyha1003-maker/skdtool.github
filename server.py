@@ -86,6 +86,8 @@ from downloader import (
 )
 import hongguo_db
 import shortmax_service
+import hongguo_service
+import reelshort_service
 from recap_engine import RecapEngine, VIRAL_KHMER_HOOKS
 from batch_engine import batch_manager, EXPORTS_DIR
 from video_processor import (

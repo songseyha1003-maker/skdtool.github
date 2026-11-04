@@ -79,6 +79,7 @@ def ensure_db_initialized():
     if _DB_INITIALIZED and DB_PATH.exists():
         return
 
+    base = Path(__file__).resolve().parent
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     cur = conn.cursor()

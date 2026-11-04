@@ -28,6 +28,7 @@ if sys.platform == "win32":
 
 from license_engine import (
     generate_license_key,
+    generate_server_lease_token,
     verify_license_key,
     register_custom_key,
     revoke_license_key,

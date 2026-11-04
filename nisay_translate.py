@@ -301,6 +301,29 @@ def translate_khmer(
             sleep_s = backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]
             time.sleep(sleep_s)
 
+    def _fallback_single(src_t: str) -> str:
+        s_clean = (src_t or "").strip()
+        if not s_clean:
+            return ""
+        if entity_glossary:
+            for k, v in entity_glossary.items():
+                if k and v and k in s_clean:
+                    s_clean = s_clean.replace(k, v)
+        try:
+            import urllib.request
+            import urllib.parse
+            url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=km&dt=t&q=" + urllib.parse.quote(s_clean)
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                fb_data = json.loads(r.read().decode('utf-8'))
+                if fb_data and isinstance(fb_data, list) and fb_data[0]:
+                    joined = "".join([part[0] for part in fb_data[0] if part and part[0]]).strip()
+                    if joined:
+                        return joined
+        except Exception:
+            pass
+        return s_clean
+
     # ⚡ 2. Save translated lines into cache with per-line integrity verification
     if translated_batch and len(translated_batch) == len(uncached_texts):
         for orig_idx, (t_orig, t_km) in enumerate(zip(uncached_texts, translated_batch)):
@@ -328,28 +351,7 @@ def translate_khmer(
     # =========================================================================
     print(f"[Nisay Failover] Fast-failover engaged ({last_error}). Translating in parallel...")
 
-    def _fallback_single(src_t: str) -> str:
-        s_clean = (src_t or "").strip()
-        if not s_clean:
-            return ""
-        if entity_glossary:
-            for k, v in entity_glossary.items():
-                if k and v and k in s_clean:
-                    s_clean = s_clean.replace(k, v)
-        try:
-            import urllib.request
-            import urllib.parse
-            url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=km&dt=t&q=" + urllib.parse.quote(s_clean)
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-            with urllib.request.urlopen(req, timeout=10) as r:
-                fb_data = json.loads(r.read().decode('utf-8'))
-                if fb_data and isinstance(fb_data, list) and fb_data[0]:
-                    joined = "".join([part[0] for part in fb_data[0] if part and part[0]]).strip()
-                    if joined:
-                        return joined
-        except Exception:
-            pass
-        return s_clean
+    # (_fallback_single pre-defined above)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(12, len(uncached_texts) or 1)) as executor:
         fb_results = list(executor.map(_fallback_single, uncached_texts))
