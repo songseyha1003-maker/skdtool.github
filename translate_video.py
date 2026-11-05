@@ -3,6 +3,8 @@ import asyncio
 import os
 import sys
 import json
+import re
+import shutil
 from pathlib import Path
 
 # Enable utf-8 output in Windows terminal

@@ -1,4 +1,4 @@
-# SN TOOL Studio Pro - Universal PowerShell Client Updater (v1.1.6+)
+# SN TOOL - Universal PowerShell Client Updater (v1.1.6+)
 # Preserves license.key and updates all application files cleanly.
 # Can be run locally OR via 1-line web command: irm <url> | iex
 
@@ -6,7 +6,7 @@
 $ProgressPreference = 'SilentlyContinue'
 
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  🚀 SN TOOL STUDIO PRO - 1-CLICK CLIENT UPDATER (v2.0.0+)" -ForegroundColor Cyan
+Write-Host "  🚀 SN TOOL - 1-CLICK CLIENT UPDATER (v2.0.4+)" -ForegroundColor Cyan
 Write-Host "  📁 Turbo Downloader Engine & AnyReel/Multi-Platform Fix" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
@@ -47,11 +47,6 @@ Write-Host "[*] Target Installation: $targetDir" -ForegroundColor Yellow
 Write-Host "[*] Closing any active SN_TOOL or Python instances..." -ForegroundColor Yellow
 Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
-
-# 2.5 Auto-heal false-positive hardware lockout
-Write-Host "[*] Auto-healing security lockout and restoring hardware access..." -ForegroundColor Yellow
-Remove-Item -Path "HKCU:\Software\SN_TOOL_SECURITY" -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item -Path "$env:LOCALAPPDATA\Microsoft\Windows\sn_sec_vault.dat" -Force -ErrorAction SilentlyContinue
 
 # 3. Backup license.key if present
 $licFile = Join-Path $targetDir "license.key"
@@ -171,6 +166,11 @@ if ($licExisted -and (Test-Path $licBackupPath)) {
     }
 }
 
+# Signal auto-heal for core manifest
+try {
+    New-Item -ItemType File -Path (Join-Path $targetDir "data\.update_pending") -Force | Out-Null
+} catch {}
+
 # 7. Cleanup temp zip if downloaded
 if ($tempZip -ne (Join-Path $targetDir "SN_TOOL_UPDATE.zip") -and (Test-Path $tempZip)) {
     Remove-Item -Path $tempZip -Force -ErrorAction SilentlyContinue
@@ -185,14 +185,14 @@ if (-not (Test-Path $batFile)) {
 
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Green
-Write-Host "  🎉 [SUCCESS] SN TOOL STUDIO PRO has been updated to v1.1.9!" -ForegroundColor Green
+Write-Host "  🎉 [SUCCESS] SN TOOL has been updated to v2.0.4!" -ForegroundColor Green
 Write-Host "========================================================================" -ForegroundColor Green
 Write-Host ""
 
 if (Test-Path $exeFile) {
-    Write-Host "[*] Launching SN TOOL Studio Pro..." -ForegroundColor Cyan
+    Write-Host "[*] Launching SN TOOL..." -ForegroundColor Cyan
     Start-Process -FilePath $exeFile -WorkingDirectory $targetDir
 } elseif (Test-Path $batFile) {
-    Write-Host "[*] Launching SN TOOL Studio Pro..." -ForegroundColor Cyan
+    Write-Host "[*] Launching SN TOOL..." -ForegroundColor Cyan
     Start-Process -FilePath $batFile -WorkingDirectory $targetDir
 }

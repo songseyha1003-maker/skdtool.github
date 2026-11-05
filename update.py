@@ -15,8 +15,8 @@ import urllib.error
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
-CURRENT_VERSION = "2.0.3"
-APP_NAME = "SN TOOL - STUDIO PRO"
+CURRENT_VERSION = "2.0.4"
+APP_NAME = "SN TOOL"
 DEFAULT_UPDATE_ZIP_URL = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
 
 def parse_version_tuple(ver_str: str) -> Tuple[int, ...]:
@@ -198,8 +198,8 @@ def check_for_updates(github_token: str = None) -> Dict[str, Any]:
         "has_update": False,
         "current_version": local_ver,
         "latest_version": local_ver,
-        "title": "SN TOOL STUDIO PRO",
-        "release_notes": "You are currently running the official release of SN TOOL STUDIO PRO.",
+        "title": "SN TOOL",
+        "release_notes": "You are currently running the official release of SN TOOL.",
         "download_url": DEFAULT_UPDATE_ZIP_URL,
         "channel": "stable"
     }
@@ -374,6 +374,12 @@ if ($licBackup -ne $null) {{
         Log-Update "Error restoring license key: $_"
     }}
 }}
+
+# Signal auto-heal & re-sign for core manifest
+try {{
+    New-Item -ItemType File -Path (Join-Path $appDir "data\\.update_pending") -Force | Out-Null
+    Log-Update "Created update_pending signal for automatic manifest re-signing."
+}} catch {{}}
 
 # 5. Remove temporary download package
 Remove-Item -Force $destZip -ErrorAction SilentlyContinue

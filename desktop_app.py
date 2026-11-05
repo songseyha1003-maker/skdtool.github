@@ -153,7 +153,7 @@ def focus_existing_window():
     if sys.platform == "win32":
         try:
             import ctypes
-            hwnd = ctypes.windll.user32.FindWindowW(None, "SN TOOL - STUDIO PRO")
+            hwnd = ctypes.windll.user32.FindWindowW(None, "SN TOOL")
             if not hwnd:
                 EnumWindows = ctypes.windll.user32.EnumWindows
                 EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
@@ -269,7 +269,7 @@ def is_window_zoomed():
                     except Exception:
                         pass
             if not hwnd:
-                hwnd = ctypes.windll.user32.FindWindowW(None, "SN TOOL - STUDIO PRO")
+                hwnd = ctypes.windll.user32.FindWindowW(None, "SN TOOL")
             if hwnd:
                 return bool(ctypes.windll.user32.IsZoomed(hwnd))
     except Exception:
@@ -427,7 +427,7 @@ def enforce_center_window(target_hwnd):
     except Exception:
         pass
 
-def launch_native_window(url="http://127.0.0.1:8000", title="SN TOOL - STUDIO PRO"):
+def launch_native_window(url="http://127.0.0.1:8000", title="SN TOOL"):
     """
     Open application in a dedicated standalone native desktop window:
     1. Try pywebview (Edge WebView2 native embed) in standard centered desktop window size
@@ -609,7 +609,7 @@ def launch_native_window(url="http://127.0.0.1:8000", title="SN TOOL - STUDIO PR
                     "--disable-features=Translate",
                     "--disable-extensions",
                     "--class=SN_TOOL",
-                    "--name=SN TOOL - STUDIO PRO"
+                    "--name=SN TOOL"
                 ]
                 proc = subprocess.Popen(cmd)
                 proc.wait()
@@ -633,7 +633,7 @@ def launch_native_window(url="http://127.0.0.1:8000", title="SN TOOL - STUDIO PR
 
 def main():
     print("========================================================")
-    print(" 🎬 Starting SN TOOL - STUDIO PRO (Native Desktop App)...")
+    print(" 🎬 Starting SN TOOL (Native Desktop App)...")
     print(" 🎙️ Official Voiceover Models: Piseth (Male Solo) & Sreymom (Female Solo)")
     print(" 🖥️ Window Mode: Dedicated Standalone Native Application")
     print("========================================================")

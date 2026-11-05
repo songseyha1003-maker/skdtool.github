@@ -3,12 +3,12 @@ chcp 65001 > nul
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 cd /d "%~dp0"
-title 🎬 SN TOOL - STUDIO PRO (AI Drama Dubbing Studio)
+title 🎬 SN TOOL (AI Drama Dubbing Studio)
 color 0e
 cls
 
 echo ========================================================================
-echo  🎬 Launching SN TOOL - STUDIO PRO (Native Desktop Application)...
+echo  🎬 Launching SN TOOL (Native Desktop Application)...
 echo  🎙️ Official Voiceover Models: Piseth (Male Solo) ^& Sreymom (Female Solo)
 echo ========================================================================
 echo.

@@ -10,55 +10,21 @@
     "bound_hwid": "ANY",
     "status": "ACTIVE"
   },
-  "SN-ADMIN-MASTER-2026-VIP": {
-    "license_key": "SN-ADMIN-MASTER-2026-VIP",
-    "client_name": "Administrator",
-    "plan": "LIFETIME",
-    "duration_days": 0,
-    "created_at": "2026-10-01 00:00:00",
-    "expires_at": "LIFETIME",
-    "expiry_timestamp": 0,
-    "bound_hwid": "ANY",
-    "status": "ACTIVE"
-  },
-  "SN-VIP-LIFETIME-PRO-2026": {
-    "license_key": "SN-VIP-LIFETIME-PRO-2026",
-    "client_name": "Administrator",
-    "plan": "LIFETIME",
-    "duration_days": 0,
-    "created_at": "2026-10-01 00:00:00",
-    "expires_at": "LIFETIME",
-    "expiry_timestamp": 0,
-    "bound_hwid": "ANY",
-    "status": "ACTIVE"
-  },
-  "SN-PRO-8888-9999-VIP": {
-    "license_key": "SN-PRO-8888-9999-VIP",
-    "client_name": "Administrator",
-    "plan": "LIFETIME",
-    "duration_days": 0,
-    "created_at": "2026-10-01 00:00:00",
-    "expires_at": "LIFETIME",
-    "expiry_timestamp": 0,
-    "bound_hwid": "ANY",
-    "status": "ACTIVE"
-  },
-  "SN-7D-5110-3693-679C-578382": {
-    "license_key": "SN-7D-5110-3693-679C-578382",
-    "client_name": "SAL",
-    "plan": "PRO 10D",
-    "duration_days": 27,
-    "created_at": "2026-10-19 13:20:00",
-    "expires_at": "2026-11-16",
-    "expiry_timestamp": 1794787199,
-    "bound_hwid": "E53CEFB948DFC356",
-    "raw_payload": "SN:7D:5110:3693:679C",
-    "signature": "578382",
+  "SN-30D-5129-5580-C9CC-704A7D": {
+    "license_key": "SN-30D-5129-5580-C9CC-704A7D",
+    "client_name": "Bong Nak",
+    "plan": "30D",
+    "duration_days": 30,
+    "created_at": "2026-10-21 09:17:45",
+    "expires_at": "2026-11-20",
+    "expiry_timestamp": 1795219199,
+    "bound_hwid": "C844A3A4B66AF891",
+    "raw_payload": "SN:30D:5129:5580:C9CC",
+    "signature": "704A7D",
     "status": "ACTIVE",
-    "last_renewed": "2026-11-04 09:58:30",
-    "last_active": "2026-11-04 08:45:49",
-    "use_count": 1875,
-    "last_active_hwid": "E53CEFB948DFC356"
+    "last_active": "2026-11-03 08:13:01",
+    "use_count": 11,
+    "last_active_hwid": "C844A3A4B66AF891"
   },
   "SN-29D-5129-0DFD-3EC1-1D6E52": {
     "license_key": "SN-29D-5129-0DFD-3EC1-1D6E52",
@@ -76,20 +42,21 @@
     "use_count": 3,
     "last_active_hwid": "09935A76E7AE4525"
   },
-  "SN-30D-5129-5580-C9CC-704A7D": {
-    "license_key": "SN-30D-5129-5580-C9CC-704A7D",
-    "client_name": "Bong Nak",
-    "plan": "30D",
-    "duration_days": 30,
-    "created_at": "2026-10-21 09:17:45",
-    "expires_at": "2026-11-20",
-    "expiry_timestamp": 1795219199,
-    "bound_hwid": "C844A3A4B66AF891",
-    "raw_payload": "SN:30D:5129:5580:C9CC",
-    "signature": "704A7D",
+  "SN-7D-5110-3693-679C-578382": {
+    "license_key": "SN-7D-5110-3693-679C-578382",
+    "client_name": "SAL",
+    "plan": "PRO 10D",
+    "duration_days": 27,
+    "created_at": "2026-10-19 13:20:00",
+    "expires_at": "2026-11-16",
+    "expiry_timestamp": 1794787199,
+    "bound_hwid": "E53CEFB948DFC356",
+    "raw_payload": "SN:7D:5110:3693:679C",
+    "signature": "578382",
     "status": "ACTIVE",
-    "last_active": "2026-11-03 08:13:01",
-    "use_count": 11,
-    "last_active_hwid": "C844A3A4B66AF891"
+    "last_renewed": "2026-11-04 09:58:30",
+    "last_active": "2026-11-04 08:45:49",
+    "use_count": 1875,
+    "last_active_hwid": "E53CEFB948DFC356"
   }
 }
