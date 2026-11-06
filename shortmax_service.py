@@ -277,14 +277,14 @@ def resolve_shortmax_episodes(drama: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "duration_sec": 120,
                 "resolution": "1080p Full HD",
                 "file_size": "25.0 MB",
-                "status": "Ready",
+                "status": "Unavailable",
                 "progress": 0,
                 "stream_url": "",
                 "download_url": "",
                 "poster": drama.get("poster") or "",
                 "source": "ShortMax 1080p HD Stream",
                 "is_online_stream": False,
-                "is_selected": True
+                "is_selected": False
             })
         return episodes
 

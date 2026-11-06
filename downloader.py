@@ -936,14 +936,16 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
                     drama["total_episodes"] = len(rs_eps)
                     return rs_eps
 
-                # Fallback: Populate preview stream for UI playback without falsely marking as master full
+                # Fallback: Populate preview stream for UI playback ONLY (do not populate download_url to prevent duplicate episode downloads)
                 first_direct = next((e["stream_url"] for e in rs_eps if e.get("stream_url") and (".m3u8" in e.get("stream_url", "") or ".mp4" in e.get("stream_url", ""))), "")
                 if first_direct:
                     for e in rs_eps:
                         if not e.get("stream_url"):
-                            e["stream_url"] = first_direct
-                            e["download_url"] = first_direct
                             e["preview_stream_url"] = first_direct
+                            e["stream_url"] = ""
+                            e["download_url"] = ""
+                            e["status"] = "Unavailable"
+                            e["is_selected"] = False
                     drama["total_episodes"] = len(rs_eps)
                     return rs_eps
         except Exception as rs_e:
@@ -1127,27 +1129,6 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
         except Exception:
             pass
 
-    # Universal High-Definition Mirror Cluster Fallback (Guarantees 100% active 1080p streams across all 633,672 dramas)
-    if not stream_eps and not master_full_url and not (sid and hg_vids):
-        try:
-            ai_cache, ai_title_index = get_ai_streams_cache()
-            if ai_cache:
-                import hashlib
-                multi_keys = [k for k, v in ai_cache.items() if v.get("play_url") and ("#" in v["play_url"] or "$$$" in v["play_url"])]
-                keys = multi_keys if (multi_keys and total_expected > 1) else list(ai_cache.keys())
-                hash_int = int(hashlib.md5(str(drama_id).encode("utf-8")).hexdigest(), 16)
-                pick_idx = hash_int % len(keys)
-                mirror_item = ai_cache[keys[pick_idx]]
-                if mirror_item and mirror_item.get("play_url"):
-                    parsed_mirror = parse_vod_play_url(mirror_item["play_url"], "Universal HD Cluster")
-                    if parsed_mirror:
-                        stream_eps = parsed_mirror
-                        found_stream_map = {it.get("episode_num"): it for it in stream_eps}
-                        if len(parsed_mirror) == 1:
-                            master_full_url = parsed_mirror[0].get("stream_url", "")
-        except Exception:
-            pass
-
     episodes = []
     ep1_stream = get_hongguo_episode_real_stream_url(sid, hg_vids[0]) if (sid and hg_vids) else ""
     for ep_num in range(1, total_expected + 1):
@@ -1155,22 +1136,14 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
         stream_it = found_stream_map.get(ep_num)
         if not stream_it and stream_eps and ep_num <= len(stream_eps):
             stream_it = stream_eps[ep_num - 1]
-        elif not stream_it and stream_eps:
-            # Boundary tail fallback: If ep_num exceeds len(stream_eps), replicate tail episode so NO episode is empty
-            stream_it = stream_eps[-1]
 
         s_url = stream_it.get("stream_url", "") if stream_it else (master_full_url or "")
-
         src = stream_it.get("source", "Chinese HD Stream") if stream_it else ("Online Stream" if s_url else "Hongguo VIP ByteDance CDN")
 
-        # Authentic 1-to-1 Hongguo VID mapping (NO modulo looping!)
+        # Authentic 1-to-1 Hongguo VID mapping
         vid = hg_vids[ep_num - 1] if (hg_vids and ep_num <= len(hg_vids)) else ""
         if not s_url and ep_num == 1 and ep1_stream:
             s_url = ep1_stream
-
-        # Ultimate fail-safe stream guarantee: Ensure s_url is never empty
-        if not s_url:
-            s_url = master_full_url or ep1_stream or "https://play.modujx17.com/20260722/fsKCuaqr/index.m3u8"
 
         # Fast local file check
         is_done = False
@@ -1185,7 +1158,9 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
                 v_url = f"/media/{f_path}"
                 sz_mb = f"{(ep_f.stat().st_size / (1024 * 1024)):.1f}"
 
-        download_target_url = s_url or (f"https://hongguoduanju.com/player/{sid}/{vid}" if (sid and vid) else s_url)
+        has_stream = bool(is_done or s_url or (sid and vid))
+        ep_status = "Completed" if is_done else ("Ready" if has_stream else "Unavailable")
+        download_target_url = s_url or (f"https://hongguoduanju.com/player/{sid}/{vid}" if (sid and vid) else "")
 
         episodes.append({
             "id": ep_id,
@@ -1200,17 +1175,17 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
             "resolution": "1080p Full HD",
             "file_size": f"{sz_mb} MB",
             "size_mb": sz_mb,
-            "status": "Completed" if is_done else "Ready",
+            "status": ep_status,
             "progress": 100 if is_done else 0,
             "filepath": f_path,
             "video_url": v_url or s_url,
-            "stream_url": str(s_url or master_full_url or ""),
-            "download_url": str(download_target_url or s_url or master_full_url or ""),
-            "master_stream_url": str(master_full_url or s_url or ""),
+            "stream_url": str(s_url or ""),
+            "download_url": str(download_target_url or s_url or ""),
+            "master_stream_url": str(master_full_url or ""),
             "is_master_full": bool(master_full_url and not stream_it),
             "source": "Local Storage" if is_done else src,
-            "is_online_stream": True,
-            "is_selected": True
+            "is_online_stream": bool(s_url),
+            "is_selected": bool(has_stream)
         })
 
     return episodes
@@ -1750,8 +1725,8 @@ def resolve_full_series_master_stream(drama_title: str, total_eps: int = 50, dra
                     break
         if c_ai and c_ai.get("play_url"):
             parsed = parse_vod_play_url(c_ai["play_url"], "AI Stream Cluster")
-            if parsed:
-                # Prefer full movie stream or first episode stream
+            if parsed and len(parsed) == 1:
+                # Prefer full movie stream ONLY if it is genuinely a single full-length movie
                 first_u = parsed[0].get("stream_url", "")
                 if first_u:
                     _DRAMA_MASTER_STREAM_CACHE[cache_k] = first_u
@@ -1945,16 +1920,8 @@ def slice_full_movie_into_episodes(
                         sz_mb = ep_dest.stat().st_size / (1024 * 1024)
                         on_episode_ready(ep_num, ep_dest, sz_mb)
                 elif not (ep_dest.exists() and ep_dest.stat().st_size > 50000):
-                    # Zero-dropped episode guarantee: if tail/boundary slice fails, replicate from last valid slice
-                    if created_files and created_files[-1].exists() and created_files[-1].stat().st_size > 50000:
-                        try:
-                            shutil.copy2(str(created_files[-1]), str(ep_dest))
-                            created_files.append(ep_dest)
-                            if on_episode_ready:
-                                sz_mb = ep_dest.stat().st_size / (1024 * 1024)
-                                on_episode_ready(ep_num, ep_dest, sz_mb)
-                        except Exception:
-                            pass
+                    # Do not replicate previous slices to prevent duplicate episodes
+                    pass
             except Exception:
                 pass
             finally:
@@ -3160,24 +3127,17 @@ class DramaDownloadManager:
                         except Exception:
                             pass
 
-                # Fail-safe candidate stream guarantee for this episode if cand_urls is empty
-                if not cand_urls and self.current_drama:
-                    d_id = str(self.current_drama.get("id") or "")
-                    ai_cache, _ = get_ai_streams_cache()
-                    if ai_cache:
-                        keys = list(ai_cache.keys())
-                        pick_idx = abs(hash(f"{d_id}_{ep_num}")) % len(keys)
-                        mirror_item = ai_cache[keys[pick_idx]]
-                        if mirror_item and mirror_item.get("play_url"):
-                            parsed_mirror = parse_vod_play_url(mirror_item["play_url"])
-                            for p_ep in parsed_mirror:
-                                if p_ep.get("stream_url"):
-                                    cand_urls.append(p_ep["stream_url"])
-                                    break
-                    if not cand_urls and master_full_url:
-                        cand_urls.append(master_full_url)
-                    if not cand_urls:
-                        cand_urls.append("https://play.modujx17.com/20260722/fsKCuaqr/index.m3u8")
+                if not cand_urls and master_full_url:
+                    cand_urls.append(master_full_url)
+
+                if not cand_urls:
+                    with self._lock:
+                        ep["status"] = "Failed"
+                        ep["progress"] = 0
+                        self.stats["failed"] += 1
+                        self._recalc_progress(selected_eps)
+                        self.add_log(f"❌ [EP {ep_num:02d}/{total_cnt:02d}] មិនមាន Link Stream ពិតប្រាកដសម្រាប់ភាគនេះឡើយ (No genuine stream URL found)")
+                    return False
 
                 def single_ep_hook(pct: int):
                     with self._lock:
@@ -3791,32 +3751,16 @@ class DramaDownloadManager:
                             if self.stats["failed"] > 0:
                                 self.stats["failed"] -= 1
                     else:
-                        # Self-Healing Zero-Failure Guarantee:
-                        # If a tail or boundary episode failed to download, heal it immediately from the nearest valid episode!
-                        valid_cands = [f for f in drama_dest_dir.glob("EP_*.mp4") if f.is_file() and f.stat().st_size > 100000]
-                        if valid_cands:
-                            try:
-                                shutil.copy2(str(valid_cands[-1]), str(ep_f))
-                                sz_mb = ep_f.stat().st_size / (1024 * 1024)
-                                ep["status"] = "Completed"
-                                ep["progress"] = 100
-                                ep["filepath"] = str(ep_f.resolve()).replace("\\", "/")
-                                ep["video_url"] = f"/media/{ep['filepath']}"
-                                ep["size_mb"] = f"{sz_mb:.1f}"
-                                self.stats["completed"] += 1
-                                if self.stats["failed"] > 0:
-                                    self.stats["failed"] -= 1
-                                self._recalc_progress(selected_eps)
-                                self.add_log(f"✔ [Self-Healing Engine] Auto-recovered & verified: {ep_f.name}")
-                            except Exception:
-                                pass
+                        # If episode could not be downloaded, mark honestly as Failed without duplicating other episodes
                         if ep.get("status") != "Completed":
                             ep["status"] = "Failed"
                             ep["progress"] = 0
 
                 self.stats["progress_percent"] = int((self.stats["completed"] / total) * 100) if total > 0 else 100
                 if self.stats["completed"] == total:
-                    self.add_log(f"🎉 ជោគជ័យ ១០០%! បានទាញយកចប់សព្វគ្រប់ {total}/{total} ភាគ គ្មានការបរាជ័យឡើយ!")
+                    self.add_log(f"🎉 ជោគជ័យ ១០០%! បានទាញយកចប់សព្វគ្រប់ {total}/{total} ភាគ ដោយភាពត្រឹមត្រូវពិតប្រាកដ!")
+                else:
+                    self.add_log(f"⚠️ បានបញ្ចប់ការទាញយក: ជោគជ័យ {self.stats['completed']}/{total} ភាគ, បរាជ័យ {self.stats['failed']} ភាគ (ភាគដែលបរាជ័យដោយសារពុំមាន Link Stream ពី Server)។")
 
             # Auto-Merge into Full Drama Movie (ទាញចប់មួយរឿងពេញតែម្ដង)
             if auto_merge_full and not self.stop_requested:

@@ -6,8 +6,8 @@
 $ProgressPreference = 'SilentlyContinue'
 
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  🚀 SN TOOL - 1-CLICK CLIENT UPDATER (v2.0.4+)" -ForegroundColor Cyan
-Write-Host "  📁 Turbo Downloader Engine & AnyReel/Multi-Platform Fix" -ForegroundColor Cyan
+Write-Host "  🚀 SN TOOL - 1-CLICK CLIENT UPDATER (v2.0.5+)" -ForegroundColor Cyan
+Write-Host "  🎯 100% Genuine Downloader & Drama Engine Integrity" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -185,7 +185,7 @@ if (-not (Test-Path $batFile)) {
 
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Green
-Write-Host "  🎉 [SUCCESS] SN TOOL has been updated to v2.0.4!" -ForegroundColor Green
+Write-Host "  🎉 [SUCCESS] SN TOOL has been updated to v2.0.5!" -ForegroundColor Green
 Write-Host "========================================================================" -ForegroundColor Green
 Write-Host ""
 

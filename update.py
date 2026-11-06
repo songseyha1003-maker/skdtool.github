@@ -15,7 +15,7 @@ import urllib.error
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
-CURRENT_VERSION = "2.0.4"
+CURRENT_VERSION = "2.0.5"
 APP_NAME = "SN TOOL"
 DEFAULT_UPDATE_ZIP_URL = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
 

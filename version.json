@@ -1,9 +1,9 @@
 {
-  "version": "2.0.4",
+  "version": "2.0.5",
   "app_name": "SN TOOL",
-  "release_date": "2026-11-05",
-  "title": "SN TOOL - Official Release v2.0.4 (Smart Sentinel Auto-Healing & Pipeline Stability)",
-  "release_notes": "• 🛡️ Smart Sentinel Auto-Healing Engine: Completely eliminated false-positive hardware bans during updates and module enhancements; introduced self-healing cryptographic re-signing.\n• ⚡ Pipeline & Batch Engine Hotfix: Fully resolved missing module dependencies ('re', 'time', 'json', 'shutil') across drama translation and dubbing workflows.\n• 🎬 Unified Concise Branding: Streamlined application identity to 'SN TOOL' across all native window interfaces, taskbars, and client updaters.\n• 🧠 Drama Series Memory v2.0: Deepened character knowledge graph injection ensuring 100% cross-episode name and voice consistency.",
+  "release_date": "2026-11-06",
+  "title": "SN TOOL - Official Release v2.0.5 (100% Genuine Downloader & Integrity Fix)",
+  "release_notes": "• 🎯 100% Genuine Drama Downloader Engine: Completely eliminated fake random fallbacks, hardcoded mirror fallbacks, and duplicate episode spoofing across all platforms.\n• 🛡️ Transparent Episode Availability: Unstreamed or VIP paywalled episodes are now accurately and honestly flagged as 'Unavailable' with automatic deselect, guaranteeing only genuine files are downloaded.\n• ⚡ ShortMax & ReelShort Stream Accuracy: Enforced strict raw stream verification for genuine 720p/1080p video retrieval.\n• 🧹 Storage & Performance Optimization: Cleaned legacy runtime caches and optimized system memory.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }
