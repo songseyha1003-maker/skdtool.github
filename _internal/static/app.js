@@ -11090,8 +11090,9 @@ async function checkDeviceLicenseStatus() {
             }
             if (planElem) planElem.textContent = data.plan || "PRO Studio";
             if (expiryElem) {
-                if (data.is_expiring_soon && data.days_remaining !== null) {
-                    expiryElem.innerHTML = `${data.expires_at || "LIFETIME"} <span style="color:#fbbf24; font-weight:bold; margin-left:6px;">(${data.days_remaining} days left)</span>`;
+                if (data.days_remaining !== null && data.days_remaining !== undefined && data.expires_at && data.expires_at !== "LIFETIME") {
+                    const daysColor = data.is_expiring_soon ? "#fbbf24" : "#38bdf8";
+                    expiryElem.innerHTML = `${data.expires_at} <span style="color:${daysColor}; font-weight:700; margin-left:6px; font-size:0.82rem;">(${data.days_remaining} days left)</span>`;
                 } else {
                     expiryElem.textContent = data.expires_at || "LIFETIME";
                 }

@@ -3341,7 +3341,7 @@ function startAudioPlaybackVUMeter() {
 let exportJobTimer = null;
 let exportPercent = 0;
 let exportElapsedSec = 0;
-let currentExportOutputMode = localStorage.getItem('sn_export_output_mode') || 'separate'; // 'separate' | 'full' | 'both'
+let currentExportOutputMode = 'separate'; // 'separate' | 'full' | 'both'
 function sanitizeExportFolderPath(rawPath) {
     if (!rawPath || typeof rawPath !== 'string') return "";
     let clean = rawPath.trim().replace(/\\/g, '/').replace(/\/+$/, '');
@@ -3623,7 +3623,6 @@ function openExportOptionsModal() {
 
 function selectExportOutputMode(mode) {
     currentExportOutputMode = mode;
-    try { localStorage.setItem('sn_export_output_mode', mode); } catch (e) {}
     const optSep = document.getElementById('export-opt-separate');
     const optFull = document.getElementById('export-opt-full');
     const optBoth = document.getElementById('export-opt-both');
@@ -3649,10 +3648,9 @@ async function confirmAndExecuteExport() {
         const exportBtn = document.getElementById('btn-tab-export');
         if (exportBtn) exportBtn.classList.remove('export-ready-pulse');
 
-        // If sibling episodes were detected in directory, process all episodes based on chosenMode
-        if (siblings && siblings.length > 1) {
-            const modeDesc = (chosenMode === 'full') ? 'Full Movie Merged' : ((chosenMode === 'both') ? 'Both Episodes & Full Movie' : 'Separate Episodes');
-            showToast(`Exporting all ${siblings.length} episodes from "${folderTitle}" (${modeDesc})...`);
+        // If user chose full movie merged or both, and sibling episodes were detected in directory
+        if ((chosenMode === 'full' || chosenMode === 'both') && siblings && siblings.length > 1) {
+            showToast(`Auto-combining all ${siblings.length} episodes from "${folderTitle}" into full movie...`);
             startStudioBatchDubbingPipeline(siblings, chosenMode);
             return;
         }
@@ -4302,29 +4300,6 @@ async function selectDramaCard(dramaId, openQueueMode = false) {
 
     // 2. INSTANT OPTIMISTIC FEEDBACK (< 1ms): Render immediate metadata from memory/catalog map
     const cachedDrama = (window.dlCatalogMap && window.dlCatalogMap.get(strDramaId)) || (dlDramaDetailCache.get(strDramaId)?.drama);
-    const isNewDrama = (!dlCurrentDrama || String(dlCurrentDrama.id) !== strDramaId);
-    if (isNewDrama) {
-        dlQueueActiveEpisodeNum = 1;
-        // Cleanly stop any existing video playback immediately so old drama never sticks!
-        const qVideo = document.getElementById('dl-q-video-elem');
-        if (qVideo) {
-            dlCurrentLoadedUrl = "";
-            if (dlHlsInstance) {
-                try { dlHlsInstance.destroy(); } catch (e) {}
-                dlHlsInstance = null;
-            }
-            try {
-                qVideo.pause();
-                qVideo.removeAttribute('src');
-                qVideo.load();
-                if (cachedDrama && cachedDrama.poster) {
-                    qVideo.poster = cachedDrama.poster;
-                }
-            } catch (e) {}
-        }
-        const subtitlesElem = document.getElementById('dl-q-video-subtitles');
-        if (subtitlesElem) subtitlesElem.style.display = 'none';
-    }
     if (cachedDrama) {
         dlCurrentDrama = cachedDrama;
         const totalEps = cachedDrama.total_episodes || 80;
@@ -5001,212 +4976,46 @@ function toggleSelectAllQueueEpisodes() {
 }
 
 let dlHlsInstance = null;
-let dlCurrentLoadedUrl = "";
-let dlPreviewPlaySeq = 0;
 
-function loadVideoWithHls(video, url, posterUrl, autoPlay = true, isMasterFull = false, epNum = 1) {
-    if (!video) return;
-
-    if (posterUrl && !video.poster) video.poster = posterUrl;
-    if (!url) return;
-
-    const playOverlay = document.getElementById('dl-q-center-play');
-    const playBtnText = document.getElementById('dl-q-play-text');
-    const playBtnIcon = document.getElementById('dl-q-play-icon');
-
-    const setPlayingUI = (playing) => {
-        if (playing) {
-            if (playOverlay) playOverlay.classList.add('hidden');
-            if (playBtnText) playBtnText.textContent = 'Pause';
-            if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-pause';
-        } else {
-            if (playOverlay) playOverlay.classList.remove('hidden');
-            if (playBtnText) playBtnText.textContent = 'Play';
-            if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
-        }
-    };
-
-    video.onplaying = () => setPlayingUI(true);
-    video.onpause = () => setPlayingUI(false);
-
-    // Identify HLS stream format
-    const isHls = (
-        url.includes('.m3u8') || 
-        url.includes('/hls/') || 
-        url.includes('hls_playlist') ||
-        (url.includes('stream-proxy') && !url.includes('.mp4') && !url.includes('.webm'))
-    ) && window.Hls && Hls.isSupported();
-
-    // 1. FAST PATH: Same stream is already loaded (Master Full Series or rapid episode change)
-    if (dlCurrentLoadedUrl === url && (video.src || (dlHlsInstance && dlHlsInstance.media))) {
-        if (isMasterFull && epNum > 1) {
-            const targetSec = Math.min((epNum - 1) * 90, Math.max(0, (video.duration || 100) - 10));
-            try { video.currentTime = targetSec; } catch (e) {}
-        } else if (!isMasterFull) {
-            try { video.currentTime = 0; } catch (e) {}
-        }
-        if (autoPlay && video.paused) {
-            const p = video.play();
-            if (p !== undefined) {
-                p.then(() => setPlayingUI(true)).catch(() => {
-                    video.muted = true;
-                    video.play().then(() => setPlayingUI(true)).catch(() => setPlayingUI(false));
-                });
-            }
-        }
-        return;
-    }
-
-    dlCurrentLoadedUrl = url;
-
-    // Reset old HLS instance completely so no corrupted buffers or PTS mismatches remain
+function loadVideoWithHls(video, url, posterUrl) {
     if (dlHlsInstance) {
-        try {
-            dlHlsInstance.stopLoad();
-            dlHlsInstance.detachMedia();
-            dlHlsInstance.destroy();
-        } catch (e) {}
+        dlHlsInstance.destroy();
         dlHlsInstance = null;
     }
-
-    try {
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-    } catch (e) {}
-
-    // 2. High-performance Turbo HLS Engine for Ultra-Smooth VOD Playback
-    if (isHls) {
-        dlHlsInstance = new Hls({
-            enableWorker: true,
-            lowLatencyMode: false,
-            backBufferLength: 30,
-            maxBufferLength: 30,
-            maxMaxBufferLength: 60,
-            maxBufferSize: 60 * 1024 * 1024,
-            maxBufferHole: 0.5,
-            highBufferWatchdogPeriod: 2,
-            nudgeOffset: 0.1,
-            nudgeMaxRetry: 5,
-            startFragPrefetch: true,
-            autoStartLoad: true
-        });
-
-        dlHlsInstance.on(Hls.Events.ERROR, function(event, data) {
-            if (data.fatal) {
-                switch(data.type) {
-                    case Hls.ErrorTypes.NETWORK_ERROR:
-                        try { dlHlsInstance.startLoad(); } catch (e) {}
-                        break;
-                    case Hls.ErrorTypes.MEDIA_ERROR:
-                        try {
-                            dlHlsInstance.recoverMediaError();
-                        } catch (recErr) {
-                            try {
-                                dlHlsInstance.swapAudioCodec();
-                                dlHlsInstance.recoverMediaError();
-                            } catch (e2) {}
-                        }
-                        break;
-                    default:
-                        try {
-                            dlHlsInstance.destroy();
-                            dlHlsInstance = null;
-                        } catch (e) {}
-                        video.src = url;
-                        video.load();
-                        if (autoPlay) video.play().catch(() => {});
-                        break;
-                }
-            }
-        });
-
+    if (posterUrl) video.poster = posterUrl;
+    if (url && (url.includes('.m3u8') || url.includes('/hls/')) && window.Hls && Hls.isSupported()) {
+        dlHlsInstance = new Hls({ enableWorker: true });
         dlHlsInstance.loadSource(url);
         dlHlsInstance.attachMedia(video);
-
-        dlHlsInstance.once(Hls.Events.MANIFEST_PARSED, function() {
-            if (isMasterFull && epNum > 1) {
-                const targetSec = (epNum - 1) * 90;
-                if (video.duration && targetSec < video.duration) {
-                    video.currentTime = targetSec;
-                }
-            } else {
-                video.currentTime = 0;
-            }
-            if (autoPlay) {
-                const p = video.play();
-                if (p !== undefined) {
-                    p.then(() => setPlayingUI(true)).catch(() => {
-                        video.muted = true;
-                        video.play().then(() => setPlayingUI(true)).catch(() => setPlayingUI(false));
-                    });
-                }
-            } else {
-                setPlayingUI(false);
-            }
-        });
     } else {
-        // Direct MP4 / WebM / Local File Playback
         video.src = url;
-        video.preload = "auto";
-        video.currentTime = 0;
-        video.load();
-
-        if (isMasterFull && epNum > 1) {
-            const onMeta = () => {
-                video.removeEventListener('loadedmetadata', onMeta);
-                const targetSec = (epNum - 1) * 90;
-                if (video.duration && targetSec < video.duration) {
-                    video.currentTime = targetSec;
-                }
-            };
-            video.addEventListener('loadedmetadata', onMeta);
-        }
-
-        if (autoPlay) {
-            const p = video.play();
-            if (p !== undefined) {
-                p.then(() => setPlayingUI(true)).catch(() => {
-                    video.muted = true;
-                    video.play().then(() => setPlayingUI(true)).catch(() => setPlayingUI(false));
-                });
-            }
-        } else {
-            setPlayingUI(false);
-        }
     }
 }
 
 async function playQueueEpisode(epNum, autoPlay = true) {
-    const mySeq = ++dlPreviewPlaySeq;
     dlQueueActiveEpisodeNum = epNum;
 
-    // 1. Instant O(1) Active Card & Row Highlight (Zero DOM lag)
-    const prevCard = document.querySelector('.dl-ep-card-btn.active');
-    if (prevCard && prevCard !== document.getElementById(`dl-ep-card-${epNum}`)) {
-        prevCard.classList.remove('active');
-    }
+    // Highlight active card in Image 2 4-Column Grid
+    document.querySelectorAll('.dl-ep-card-btn').forEach(c => c.classList.remove('active'));
     const activeCard = document.getElementById(`dl-ep-card-${epNum}`);
     if (activeCard) {
         activeCard.classList.add('active');
         activeCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
-    const prevRow = document.querySelector('.dl-q2-tr.active');
-    if (prevRow && prevRow !== document.getElementById(`dl-q-row-${epNum}`)) {
-        prevRow.classList.remove('active');
-    }
+    // Fallback highlight row in table
+    document.querySelectorAll('.dl-q2-tr').forEach(r => r.classList.remove('active'));
     const activeRow = document.getElementById(`dl-q-row-${epNum}`);
     if (activeRow) {
         activeRow.classList.add('active');
     }
 
     const totalEps = dlEpisodesList.length || 80;
-    const epObj = dlEpisodesList.find(e => (e.episode_num || e.id || e.episode_number) == epNum) || {};
+    const epObj = dlEpisodesList.find(e => (e.episode_num || e.id) == epNum) || {};
     const dramaTitle = (dlCurrentDrama?.title_cn || dlCurrentDrama?.title || '').replace(/[《》]/g, '').split(' - ')[0].trim();
     const epTitleText = `EP${String(epNum).padStart(2, '0')} - ${epObj.title || dramaTitle}`;
 
-    // Subtitle overlay banner
+    // Subtitle overlay banner matching Image 2
     const subtitlesElem = document.getElementById('dl-q-video-subtitles');
     if (subtitlesElem) {
         const sampleSubs = [
@@ -5239,13 +5048,27 @@ async function playQueueEpisode(epNum, autoPlay = true) {
 
     if (!video) return;
 
-    // A. Instant memory playback: If stream/video is already resolved (0ms instant switch!)
-    const rawUrl = epObj?.video_url || epObj?.stream_url || epObj?.download_url;
-    if (rawUrl && typeof rawUrl === 'string' && rawUrl.length > 5) {
-        const playbackUrl = (rawUrl.startsWith('http') && !rawUrl.includes('/api/downloader/stream-proxy'))
-            ? `/api/downloader/stream-proxy?url=${encodeURIComponent(rawUrl)}`
-            : rawUrl;
-        loadVideoWithHls(video, playbackUrl, dlCurrentDrama?.poster || '', autoPlay, epObj.is_master_full, epNum);
+    // A. Check if the episode object already has an authentic video URL (e.g. from folder import or completed download)
+    const rawUrl = epObj?.video_url || epObj?.stream_url;
+    if (rawUrl) {
+        loadVideoWithHls(video, rawUrl, dlCurrentDrama?.poster || '');
+        video.currentTime = 0;
+        if (autoPlay) {
+            video.play().then(() => {
+                if (playOverlay) playOverlay.classList.add('hidden');
+                if (playBtnText) playBtnText.textContent = 'Pause';
+                if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-pause';
+            }).catch(() => {
+                if (playOverlay) playOverlay.classList.remove('hidden');
+                if (playBtnText) playBtnText.textContent = 'Play';
+                if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
+            });
+        } else {
+            video.pause();
+            if (playOverlay) playOverlay.classList.remove('hidden');
+            if (playBtnText) playBtnText.textContent = 'Play';
+            if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
+        }
         return;
     }
 
@@ -5253,64 +5076,51 @@ async function playQueueEpisode(epNum, autoPlay = true) {
     try {
         const res = await fetch(`/api/downloader/preview/${dlCurrentDrama.id}?ep=${epNum}`);
         const data = await res.json();
-        
-        // Guard against race conditions: Discard response if user already clicked another episode or drama!
-        if (mySeq !== dlPreviewPlaySeq) {
+        const vUrl = data.video_url || data.stream_url;
+        if (data.success && vUrl) {
+            loadVideoWithHls(video, vUrl, data.poster || dlCurrentDrama?.poster || '');
+            video.currentTime = 0;
+            if (autoPlay) {
+                video.play().then(() => {
+                    if (playOverlay) playOverlay.classList.add('hidden');
+                    if (playBtnText) playBtnText.textContent = 'Pause';
+                    if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-pause';
+                }).catch(() => {
+                    if (playOverlay) playOverlay.classList.remove('hidden');
+                    if (playBtnText) playBtnText.textContent = 'Play';
+                    if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
+                });
+            } else {
+                video.pause();
+                if (playOverlay) playOverlay.classList.remove('hidden');
+                if (playBtnText) playBtnText.textContent = 'Play';
+                if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
+            }
             return;
-        }
-
-        if (data.success) {
-            const vUrl = data.video_url || data.stream_url;
-            if (epObj && vUrl) {
-                epObj.video_url = vUrl;
-                epObj.stream_url = vUrl;
-                if (data.is_master_full) epObj.is_master_full = true;
+        } else {
+            // Authentic video not yet downloaded / imported
+            if (dlHlsInstance) {
+                dlHlsInstance.destroy();
+                dlHlsInstance = null;
             }
-
-            // Populate all resolved streams from backend into client memory for instant subsequent clicks!
-            if (data.resolved_streams && typeof data.resolved_streams === 'object') {
-                for (const [sNumStr, sUrl] of Object.entries(data.resolved_streams)) {
-                    const sNum = parseInt(sNumStr);
-                    const targetEp = dlEpisodesList.find(e => (e.episode_num || e.episode_number) === sNum);
-                    if (targetEp && sUrl) {
-                        targetEp.video_url = sUrl;
-                        targetEp.stream_url = sUrl;
-                        if (data.is_master_full) targetEp.is_master_full = true;
-                    }
-                }
-            }
-
-            if (vUrl) {
-                loadVideoWithHls(video, vUrl, data.poster || dlCurrentDrama?.poster || '', autoPlay, data.is_master_full, epNum);
-                return;
-            }
-        }
-
-        // Stream currently unavailable
-        if (dlHlsInstance) {
-            try { dlHlsInstance.destroy(); } catch (e) {}
-            dlHlsInstance = null;
-        }
-        try {
             video.pause();
             video.removeAttribute('src');
             video.load();
-        } catch (e) {}
-        if (dlCurrentDrama && dlCurrentDrama.poster) {
-            video.poster = dlCurrentDrama.poster;
-        }
-        if (playOverlay) playOverlay.classList.remove('hidden');
-        if (playBtnText) playBtnText.textContent = 'Play';
-        if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
-        return;
-    } catch (e) {
-        if (mySeq === dlPreviewPlaySeq) {
-            try { video.pause(); } catch (err) {}
             if (dlCurrentDrama && dlCurrentDrama.poster) {
                 video.poster = dlCurrentDrama.poster;
             }
             if (playOverlay) playOverlay.classList.remove('hidden');
+            if (playBtnText) playBtnText.textContent = 'Play';
+            if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-play';
+            showToast(`Episode ${epNum} is not downloaded locally yet — click Download to fetch`);
+            return;
         }
+    } catch (e) {
+        video.pause();
+        if (dlCurrentDrama && dlCurrentDrama.poster) {
+            video.poster = dlCurrentDrama.poster;
+        }
+        if (playOverlay) playOverlay.classList.remove('hidden');
     }
 }
 
@@ -5321,25 +5131,12 @@ function toggleQueuePlay() {
     const playBtnIcon = document.getElementById('dl-q-play-icon');
     if (!video) return;
 
-    // If video is not loaded yet, initiate playback for current episode!
-    if (!dlCurrentLoadedUrl) {
-        playQueueEpisode(dlQueueActiveEpisodeNum || 1, true);
-        return;
-    }
-
     if (video.paused) {
         video.play().then(() => {
             if (playOverlay) playOverlay.classList.add('hidden');
             if (playBtnText) playBtnText.textContent = 'Pause';
             if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-pause';
-        }).catch(() => {
-            video.muted = true;
-            video.play().then(() => {
-                if (playOverlay) playOverlay.classList.add('hidden');
-                if (playBtnText) playBtnText.textContent = 'Pause';
-                if (playBtnIcon) playBtnIcon.className = 'fa-solid fa-pause';
-            }).catch(() => {});
-        });
+        }).catch(() => {});
     } else {
         video.pause();
         if (playOverlay) playOverlay.classList.remove('hidden');
@@ -6217,7 +6014,7 @@ async function previewLoadedDrama() {
         return;
     }
     switchDlViewMode('queue');
-    playQueueEpisode(1, true);
+    playQueueEpisode(1);
     showToast(`🎬 Opening '${dlCurrentDrama.title}' in Player mode`);
 }
 
@@ -10478,13 +10275,8 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
 
         appendLiveTerminalLine(`Dubbing engine dispatched in background. Task ID: ${activeDubbingTaskId}`, "[Video 1/1]", "info");
 
-        let hasHandledAutoDubCompletion = false;
-        let isPollingAutoDub = false;
-
         if (activeDubbingPollTimer) clearInterval(activeDubbingPollTimer);
         activeDubbingPollTimer = setInterval(async () => {
-            if (isPollingAutoDub || hasHandledAutoDubCompletion) return;
-            isPollingAutoDub = true;
             elapsed += 1;
             try {
                 const sRes = await fetch(`/api/projects/auto-dub-status/${activeDubbingTaskId}`);
@@ -10552,8 +10344,6 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                 }
 
                 if (sData.status === "completed") {
-                    if (hasHandledAutoDubCompletion) return;
-                    hasHandledAutoDubCompletion = true;
                     clearInterval(activeDubbingPollTimer);
                     activeDubbingPollTimer = null;
                     activeDubbingTaskId = null;
@@ -10645,8 +10435,6 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                 }
             } catch (err) {
                 console.warn("Poll error:", err);
-            } finally {
-                isPollingAutoDub = false;
             }
         }, 1000);
 
@@ -10726,62 +10514,46 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
         }
         if (!seriesTitle) seriesTitle = "Drama_Series";
 
-        // Robust path & filename extraction for single-pass Full Movie Merged dubbing
-        let videoPaths = files.map(f => getMediaFilePath(f)).filter(Boolean);
-        const fileNames = files.map(f => getMediaFileName(f)).filter(Boolean);
-        const folderHint = currentCustomExportFolder || defaultDramaExportFolder || stagedVideoFolderTitle || (files[0] && files[0].folder_name) || '';
-
-        if (videoPaths.length !== totalBatchCount && folderHint) {
-            videoPaths = files.map(f => {
-                const p = getMediaFilePath(f);
-                if (p) return p;
-                const fn = getMediaFileName(f);
-                return `${folderHint.replace(/\\/g, '/').replace(/\/+$/, '')}/${fn}`;
-            }).filter(Boolean);
-        }
-
-        appendLiveTerminalLine(`▶ Lossless stream-copying ${totalBatchCount} episodes into unified container...`, '[Full Movie Mode]', 'info');
-
+        const videoPaths = files.map(f => getMediaFilePath(f)).filter(Boolean);
         let mergedSourcePath = null;
         let mergedSourceName = null;
-        let mergedSizeMb = '?';
+        let mergedSizeMb = "?";
 
-        try {
-            const mRes = await fetch('/api/projects/pre-merge-raw-episodes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    video_paths: videoPaths,
-                    file_names: fileNames,
-                    folder_path: folderHint,
-                    custom_export_dir: currentCustomExportFolder || defaultDramaExportFolder || undefined,
-                    series_title: seriesTitle,
-                    auto_trim_freeze: false
-                })
-            });
-            const mData = await mRes.json();
-            if (mData.success && mData.merged_path) {
-                if (mData.series_title && mData.series_title !== 'Drama_Series') {
-                    seriesTitle = mData.series_title;
-                }
-                mergedSourcePath = mData.merged_path;
-                mergedSourceName = mData.merged_filename;
-                mergedSizeMb = mData.size_mb;
-                if (mData.trimmed_count > 0) {
-                    appendLiveTerminalLine(`✓ Pre-merge AI Freeze Detector: trimmed ${mData.trimmed_count} frozen outros (-${mData.total_seconds_saved}s), creating seamless "${mergedSourceName}" (${mergedSizeMb} MB, ${mData.episodes_count || totalBatchCount} eps)`, '[Full Movie Mode]', 'success');
+        if (videoPaths.length === totalBatchCount) {
+            appendLiveTerminalLine(`▶ Lossless stream-copying ${totalBatchCount} episodes into unified container...`, "[Full Movie Mode]", "info");
+            try {
+                const mRes = await fetch("/api/projects/pre-merge-raw-episodes", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        video_paths: videoPaths,
+                        series_title: seriesTitle
+                    })
+                });
+                const mData = await mRes.json();
+                if (mData.success && mData.merged_path) {
+                    if (mData.series_title && mData.series_title !== "Drama_Series") {
+                        seriesTitle = mData.series_title;
+                    }
+                    mergedSourcePath = mData.merged_path;
+                    mergedSourceName = mData.merged_filename;
+                    mergedSizeMb = mData.size_mb;
+                    if (mData.trimmed_count > 0) {
+                        appendLiveTerminalLine(`✓ Pre-merge AI Freeze Detector: trimmed ${mData.trimmed_count} frozen outros (-${mData.total_seconds_saved}s), creating seamless "${mergedSourceName}" (${mergedSizeMb} MB, ${totalBatchCount} eps)`, "[Full Movie Mode]", "success");
+                    } else {
+                        appendLiveTerminalLine(`✓ Fast Pre-merge complete: "${mergedSourceName}" (${mergedSizeMb} MB, ${totalBatchCount} episodes unified, 100% active scenes)`, "[Full Movie Mode]", "success");
+                    }
                 } else {
-                    appendLiveTerminalLine(`✓ Fast Pre-merge complete: "${mergedSourceName}" (${mergedSizeMb} MB, ${mData.episodes_count || totalBatchCount} episodes unified, 100% active scenes)`, '[Full Movie Mode]', 'success');
+                    appendLiveTerminalLine(`Pre-merge warning: ${mData.error || 'Server note'}. Falling back to batch merge.`, "[Full Movie Mode]", "warning");
                 }
-            } else {
-                appendLiveTerminalLine(`Pre-merge note: ${mData.error || 'Server response'}.`, '[Full Movie Mode]', 'warning');
+            } catch (mErr) {
+                appendLiveTerminalLine(`Pre-merge network note: ${mErr.message}. Falling back to batch merge.`, "[Full Movie Mode]", "warning");
             }
-        } catch (mErr) {
-            appendLiveTerminalLine(`Pre-merge network note: ${mErr.message}.`, '[Full Movie Mode]', 'warning');
         }
 
         if (mergedSourcePath) {
-            appendLiveTerminalLine(`▶ Step 2/2: Starting Full-Movie Automated AI Dubbing on unified video...`, '[Full Movie Mode]', 'info');
-            appendLiveTerminalLine(`Single-pass transcription & translation for seamless storytelling across scenes!`, '[Full Movie Mode]', 'info');
+            appendLiveTerminalLine(`▶ Step 2/2: Starting Full-Movie Automated AI Dubbing on unified video...`, "[Full Movie Mode]", "info");
+            appendLiveTerminalLine(`Single-pass transcription & translation for seamless storytelling across scenes!`, "[Full Movie Mode]", "info");
             updateExportProgressUI(10, 0, 150, `Step 2/2: Dubbing full movie "${seriesTitle}" with Piseth & Sreymom...`);
 
             const fullMovieFile = {
@@ -10793,15 +10565,8 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
             };
 
             await startAutoDubbingPipeline(fullMovieFile, `Dubbed_${seriesTitle}_Full_Movie`);
-            return; // STRICT RETURN: Dub only the full movie! Never execute sequential episodes!
+            return;
         }
-
-        // STRICT SAFETY GUARD FOR FULL MOVIE MODE:
-        // If pre-merge on raw files could not resolve source media, do NOT secretly dub 99 separate episodes into the user's export folder!
-        showToast('Error: Could not pre-merge episodes into a unified full movie. Please check folder path.');
-        appendLiveTerminalLine(`❌ Strict Full Movie Mode stopped: Cannot locate episode media to merge into Full Movie. Sequential separate dubbing was prevented.`, '[Full Movie Mode]', 'error');
-        resetEngineMonitorToStandby();
-        return;
     }
 
     // =========================================================================
@@ -11051,7 +10816,7 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
         appendLiveTerminalLine(`Export Mode: "${outputMode.toUpperCase()}" ➜ Concat/Merging all ${completedProjects.length} episodes into One Full Video...`, "[Full Movie Merge]", "info");
         updateExportProgressUI(96, totalElapsedSeconds, 30, `Merging ${completedProjects.length} episodes into Full Movie...`);
 
-        const videoPaths = completedProjects.map(p => p.final_exported_video_path || p.output_video_file || p.output_file).filter(Boolean);
+        const videoPaths = completedProjects.map(p => p.output_video_file || p.output_file).filter(Boolean);
         let seriesTitle = "Drama_Series";
         if (files && files[0]) {
             const f0Name = getMediaFileName(files[0]);
@@ -11066,18 +10831,13 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                 body: JSON.stringify({
                     video_paths: videoPaths,
                     series_title: seriesTitle,
-                    custom_export_dir: currentCustomExportFolder || defaultDramaExportFolder || undefined,
-                    cleanup_separate_episodes: (outputMode === 'full')
+                    custom_export_dir: currentCustomExportFolder || defaultDramaExportFolder || undefined
                 })
             });
             const mData = await mRes.json();
             if (mData.success) {
                 appendLiveTerminalLine(`✓ Full Movie merged successfully: "${mData.merged_filename}"`, "[Full Movie Merge]", "success");
                 showToast(`Full movie merged successfully: ${mData.merged_filename}`);
-
-                if (outputMode === 'full') {
-                    appendLiveTerminalLine(`✓ Strict "Full Movie Merged" mode: purged intermediate separate episodes. Output folder contains strictly 1 Full Movie video!`, "[Full Movie Merge]", "success");
-                }
 
                 const mainVideo = document.getElementById('main-video');
                 if (mainVideo && mData.video_url) {
@@ -11130,13 +10890,10 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
 
     // Show success notification banner
     if (completedProjects.length > 0) {
-        const lastProject = (outputMode === 'full' && currentDubbedProject) ? currentDubbedProject : completedProjects[completedProjects.length - 1];
         showDubbingSuccessNotification({
-            project: lastProject,
-            batch_count: (outputMode === 'full') ? 1 : completedProjects.length,
-            total_count: (outputMode === 'full') ? 1 : totalBatchCount,
-            final_exported_filename: (outputMode === 'full' && currentDubbedProject && currentDubbedProject.merged_filename) ? currentDubbedProject.merged_filename : undefined,
-            final_exported_video_path: (outputMode === 'full' && currentDubbedProject && currentDubbedProject.output_video_file) ? currentDubbedProject.output_video_file : undefined
+            project: completedProjects[completedProjects.length - 1],
+            batch_count: completedProjects.length,
+            total_count: totalBatchCount
         });
     }
 }
@@ -11182,26 +10939,12 @@ function showDubbingSuccessNotification(data) {
     }
 }
 
-let lastOpenExportFolderTime = 0;
-let lastOpenExportFolderPath = "";
-
 async function openExportFolderDirect(targetPath) {
-    const now = Date.now();
-    let pathToOpen = targetPath || currentCustomExportFolder || '';
-    if (pathToOpen && typeof pathToOpen === 'string') {
-        pathToOpen = sanitizeExportFolderPath(pathToOpen) || pathToOpen;
-    }
-    const cleanKey = String(pathToOpen).trim().toLowerCase();
-
-    // 4-second strict client-side debounce to guarantee only ONE single Explorer window ever pops up
-    if ((now - lastOpenExportFolderTime < 4000) && (lastOpenExportFolderPath === cleanKey)) {
-        console.log("[Debounce] Suppressing duplicate Explorer open request:", pathToOpen);
-        return;
-    }
-    lastOpenExportFolderTime = now;
-    lastOpenExportFolderPath = cleanKey;
-
     try {
+        let pathToOpen = targetPath || currentCustomExportFolder || '';
+        if (pathToOpen && typeof pathToOpen === 'string') {
+            pathToOpen = sanitizeExportFolderPath(pathToOpen) || pathToOpen;
+        }
         const res = await fetch('/api/projects/open-folder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -11347,8 +11090,9 @@ async function checkDeviceLicenseStatus() {
             }
             if (planElem) planElem.textContent = data.plan || "PRO Studio";
             if (expiryElem) {
-                if (data.is_expiring_soon && data.days_remaining !== null) {
-                    expiryElem.innerHTML = `${data.expires_at || "LIFETIME"} <span style="color:#fbbf24; font-weight:bold; margin-left:6px;">(${data.days_remaining} days left)</span>`;
+                if (data.days_remaining !== null && data.days_remaining !== undefined && data.expires_at && data.expires_at !== "LIFETIME") {
+                    const daysColor = data.is_expiring_soon ? "#fbbf24" : "#38bdf8";
+                    expiryElem.innerHTML = `${data.expires_at} <span style="color:${daysColor}; font-weight:700; margin-left:6px; font-size:0.82rem;">(${data.days_remaining} days left)</span>`;
                 } else {
                     expiryElem.textContent = data.expires_at || "LIFETIME";
                 }
@@ -11825,15 +11569,12 @@ async function checkForAppUpdates(manual = false) {
             openModal('modal-update');
             if (manual) showToast(`New version available: v${latVer}`);
         } else {
-            // Already on latest official build:
-            if (badgeText) badgeText.textContent = "UP TO DATE";
-            if (subtitle) subtitle.textContent = `SN Tool v${curVer} is currently active and fully up to date. All neural engines and features are optimal.`;
-            if (btnUpdate) {
-                btnUpdate.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span id="btn-do-update-text">Already Up to Date (v${curVer})</span>`;
-                btnUpdate.disabled = true;
-            }
+            // Already on latest official build: Do NOT pop up modal! Only log to Studio Processing & Activity Console!
+            if (badgeText) badgeText.textContent = "LATEST OFFICIAL BUILD";
+            if (subtitle) subtitle.textContent = `Official release notes and feature highlights for SN Tool Studio Pro (v${curVer}):`;
+            if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-rotate"></i> <span id="btn-do-update-text">Reinstall / Update (v${curVer})</span>`;
             if (manual) {
-                showToast(`✅ You are up to date! SN Tool v${curVer} is the latest version.`);
+                showToast(`SN Tool Studio Pro v${curVer} is up to date!`);
             }
         }
     } catch (err) {
