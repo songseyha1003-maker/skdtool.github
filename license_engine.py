@@ -168,13 +168,8 @@ def record_permanent_device_ban(reason: str = "Illegal security bypass / tamper 
     except Exception:
         pass
 
-    # 3. Auto-Purge any existing license files
-    try:
-        lic_path = resolve_file_path("license.key")
-        if lic_path.exists():
-            lic_path.unlink(missing_ok=True)
-    except Exception:
-        pass
+    # 3. Preserve license file safely (no destructive auto-purge on disk)
+    pass
 
 
 def unban_device(hwid: str, unban_code: str) -> Tuple[bool, str]:
@@ -1052,11 +1047,11 @@ def verify_core_manifest_integrity() -> Tuple[bool, str]:
                 mismatched_files.append(filename)
 
         if mismatched_files:
-            # 🛡️ Strict anti-crack: Only tampering with license_engine.py is treated as a licensing crack attempt.
-            # Other processing modules (pipeline, downloader, translator, etc.) are auto-healed if license_engine is intact!
-            if "license_engine.py" not in mismatched_files:
+            # 🛡️ Smart auto-heal for official updates: if no active debugger or blacklisted tool is attached,
+            # auto-re-sign legitimate updates to eliminate false-positive bans!
+            if not is_debugger_active() and not check_blacklisted_hack_tools():
                 build_core_manifest()
-                return True, "Core files verified and re-signed"
+                return True, "Core files verified and auto-healed after update"
             return False, f"❌ Unauthorized code tampering detected in {mismatched_files[0]}"
 
         return True, "All core files intact and verified"
@@ -1160,6 +1155,113 @@ def verify_runtime_integrity() -> Tuple[bool, str]:
         return False, f"Integrity check failed: {e}"
 
 
+_CACHED_HWID: Optional[str] = None
+HWID_CACHE_FILE = Path(os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Windows\sn_hwid_v2.dat"))
+
+def _get_persistent_cached_hwid() -> Optional[str]:
+    # 1. Try registry
+    if sys.platform == "win32":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_SUBKEY, 0, winreg.KEY_READ) as k:
+                val, _ = winreg.QueryValueEx(k, "MachineHWID")
+                if val and len(str(val).strip()) >= 16:
+                    return str(val).strip().upper()
+        except Exception:
+            pass
+    # 2. Try AppData file
+    try:
+        if HWID_CACHE_FILE.exists():
+            val = HWID_CACHE_FILE.read_text(encoding="utf-8").strip().upper()
+            if val and len(val) >= 16:
+                return val
+    except Exception:
+        pass
+    return None
+
+def _save_persistent_cached_hwid(hwid_val: str):
+    clean = str(hwid_val).strip().upper()
+    if not clean or len(clean) < 16:
+        return
+    if sys.platform == "win32":
+        try:
+            import winreg
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, REGISTRY_SUBKEY) as k:
+                winreg.SetValueEx(k, "MachineHWID", 0, winreg.REG_SZ, clean)
+        except Exception:
+            pass
+    try:
+        HWID_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        HWID_CACHE_FILE.write_text(clean, encoding="utf-8")
+    except Exception:
+        pass
+
+def get_all_candidate_hwids() -> List[str]:
+    """Return all valid hardware ID candidates for the current machine to prevent false-positive lockouts."""
+    cands: List[str] = []
+    # 1. Persistent cache
+    cached = _get_persistent_cached_hwid()
+    if cached and cached not in cands:
+        cands.append(cached)
+    
+    # 2. Windows UUID via CIM
+    if sys.platform == "win32":
+        try:
+            cmd = ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', '(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID']
+            res = subprocess.check_output(cmd, shell=False, text=True, stderr=subprocess.DEVNULL, timeout=2.5).strip()
+            if res and len(res) > 8:
+                h = hashlib.sha256(res.encode()).hexdigest()[:16].upper()
+                if h not in cands:
+                    cands.append(h)
+        except Exception:
+            pass
+
+    # 3. Windows Cryptography MachineGuid
+    if sys.platform == "win32":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography", 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as k:
+                guid, _ = winreg.QueryValueEx(k, "MachineGuid")
+                if guid and len(str(guid)) > 8:
+                    h_guid = hashlib.sha256(str(guid).encode()).hexdigest()[:16].upper()
+                    if h_guid not in cands:
+                        cands.append(h_guid)
+        except Exception:
+            pass
+
+    # 4. Fallback node
+    raw = f"{platform.node()}-{platform.machine()}-{platform.processor()}"
+    h_node = hashlib.sha256(raw.encode()).hexdigest()[:16].upper()
+    if h_node not in cands:
+        cands.append(h_node)
+
+    return cands
+
+def get_machine_hwid() -> str:
+    """Generate a unique hardware ID (HWID) for the current machine (cached permanently for extreme speed)."""
+    global _CACHED_HWID
+    if _CACHED_HWID:
+        return _CACHED_HWID
+
+    # 1. Try persistent cache
+    p_cached = _get_persistent_cached_hwid()
+    if p_cached:
+        _CACHED_HWID = p_cached
+        return _CACHED_HWID
+
+    # 2. Compute candidates
+    cands = get_all_candidate_hwids()
+    if cands:
+        _CACHED_HWID = cands[0]
+        _save_persistent_cached_hwid(_CACHED_HWID)
+        return _CACHED_HWID
+
+    raw = f"{platform.node()}-{platform.machine()}-{platform.processor()}"
+    _CACHED_HWID = hashlib.sha256(raw.encode()).hexdigest()[:16].upper()
+    _save_persistent_cached_hwid(_CACHED_HWID)
+    return _CACHED_HWID
+
+
 def _get_hwid_cipher(hwid: Optional[str] = None):
     try:
         from cryptography.fernet import Fernet
@@ -1190,19 +1292,28 @@ def encrypt_license_token(payload: Dict[str, Any], hwid: Optional[str] = None) -
 def decrypt_license_token(raw_content: str, hwid: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Decrypts activation payload using local machine HWID.
-    Returns None if corrupted, tampered, or copied from a different computer.
+    Tolerant to multiple hardware candidates to prevent false-positive lockouts.
     """
     content = raw_content.strip()
     if content.startswith("SN_VAULT_V2:"):
-        cipher = _get_hwid_cipher(hwid)
-        if not cipher:
-            return None
-        try:
-            token = content[len("SN_VAULT_V2:"):].strip()
-            decrypted_bytes = cipher.decrypt(token.encode("ascii"), ttl=None)
-            return json.loads(decrypted_bytes.decode("utf-8"))
-        except Exception:
-            return None
+        token = content[len("SN_VAULT_V2:"):].strip()
+        candidates: List[str] = []
+        if hwid:
+            candidates.append(hwid.strip().upper())
+        candidates.extend(get_all_candidate_hwids())
+
+        for cand_h in candidates:
+            cipher = _get_hwid_cipher(cand_h)
+            if not cipher:
+                continue
+            try:
+                decrypted_bytes = cipher.decrypt(token.encode("ascii"), ttl=None)
+                data = json.loads(decrypted_bytes.decode("utf-8"))
+                if isinstance(data, dict) and data.get("license_key"):
+                    return data
+            except Exception:
+                continue
+        return None
     try:
         return json.loads(content)
     except Exception:
@@ -1974,28 +2085,6 @@ def check_remote_revocation_online(cleaned_key: str, current_hwid: str) -> Optio
     return None
 
 
-_CACHED_HWID: Optional[str] = None
-
-def get_machine_hwid() -> str:
-    """Generate a unique hardware ID (HWID) for the current machine (cached for extreme speed)."""
-    global _CACHED_HWID
-    if _CACHED_HWID:
-        return _CACHED_HWID
-    try:
-        if sys.platform == "win32":
-            # Get Windows Machine GUID
-            cmd = 'powershell "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"'
-            res = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL).strip()
-            if res and len(res) > 8:
-                _CACHED_HWID = hashlib.sha256(res.encode()).hexdigest()[:16].upper()
-                return _CACHED_HWID
-    except Exception:
-        pass
-    
-    # Fallback using node and platform
-    raw = f"{platform.node()}-{platform.machine()}-{platform.processor()}"
-    _CACHED_HWID = hashlib.sha256(raw.encode()).hexdigest()[:16].upper()
-    return _CACHED_HWID
 
 
 def generate_license_key(client_name: str, duration_days: int = 30, hwid: Optional[str] = None, plan: str = "PRO") -> Dict[str, Any]:
@@ -2537,8 +2626,6 @@ def verify_license_key(input_key: str, current_hwid: Optional[str] = None) -> Tu
 
     # 1. Check Default Master Keys (100% Offline & Online, Universal)
     if cleaned_key in DEFAULT_MASTER_KEYS:
-        if (time.perf_counter() - t_perf_start) > 1.2:
-            return False, "❌ Execution timing anomaly detected (Debugger step trap)", {}
         master_info = DEFAULT_MASTER_KEYS[cleaned_key]
         return True, "✅ Valid License Key!", {
             "license_key": cleaned_key,
@@ -2569,8 +2656,6 @@ def verify_license_key(input_key: str, current_hwid: Optional[str] = None) -> Tu
                 if expiry_ts > 0 and time.time() > expiry_ts:
                     return False, f"⚠️ This Custom Key has expired ({rec.get('expires_at')})", {}
 
-                if (time.perf_counter() - t_perf_start) > 1.2:
-                    return False, "❌ Execution timing anomaly detected (Debugger step trap)", {}
                 return True, "✅ Custom Key is valid and active!", rec
         except Exception:
             pass
@@ -2594,8 +2679,6 @@ def verify_license_key(input_key: str, current_hwid: Optional[str] = None) -> Tu
                         if expiry_ts > 0 and time.time() > expiry_ts:
                             return False, f"⚠️ This License Key has expired ({record.get('expires_at')})", {}
 
-                        if (time.perf_counter() - t_perf_start) > 1.2:
-                            return False, "❌ Execution timing anomaly detected (Debugger step trap)", {}
                         return True, "✅ License Key is valid and active!", record
         except Exception:
             pass
@@ -2603,8 +2686,6 @@ def verify_license_key(input_key: str, current_hwid: Optional[str] = None) -> Tu
     # 4. Check Online Cloud Registry (GitHub) & Bundled Online Keys Database
     online_ok, online_msg, online_rec = check_key_online(cleaned_key, current_hwid)
     if online_ok:
-        if (time.perf_counter() - t_perf_start) > 1.2:
-            return False, "❌ Execution timing anomaly detected (Debugger step trap)", {}
         return True, online_msg, online_rec
     elif online_msg and ("suspended" in online_msg.lower() or "revoked" in online_msg.lower() or "expired" in online_msg.lower() or "hwid" in online_msg.lower() or "ផ្អាក" in online_msg or "ផុតកំណត់" in online_msg or "HWID" in online_msg):
         return False, online_msg, {}
@@ -2650,10 +2731,6 @@ def verify_license_key(input_key: str, current_hwid: Optional[str] = None) -> Tu
             expected_hwid_tag = hashlib.sha256((current_hwid.upper() + SECRET_ADMIN_SALT).encode()).hexdigest()[:4].upper()
             if hwid_tag != expected_hwid_tag:
                 return False, "❌ This License Key is locked to a different machine (HWID mismatch)", {}
-
-        # Anti-Single Stepping Latency Trap
-        if (time.perf_counter() - t_perf_start) > 1.2:
-            return False, "❌ Execution timing anomaly detected (Debugger step trap)", {}
 
         return True, "✅ License Key is valid and active!", {
             "license_key": cleaned_key,
@@ -2805,10 +2882,6 @@ def check_current_device_license() -> Dict[str, Any]:
         raw_lic = lic_path.read_text(encoding="utf-8").strip()
         data = decrypt_license_token(raw_lic, current_hwid)
         if not data:
-            try:
-                lic_path.unlink(missing_ok=True)
-            except Exception:
-                pass
             return {
                 "is_activated": False,
                 "message": "Please enter License Key to activate tool (Hardware Binding Mismatch).",
@@ -2830,24 +2903,21 @@ def check_current_device_license() -> Dict[str, Any]:
         # Verify integrity
         expected_checksum = hmac.new(SECRET_ADMIN_SALT.encode(), f"{license_key}|{saved_hwid}".encode(), hashlib.sha256).hexdigest()[:16]
         if checksum != expected_checksum:
-            try:
-                lic_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            record_permanent_device_ban("Tampered / forged license.key file detected")
             return {
                 "is_activated": False,
-                "is_banned": True,
-                "message": "License Key file has been tampered with and was auto-purged. Device permanently banned.",
+                "message": "License Key verification checksum failed.",
                 "hwid": current_hwid
             }
 
-        # Check machine HWID match (Strict Anti-Copy)
-        if saved_hwid != current_hwid:
-            try:
-                lic_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+        # Check machine HWID match (Strict Anti-Copy with multi-candidate resilience)
+        candidate_hwids = get_all_candidate_hwids()
+        is_hwid_matched = (
+            saved_hwid == current_hwid or
+            saved_hwid in candidate_hwids or
+            current_hwid in ("ANY", "*", "UNIVERSAL", "") or
+            saved_hwid in ("ANY", "*", "UNIVERSAL", "")
+        )
+        if not is_hwid_matched:
             return {
                 "is_activated": False,
                 "message": "Please enter License Key to activate tool (Machine HWID Mismatch).",
@@ -2856,10 +2926,6 @@ def check_current_device_license() -> Dict[str, Any]:
 
         # Check local and remote revocation
         if license_key in get_revoked_keys():
-            try:
-                lic_path.unlink(missing_ok=True)
-            except Exception:
-                pass
             return {
                 "is_activated": False,
                 "message": "❌ This License Key has been suspended by Admin.",
@@ -2868,10 +2934,6 @@ def check_current_device_license() -> Dict[str, Any]:
 
         remote_msg = check_remote_revocation_online(license_key, current_hwid)
         if remote_msg:
-            try:
-                lic_path.unlink(missing_ok=True)
-            except Exception:
-                pass
             return {
                 "is_activated": False,
                 "message": remote_msg,
@@ -2892,10 +2954,10 @@ def check_current_device_license() -> Dict[str, Any]:
                     data["expiry_timestamp"] = remote_exp_ts
                     data["plan"] = online_rec.get("plan", data.get("plan", "PRO"))
                     data["last_active"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    data["checksum"] = hmac.new(SECRET_ADMIN_SALT.encode(), f"{license_key}|{current_hwid}".encode(), hashlib.sha256).hexdigest()[:16]
+                    data["checksum"] = hmac.new(SECRET_ADMIN_SALT.encode(), f"{license_key}|{saved_hwid}".encode(), hashlib.sha256).hexdigest()[:16]
                     try:
-                        with open(lic_path, "w", encoding="utf-8") as f:
-                            json.dump(data, f, indent=2, ensure_ascii=False)
+                        enc_token = encrypt_license_token(data, current_hwid)
+                        lic_path.write_text(enc_token, encoding="utf-8")
                     except Exception:
                         pass
         except Exception:

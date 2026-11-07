@@ -869,9 +869,11 @@ def infer_drama_persona_acoustics(
         assigned_voice = chosen_single_voice
     else:
         # Priority 1: Direct text & character indicators
-        if is_elder_female or is_villainess or is_heroine or "female" in speaker_clean or "sreymom" in speaker_clean or "ស្រី" in speaker_clean or "早早" in orig_text or "曼琳" in orig_text:
+        is_spk_female = any(k in speaker_clean for k in ("female", "woman", "girl", "lady", "wife", "mother", "sister", "sreymom", "ស្រី", "女", "婦", "母"))
+        is_spk_male = any(k in re.sub(r'female|woman', '', speaker_clean) for k in ("male", "man", "boy", "husband", "father", "brother", "guy", "sir", "piseth", "ប្រុស", "男", "父"))
+        if is_elder_female or is_villainess or is_heroine or is_spk_female or "早早" in orig_text or "曼琳" in orig_text:
             assigned_voice = "sreymom"
-        elif is_elder_male or is_angry_male or is_male_lead or "male" in speaker_clean.replace("female", "") or "ប្រុស" in speaker_clean or "沐谦" in orig_text or "张昭" in orig_text:
+        elif is_elder_male or is_angry_male or is_male_lead or is_spk_male or "沐谦" in orig_text or "张昭" in orig_text:
             assigned_voice = "piseth"
         # Priority 2: Detected acoustic role from STT F0
         elif role_hint == "female":
