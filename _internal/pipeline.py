@@ -3,6 +3,8 @@ Unified Drama Voice Translation & Facebook Movie Recap Pipeline Manager (V2.0 Pr
 """
 import os
 import sys
+import re
+import time
 import json
 import uuid
 import asyncio
@@ -370,11 +372,14 @@ class ProjectManager:
                     continue
 
                 spk_str = str(d.get("speaker", "")).lower()
-                if any(kw in spk_str for kw in ("female", "ស្រី", "s1", "s3", "s5")):
+                is_f = any(kw in spk_str for kw in ("female", "woman", "girl", "lady", "wife", "mother", "sister", "sreymom", "ស្រី", "女", "s1", "s3", "s5"))
+                is_m = any(kw in re.sub(r'female|woman', '', spk_str) for kw in ("male", "man", "boy", "husband", "father", "brother", "guy", "sir", "piseth", "ប្រុស", "男", "s0", "s2", "s4"))
+
+                if is_f and not is_m:
                     d["detected_role"] = "female"
                     d["voice"] = "sreymom"
                     last_role = "female"
-                elif any(kw in spk_str for kw in ("male", "ប្រុស", "s0", "s2", "s4")):
+                elif is_m and not is_f:
                     d["detected_role"] = "male"
                     d["voice"] = "piseth"
                     last_role = "male"
@@ -385,12 +390,22 @@ class ProjectManager:
                     d["voice"] = "sreymom" if new_role == "female" else "piseth"
                     last_role = new_role
 
+        proj_t = project.get("title") or ""
+        ep_n = 1
+        ep_m = re.search(r'(?:EP|Episode|Part|第)?[\s_\-]*(\d+)', str(proj_t), re.IGNORECASE)
+        if ep_m:
+            try:
+                ep_n = int(ep_m.group(1))
+            except Exception:
+                ep_n = 1
+
         translated_dialogues = await self.translator.translate_dialogues(
             dialogues=project.get("dialogues", []),
             mode=mode,
             source_lang=source_lang,
             target_voice_override=v_override,
-            drama_title=project.get("title")
+            drama_title=proj_t,
+            episode_number=ep_n
         )
 
         if v_override not in ("multi", "auto_multi"):
@@ -627,6 +642,15 @@ class ProjectManager:
         5. Smart Audio Ducking & BGM Mixing (85%)
         6. Render Final Master MP4 & Export (95%)
         """
+        # 🛡️ SYSTEM 10: Cryptographic AI Execution Gatekeeper
+        try:
+            import license_engine
+            ai_ok, ai_msg, _ = license_engine.verify_ai_execution_authorization()
+            if not ai_ok:
+                raise PermissionError(ai_msg)
+        except ImportError:
+            pass
+
         def update_prog(pct: int, msg_km: str, msg_en: str, dialogues = None):
             if progress_callback:
                 try:
@@ -759,6 +783,15 @@ class ProjectManager:
             update_prog(pct, msg_km, msg_en)
 
         update_prog(50, f"៤/៧ AI កំពុងបកប្រែសាច់រឿង ({voice_label} 0/{total_d} ឃ្លា)...", f"Translating script to {voice_label} (0/{total_d})...")
+        # 🧠 Parse episode number for cross-episode series continuity
+        ep_num = 1
+        ep_match = re.search(r'(?:EP|Episode|Part|第)?[\s_\-]*(\d+)', str(proj_title), re.IGNORECASE)
+        if ep_match:
+            try:
+                ep_num = int(ep_match.group(1))
+            except Exception:
+                ep_num = 1
+
         try:
             translated = await self.translator.translate_dialogues(
                 dialogues=dialogues,
@@ -766,6 +799,7 @@ class ProjectManager:
                 source_lang=source_lang,
                 target_voice_override=v_override,
                 drama_title=proj_title,
+                episode_number=ep_num,
                 progress_callback=on_trans_prog
             )
         except Exception as te:
@@ -790,6 +824,13 @@ class ProjectManager:
                 "AI Script Translation returned 0 dialogues. "
                 "ការបកប្រែស្គ្រីបមិនទទួលបានជោគជ័យទេ។ សូមពិនិត្យមើលការភ្ជាប់ទៅកាន់ប្រព័ន្ធ AI។"
             )
+
+        # 📖 Auto-record episode summary into Drama Series Memory for cross-episode continuity
+        try:
+            from series_memory import series_memory
+            series_memory.record_episode_summary(proj_title, ep_num, translated)
+        except Exception as se:
+            print(f"Series summary record note: {se}")
 
         update_prog(70, "៤/៧ AI បានបកប្រែសាច់រឿងរួចរាល់ 100%...", "AI script translation completed 100%")
 

@@ -2335,11 +2335,18 @@ def send_cloud_heartbeat_async(license_key: str, hwid: Optional[str] = None, cli
         try:
             import urllib.request
             client_hwid = hwid or get_machine_hwid()
+            app_ver = "2.0.5"
+            try:
+                from update import get_local_version
+                app_ver = get_local_version()
+            except Exception:
+                pass
             payload = {
                 "action": "heartbeat",
                 "license_key": license_key.strip().upper(),
                 "hwid": client_hwid,
                 "client_name": client_name or "",
+                "app_version": app_ver,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             body = json.dumps(payload).encode("utf-8")

@@ -841,9 +841,9 @@ def infer_drama_persona_acoustics(
     elder_male_km = ["លោកតា", "លោកប៉ា", "ឪពុក", "លោកអ៊ំ", "លោកមេផ្ទះ"]
     is_elder_male = any(k in orig_text for k in elder_male_zh) or any(k in km_text for k in elder_male_km) or "grandpa" in speaker_clean or "father" in speaker_clean or "លោកតា" in speaker_clean or "elder_male" in role_hint
 
-    # 3. Villainess / Mean Sister / Screaming / Mocking Woman
-    villainess_zh = ["白痴", "贱人", "你敢", "滚", "算什么东西", "要脸不要", "狐狸精", "死丫头", "不要脸", "沈曼琳", "小三", "给脸不要脸", "野种", "狐媚子", "看你脸"]
-    villainess_km = ["អាចង្រៃ", "ស្រីឆ្កួត", "មីក្បត់", "ឆ្កួតមែន", "មុខក្រាស់", "ឯងគិតថាឯងជាស្អី", "ចេញទៅ!", "ល្ងង់", "ស្រីថោកទាប", "ស្រីក្បត់", "មុខល្ងង់", "ស៊ិន ម៉ាន់លីន", "沈曼琳"]
+    # 3. Villainess / Mean Woman / Rival Mistress
+    villainess_zh = ["贱人", "狐狸精", "死丫头", "沈曼琳", "小三", "狐媚子", "要脸不要", "给脸不要脸"]
+    villainess_km = ["ស្រីឆ្កួត", "មីក្បត់", "ស្រីពុតត្បុត", "ស្រីកំណាន់", "ស្រីថោកទាប", "ស្រីក្បត់", "មីស្រីពិសពុល", "ស៊ិន ម៉ាន់លីន", "沈曼琳"]
     is_villainess = any(k in orig_text for k in villainess_zh) or any(k in km_text for k in villainess_km) or "villainess" in speaker_clean or "曼琳" in speaker_clean or "តួកាច" in speaker_clean
 
     # 4. Female Lead / Suffering / Sweet / Crying
@@ -851,9 +851,9 @@ def infer_drama_persona_acoustics(
     heroine_km = ["លីន ចាវចាវ", "សូមអង្វរ", "ហេតុអ្វី", "អត់ទោស", "សុំទោស", "កូនរបស់ខ្ញុំ", "កូនក្នុងពោះ", "អាណិតខ្ញុំផង"]
     is_heroine = any(k in orig_text for k in heroine_zh) or any(k in km_text for k in heroine_km) or "heroine" in speaker_clean or "早早" in speaker_clean or "តួឯកស្រី" in speaker_clean
 
-    # 5. Angry Male / Shouting / Fight
-    angry_male_zh = ["混蛋", "找死", "闭嘴", "给我滚", "废话", "弄死你", "混账", "住口", "你找死"]
-    angry_male_km = ["បិទមាត់!", "អាគម្រក់!", "ឯងចង់ងាប់មែនទេ!", "ចេញទៅ!", "ឈប់ភ្លាម!", "កុំមកចង់ខ្លាំង!", "ចង់ងាប់"]
+    # 5. Angry Male / Antagonist Shouting / Confrontation
+    angry_male_zh = ["混蛋", "找死", "闭嘴", "给我滚", "废话", "弄死你", "混账", "住口", "你找死", "白痴", "滚", "算什么东西", "不要脸", "看你脸"]
+    angry_male_km = ["បិទមាត់!", "អាគម្រក់!", "ឯងចង់ងាប់មែនទេ!", "ចេញទៅ!", "ឈប់ភ្លាម!", "កុំមកចង់ខ្លាំង!", "ចង់ងាប់", "អាចង្រៃ", "មើលមុខឯង"]
     is_angry_male = any(k in orig_text for k in angry_male_zh) or any(k in km_text for k in angry_male_km) or ("!" in orig_text and ("男" in speaker_clean or "male" in speaker_clean))
 
     # 6. Male Lead / CEO / President
@@ -868,23 +868,33 @@ def infer_drama_persona_acoustics(
     if not is_multi:
         assigned_voice = chosen_single_voice
     else:
-        # Priority 1: Direct text & character indicators
+        # Priority 1: Explicit speaker metadata (Never let dialogue insult keywords override known gender!)
         is_spk_female = any(k in speaker_clean for k in ("female", "woman", "girl", "lady", "wife", "mother", "sister", "sreymom", "ស្រី", "女", "婦", "母"))
         is_spk_male = any(k in re.sub(r'female|woman', '', speaker_clean) for k in ("male", "man", "boy", "husband", "father", "brother", "guy", "sir", "piseth", "ប្រុស", "男", "父"))
-        if is_elder_female or is_villainess or is_heroine or is_spk_female or "早早" in orig_text or "曼琳" in orig_text:
+
+        if is_spk_female and not is_spk_male:
             assigned_voice = "sreymom"
-        elif is_elder_male or is_angry_male or is_male_lead or is_spk_male or "沐谦" in orig_text or "张昭" in orig_text:
+        elif is_spk_male and not is_spk_female:
             assigned_voice = "piseth"
         # Priority 2: Detected acoustic role from STT F0
         elif role_hint == "female":
             assigned_voice = "sreymom"
         elif role_hint == "male":
             assigned_voice = "piseth"
-        # Priority 3: Existing voice if not a solo override
+        # Priority 3: Character names and clear gender terms in text
+        elif any(w in orig_text for w in ["早早", "曼琳", "林早早", "沈曼琳", "夫人", "婆婆", "母亲", "奶奶", "老夫人", "小三", "狐狸精", "姐姐", "妹妹", "姑娘"]):
+            assigned_voice = "sreymom"
+        elif any(w in orig_text for w in ["沐谦", "张昭", "李沐谦", "顾北辰", "总裁", "少爷", "先生", "老爷", "老太爷", "管家", "爷爷", "爸爸", "父亲"]):
+            assigned_voice = "piseth"
+        elif is_elder_female or is_villainess or is_heroine:
+            assigned_voice = "sreymom"
+        elif is_elder_male or is_angry_male or is_male_lead:
+            assigned_voice = "piseth"
+        # Priority 4: Existing voice if not a solo override
         elif curr_voice in ("piseth", "sreymom") and not has_solo_stamp:
             assigned_voice = curr_voice
         else:
-            assigned_voice = "sreymom" if any(w in orig_text for w in ["女", "姐", "妹", "早早", "曼琳", "妈", "娘"]) else "piseth"
+            assigned_voice = "sreymom" if any(w in orig_text for w in ["女", "姐", "妹", "妈", "娘", "婆"]) else "piseth"
 
     # In Multi-Voice mode: if old item had a single-voice solo stamp or mismatched voice, reset pitch & rate
     if is_multi and (has_solo_stamp or (assigned_voice == "sreymom" and "piseth" in speaker_raw) or (assigned_voice == "piseth" and "sreymom" in speaker_raw)):
@@ -1366,6 +1376,34 @@ class DramaTranslator:
             elif isinstance(c_res, str):
                 all_translated_texts.append(c_res)
 
+        # Ultra-fast parallel fallback reconciliation for any missing or untranslated lines
+        missing_indices = []
+        for idx in range(len(dialogues)):
+            raw_km = all_translated_texts[idx] if idx < len(all_translated_texts) else ""
+            has_cjk = any('\u4e00' <= c <= '\u9fff' for c in str(raw_km))
+            if not raw_km or has_cjk:
+                missing_indices.append(idx)
+
+        while len(all_translated_texts) < len(dialogues):
+            all_translated_texts.append("")
+
+        if missing_indices:
+            sem_fb = asyncio.Semaphore(12)
+            async def _fill_missing(mi):
+                async with sem_fb:
+                    itm = dialogues[mi]
+                    orig_text = (itm.get("text") or itm.get("text_original") or "").strip()
+                    v_info = self._determine_strictly_two_voices(itm, target_voice_override)
+                    try:
+                        return await self.translate_text_free(orig_text, source_lang=source_lang, voice=v_info["voice"])
+                    except Exception:
+                        return orig_text
+
+            fb_tasks = [_fill_missing(mi) for mi in missing_indices]
+            fb_results = await asyncio.gather(*fb_tasks)
+            for mi, res_text in zip(missing_indices, fb_results):
+                all_translated_texts[mi] = res_text
+
         results = []
         for idx, itm in enumerate(dialogues):
             orig_text = (itm.get("text") or itm.get("text_original") or "").strip()
@@ -1386,15 +1424,7 @@ class DramaTranslator:
                 pitch_hz = 0
                 rate_percent = 2
 
-            raw_km = all_translated_texts[idx] if idx < len(all_translated_texts) else ""
-            # If raw_km is missing, empty, or still contains untranslated Chinese characters, translate on-the-fly!
-            has_cjk = any('\u4e00' <= c <= '\u9fff' for c in str(raw_km))
-            has_khmer = any('\u1780' <= c <= '\u17ff' for c in str(raw_km))
-            if not raw_km or (has_cjk and not has_khmer):
-                try:
-                    raw_km = await self.translate_text_free(orig_text, source_lang=source_lang, voice=chosen_voice)
-                except Exception:
-                    raw_km = orig_text
+            raw_km = all_translated_texts[idx] if idx < len(all_translated_texts) else orig_text
 
             final_text_km = enrich_khmer_drama_dialogue(
                 str(raw_km).strip(),
@@ -1442,7 +1472,7 @@ class DramaTranslator:
 
         client = self.get_http_client()
         chunk_size = 25
-        candidate_models = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "allam-2-7b"]
+        candidate_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "qwen/qwen3.8-27b"]
 
         chunks = [dialogues[i:i + chunk_size] for i in range(0, len(dialogues), chunk_size)]
 
@@ -1501,6 +1531,10 @@ Return JSON object with key "dialogues" containing an array with keys: id, start
                                     item["end"] = chunk[j].get("end", item.get("end", 0))
                                     orig_line = chunk[j].get("text_original", chunk[j].get("text", ""))
                                     item["text_original"] = orig_line
+                                    if "speaker" in chunk[j] and not item.get("speaker"):
+                                        item["speaker"] = chunk[j]["speaker"]
+                                    if "detected_role" in chunk[j] and not item.get("detected_role"):
+                                        item["detected_role"] = chunk[j]["detected_role"]
 
                                     persona = infer_drama_persona_acoustics(
                                         item,
@@ -1740,6 +1774,10 @@ Return ONLY valid JSON array with keys: id, start, end, text_original, text_km, 
                                     item["end"] = chunk[j].get("end", item.get("end", 0))
                                     orig_line = chunk[j].get("text_original", chunk[j].get("text", ""))
                                     item["text_original"] = orig_line
+                                    if "speaker" in chunk[j] and not item.get("speaker"):
+                                        item["speaker"] = chunk[j]["speaker"]
+                                    if "detected_role" in chunk[j] and not item.get("detected_role"):
+                                        item["detected_role"] = chunk[j]["detected_role"]
 
                                     persona = infer_drama_persona_acoustics(
                                         item,

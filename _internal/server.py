@@ -1222,7 +1222,7 @@ def license_status_endpoint():
         from update import get_local_version
         info["app_version"] = get_local_version()
     except Exception:
-        info["app_version"] = "1.1.7"
+        info["app_version"] = "2.0.5"
 
     cfg_path = get_data_file("license_config.json")
     if cfg_path.exists():
@@ -1243,7 +1243,7 @@ def api_version_endpoint():
         from update import get_local_version
         v = get_local_version()
     except Exception:
-        v = "1.1.7"
+        v = "2.0.0"
     return jsonify({"version": v, "success": True})
 
 
@@ -1362,6 +1362,10 @@ def downloader_catalog_endpoint():
     query = request.args.get("q", "").strip()
     page = int(request.args.get("page", 1))
     limit = int(request.args.get("limit", 60))
+    sort = request.args.get("sort", "popular").lower()
+    refresh = request.args.get("refresh", "0").lower() in ("1", "true", "yes")
+    if refresh:
+        sort = "random"
     offset = max(0, (page - 1) * limit)
 
     dramas, total_count = hongguo_db.query_dramas(
@@ -1369,16 +1373,18 @@ def downloader_catalog_endpoint():
         query=query if query else None,
         platform=platform if platform != "all" else None,
         limit=limit,
-        offset=offset
+        offset=offset,
+        sort=sort
     )
 
+    has_more = True if (sort == "random" or refresh) else ((offset + len(dramas)) < total_count)
     return jsonify({
         "success": True,
         "dramas": dramas,
         "total_count": total_count,
         "page": page,
         "limit": limit,
-        "has_more": (offset + len(dramas)) < total_count
+        "has_more": has_more
     })
 
 
@@ -1436,15 +1442,25 @@ def downloader_drama_detail_endpoint(drama_id):
 
 @app.route("/api/downloader/preview/<drama_id>", methods=["GET"])
 def downloader_preview_endpoint(drama_id):
-    """Get authentic preview video for a drama to play directly in 9:16 monitor."""
+    """Get authentic preview video for a drama to play directly in 9:16 monitor with zero stutter and zero cross-drama leaks."""
     ep_num = request.args.get("ep", 1, type=int)
     drama = hongguo_db.get_drama_by_id(drama_id)
     if not drama and drama_downloader.current_drama:
         if str(drama_downloader.current_drama.get("id")) == str(drama_id):
             drama = drama_downloader.current_drama
 
-    # 1. Check if active episodes manifest has a genuine video file for this episode
-    if drama_downloader.episodes:
+    if not drama:
+        return jsonify({
+            "success": False,
+            "error": "drama_not_found",
+            "message": f"Drama {drama_id} not found"
+        }), 404
+
+    curr_id = str(drama_downloader.current_drama.get("id") or "") if drama_downloader.current_drama else ""
+    is_same_drama = (curr_id == str(drama_id))
+
+    # 1. Check if active episodes manifest has a genuine video file for THIS specific drama
+    if is_same_drama and drama_downloader.episodes:
         for ep in drama_downloader.episodes:
             if ep.get("episode_number") == ep_num or ep.get("episode_num") == ep_num:
                 if ep.get("video_url") and ep.get("filepath") and Path(ep["filepath"]).exists():
@@ -1456,26 +1472,22 @@ def downloader_preview_endpoint(drama_id):
                         "episode": ep_num
                     })
 
-    # 2. Check if authentic video file exists in save location or imported folder
+    # 2. Check if authentic video file exists in save location specifically for THIS drama
     auth_src = find_authentic_episode_video(drama, ep_num)
     if auth_src and auth_src.exists():
         rel_or_abs = str(auth_src.resolve()).replace("\\", "/")
         return jsonify({
             "success": True,
             "video_url": f"/media/{rel_or_abs}",
-            "title": drama.get("title") if drama else "Hongguo Short Drama",
+            "title": drama.get("title") if drama else f"Episode {ep_num}",
             "poster": drama.get("poster") if drama else "posters/poster_sample_ceo.jpg",
             "episode": ep_num
         })
 
     # 2.5 Special handler for ShortMax preview video
-    is_shortmax = (drama and drama.get("platform_id") == "shortmax") or str(drama_id).startswith("shortmax_")
+    is_shortmax = (drama and (drama.get("platform_id") in ("shortmax", "shorttv") or str(drama_id).startswith("shortmax_") or str(drama_id).startswith("sm_")))
     if is_shortmax:
-        sp_id_str = str(drama_id).replace("shortmax_", "").strip()
-        try:
-            sp_id = int(sp_id_str)
-        except Exception:
-            sp_id = 0
+        sp_id = shortmax_service._extract_shortmax_id(drama)
         if sp_id:
             pv_path = shortmax_service.get_or_create_preview_video(sp_id, ep_num)
             if pv_path and pv_path.exists():
@@ -1503,34 +1515,222 @@ def downloader_preview_endpoint(drama_id):
                 "episode": ep_num
             })
 
-    # 3. If authentic live stream is available, provide direct stream URL for 9:16 preview
-    if drama_downloader.episodes:
-        for ep in drama_downloader.episodes:
+    # 3. Check / Resolve direct authentic live streams for THIS drama
+    target_eps = drama_downloader.episodes if is_same_drama else None
+
+    # Check if requested episode already has an active stream URL
+    has_stream = False
+    if target_eps:
+        for ep in target_eps:
             if ep.get("episode_number") == ep_num or ep.get("episode_num") == ep_num:
-                s_url = ep.get("stream_url") or ep.get("download_url")
-                if (not s_url or not str(s_url).startswith("http")) and ep.get("vid") and ep.get("series_id"):
-                    s_url = get_hongguo_episode_real_stream_url(ep["series_id"], ep["vid"])
-                    if s_url:
-                        ep["stream_url"] = s_url
-                        ep["download_url"] = s_url
-                if s_url and str(s_url).startswith("http"):
-                    return jsonify({
-                        "success": True,
-                        "video_url": s_url,
-                        "stream_url": s_url,
-                        "is_live_stream": True,
-                        "title": ep.get("title") or (drama.get("title") if drama else f"Episode {ep_num}"),
-                        "poster": drama.get("poster") if drama else "posters/poster_sample_ceo.jpg",
-                        "episode": ep_num
-                    })
+                u = ep.get("stream_url") or ep.get("download_url") or ep.get("video_url")
+                if u and str(u).startswith("http"):
+                    has_stream = True
+                    break
+
+    # If stream is not yet resolved for this episode or this drama, resolve streams now!
+    if not has_stream and drama:
+        try:
+            resolved_eps = get_drama_episodes(drama, resolve_streams=True)
+            if resolved_eps:
+                stream_map = {e.get("episode_num") or e.get("episode_number"): e for e in resolved_eps}
+                if target_eps:
+                    for ep in target_eps:
+                        num = ep.get("episode_number") or ep.get("episode_num")
+                        if num in stream_map:
+                            res_e = stream_map[num]
+                            for k in ("stream_url", "download_url", "video_url", "master_stream_url", "is_master_full"):
+                                if res_e.get(k):
+                                    ep[k] = res_e[k]
+                else:
+                    target_eps = resolved_eps
+                    if not is_same_drama and not drama_downloader.is_downloading:
+                        drama_downloader.current_drama = drama
+                        drama_downloader.episodes = resolved_eps
+        except Exception as e:
+            print(f"[Preview Endpoint] Stream resolution error: {e}")
+
+    if target_eps:
+        # Build stream map of all resolved streams to send to client for instant subsequent clicks
+        resolved_stream_dict = {}
+        target_ep_obj = None
+        for ep in target_eps:
+            num = ep.get("episode_number") or ep.get("episode_num")
+            u = ep.get("video_url") or ep.get("stream_url") or ep.get("download_url")
+            if (not u or not str(u).startswith("http")) and ep.get("vid") and ep.get("series_id"):
+                real_u = get_hongguo_episode_real_stream_url(ep["series_id"], ep["vid"])
+                if real_u:
+                    ep["stream_url"] = real_u
+                    ep["download_url"] = real_u
+                    u = real_u
+            if num and u:
+                resolved_stream_dict[num] = u
+            if num == ep_num:
+                target_ep_obj = ep
+
+        s_url = resolved_stream_dict.get(ep_num)
+        is_master = False
+        if not s_url and resolved_stream_dict:
+            # Fallback to episode 1 or first available stream (e.g. Master Full Series Stream)
+            s_url = resolved_stream_dict.get(1) or next(iter(resolved_stream_dict.values()))
+            is_master = True
+
+        if s_url:
+            import urllib.parse
+            ep_title = target_ep_obj.get("title") if target_ep_obj else None
+            is_remote = str(s_url).startswith("http")
+            stream_playback_url = f"/api/downloader/stream-proxy?url={urllib.parse.quote(str(s_url))}" if is_remote else s_url
+            proxied_streams = {
+                n: (f"/api/downloader/stream-proxy?url={urllib.parse.quote(str(u))}" if str(u).startswith("http") else u)
+                for n, u in resolved_stream_dict.items()
+            }
+            return jsonify({
+                "success": True,
+                "video_url": stream_playback_url,
+                "stream_url": stream_playback_url,
+                "raw_stream_url": s_url,
+                "is_live_stream": is_remote,
+                "is_master_full": is_master or bool(target_ep_obj and target_ep_obj.get("is_master_full")),
+                "title": ep_title or (drama.get("title") if drama else f"Episode {ep_num}"),
+                "poster": drama.get("poster") if drama else "posters/poster_sample_ceo.jpg",
+                "episode": ep_num,
+                "resolved_streams": proxied_streams
+            })
 
     return jsonify({
         "success": False,
         "error": "no_video",
-        "message": f"Episode {ep_num} is not downloaded locally yet",
+        "message": f"Episode {ep_num} stream is currently unavailable",
         "poster": drama.get("poster") if drama else "posters/poster_sample_ceo.jpg",
         "episode": ep_num
     }), 404
+
+
+@app.route("/api/downloader/stream-proxy", methods=["GET"])
+def downloader_stream_proxy_endpoint():
+    """
+    High-performance CORS-free stream proxy for HLS (.m3u8) playlists and media segments.
+    Enables instant, zero-buffer preview for all drama CDN platforms (ReelShort, ShortMax, AnyReel, Hongguo).
+    """
+    raw_url = request.args.get("url", "").strip()
+    if not raw_url:
+        return "Missing URL", 400
+
+    import urllib.parse
+    import urllib.request
+    from flask import Response, stream_with_context
+
+    clean_url = urllib.parse.unquote(raw_url)
+    if not clean_url.startswith("http"):
+        return "Invalid URL scheme", 400
+
+    # Handle YouTube web links by resolving to direct media streams
+    if "youtube.com" in clean_url or "youtu.be" in clean_url:
+        try:
+            import yt_dlp
+            ydl_opts = {'quiet': True, 'no_warnings': True, 'socket_timeout': 5}
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                yt_info = ydl.extract_info(clean_url, download=False)
+                formats = yt_info.get('formats', [])
+                hls_format = next((f for f in formats if f.get('protocol') in ('m3u8_native', 'm3u8') and f.get('url')), None)
+                best_format = hls_format or next((f for f in formats if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('url')), None)
+                if best_format and best_format.get('url'):
+                    clean_url = best_format['url']
+        except Exception as yt_e:
+            print(f"[Stream Proxy] YouTube direct stream warning: {yt_e}")
+
+    # Determine intelligent anti-hotlink referer & origin per CDN platform
+    referer = "https://www.google.com/"
+    origin = None
+    if "shorttv.live" in clean_url or "shortmax" in clean_url:
+        referer = "https://www.shorttv.live/"
+        origin = "https://www.shorttv.live"
+    elif "crazymaplestudios.com" in clean_url or "reelshort" in clean_url:
+        referer = "https://www.reelshort.com/"
+        origin = "https://www.reelshort.com"
+    elif any(k in clean_url for k in ("hongguo", "byteimg", "snssdk", "bytedance", "toutiao")):
+        referer = "https://hongguoduanju.com/"
+    elif any(k in clean_url for k in ("bfllvip.com", "cdnlz", "modujx")):
+        referer = "https://www.google.com/"
+    else:
+        try:
+            p = urllib.parse.urlparse(clean_url)
+            referer = f"{p.scheme}://{p.netloc}/"
+        except Exception:
+            referer = "https://www.google.com/"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Referer": referer,
+        "Accept": "*/*"
+    }
+    if origin:
+        headers["Origin"] = origin
+
+    range_header = request.headers.get("Range")
+    if range_header:
+        headers["Range"] = range_header
+
+    try:
+        remote_resp = None
+        for attempt in range(2):
+            try:
+                req = urllib.request.Request(clean_url, headers=headers)
+                remote_resp = urllib.request.urlopen(req, timeout=12.0)
+                break
+            except Exception as net_err:
+                if attempt == 1:
+                    raise net_err
+                time.sleep(0.2)
+
+        content_type = remote_resp.headers.get("Content-Type", "")
+        is_m3u8 = (
+            ".m3u8" in clean_url.lower() or 
+            "mpegurl" in content_type.lower() or 
+            "application/x-mpegurl" in content_type.lower()
+        )
+
+        if is_m3u8:
+            raw_text = remote_resp.read().decode("utf-8", errors="ignore")
+            rewritten_lines = []
+            for line in raw_text.splitlines():
+                s = line.strip()
+                if s and not s.startswith("#"):
+                    full_target = urllib.parse.urljoin(clean_url, s)
+                    proxy_chunk_url = f"/api/downloader/stream-proxy?url={urllib.parse.quote(full_target)}"
+                    rewritten_lines.append(proxy_chunk_url)
+                else:
+                    rewritten_lines.append(line)
+            
+            output_body = "\r\n".join(rewritten_lines)
+            resp = Response(output_body, mimetype="application/vnd.apple.mpegurl")
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Headers"] = "*"
+            resp.headers["Cache-Control"] = "public, max-age=3600"
+            return resp
+
+        # Direct segment or binary stream
+        def generate():
+            while True:
+                chunk = remote_resp.read(64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+
+        resp = Response(stream_with_context(generate()), status=remote_resp.status)
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "*"
+        resp.headers["Content-Type"] = content_type or "video/MP2T"
+        
+        for h in ("Content-Length", "Content-Range", "Accept-Ranges"):
+            val = remote_resp.headers.get(h)
+            if val:
+                resp.headers[h] = val
+        return resp
+
+    except Exception as e:
+        print(f"[Stream Proxy Error] {e} for {clean_url[:80]}")
+        return jsonify({"error": str(e)}), 502
 
 
 @app.route("/api/downloader/import-folder", methods=["POST", "GET"])
@@ -1694,6 +1894,51 @@ def downloader_status_endpoint():
     })
 
 
+
+_LAST_EXPLORER_OPEN_TIME = 0.0
+_LAST_EXPLORER_OPEN_PATH = ""
+
+def safe_open_explorer(target_path, highlight_file: bool = True) -> bool:
+    """Safely open Windows File Explorer with strict 3.5-second debounce cooldown to eliminate duplicate window spam."""
+    global _LAST_EXPLORER_OPEN_TIME, _LAST_EXPLORER_OPEN_PATH
+    import time
+    now = time.time()
+    try:
+        p = Path(target_path).resolve()
+    except Exception:
+        p = Path(target_path)
+    path_key = str(p).lower().replace("/", "\\")
+
+    # 3.5-second debounce window per folder/file path
+    if (now - _LAST_EXPLORER_OPEN_TIME < 3.5) and (_LAST_EXPLORER_OPEN_PATH == path_key):
+        return True
+
+    _LAST_EXPLORER_OPEN_TIME = now
+    _LAST_EXPLORER_OPEN_PATH = path_key
+
+    if sys.platform == "win32":
+        try:
+            import subprocess
+            if highlight_file and p.exists() and p.is_file():
+                subprocess.Popen(f'explorer.exe /select,"{str(p)}"', shell=True)
+            elif p.is_dir():
+                os.startfile(str(p))
+            else:
+                p.mkdir(parents=True, exist_ok=True)
+                os.startfile(str(p))
+            return True
+        except Exception:
+            return False
+    else:
+        try:
+            import subprocess
+            target_dir = p.parent if (p.exists() and p.is_file()) else p
+            subprocess.Popen(["xdg-open", str(target_dir)])
+            return True
+        except Exception:
+            return False
+
+
 @app.route("/api/downloader/open-folder", methods=["POST", "GET"])
 def downloader_open_folder_endpoint():
     """Open drama download folder directly in Windows File Explorer."""
@@ -1727,10 +1972,7 @@ def downloader_open_folder_endpoint():
 
     try:
         resolved_str = str(p.resolve()).replace("/", "\\")
-        if sys.platform == "win32":
-            os.startfile(resolved_str)
-        else:
-            subprocess.Popen(["xdg-open", resolved_str])
+        safe_open_explorer(p, highlight_file=False)
         return jsonify({"success": True, "path": resolved_str})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -2500,14 +2742,7 @@ def system_open_folder_endpoint():
         if not target_dir.exists():
             target_dir.mkdir(parents=True, exist_ok=True)
             
-        if sys.platform == "win32":
-            # If target is an existing file, reveal & highlight it directly in Windows Explorer
-            if p.exists() and p.is_file():
-                subprocess.Popen(["explorer.exe", f"/select,{str(p)}"])
-            else:
-                os.startfile(str(target_dir))
-        else:
-            subprocess.Popen(["xdg-open", str(target_dir)])
+        safe_open_explorer(p, highlight_file=True)
         return jsonify({"success": True, "path": str(target_dir).replace("\\", "/")})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -3319,27 +3554,12 @@ def open_project_folder_endpoint():
     from batch_engine import sanitize_export_path
     clean_target = sanitize_export_path(target_path) or target_path
 
-    if sys.platform == "win32":
-        try:
-            import subprocess
-            p = Path(clean_target).resolve()
-            if not p.exists() and Path(target_path).exists():
-                p = Path(target_path).resolve()
-            if p.is_file():
-                # Open Explorer and highlight the exact file!
-                subprocess.Popen(f'explorer.exe /select,"{str(p)}"', shell=True)
-                return jsonify({"success": True, "opened_path": str(p.parent), "selected_file": str(p)})
-            elif p.is_dir():
-                os.startfile(str(p))
-                return jsonify({"success": True, "opened_path": str(p)})
-            else:
-                # If neither exists yet, create parent directory and open
-                p.mkdir(parents=True, exist_ok=True)
-                os.startfile(str(p))
-                return jsonify({"success": True, "opened_path": str(p)})
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e)}), 500
-    return jsonify({"success": True, "opened_path": target_path})
+    p = Path(clean_target).resolve()
+    if not p.exists() and Path(target_path).exists():
+        p = Path(target_path).resolve()
+    ok = safe_open_explorer(p, highlight_file=True)
+    opened_dir = str(p.parent if p.is_file() else p)
+    return jsonify({"success": ok, "opened_path": opened_dir, "selected_file": str(p) if p.is_file() else None})
 
 
 @app.route("/api/projects/merge-episodes", methods=["POST"])
@@ -3348,6 +3568,7 @@ def merge_episodes_endpoint():
     data = request.get_json(force=True) or {}
     video_paths = data.get("video_paths", [])
     series_title = data.get("series_title", "Drama_Series")
+    cleanup_separate = bool(data.get("cleanup_separate_episodes") or data.get("full_movie_only") or data.get("delete_episodes"))
 
     clean_title = re.sub(r'^(?:Dubbed_)+', '', str(series_title), flags=re.IGNORECASE)
     clean_title = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', clean_title).strip('_ ')
@@ -3407,12 +3628,53 @@ def merge_episodes_endpoint():
     try:
         from video_processor import merge_videos
         final_path = merge_videos(resolved_paths, str(out_file), auto_trim_freeze=True)
+        final_p = Path(final_path).resolve()
+
+        # If user strictly requested "Full Movie Merged", clean up intermediate separate episodes!
+        cleaned_separate_count = 0
+        if cleanup_separate and final_p.exists() and final_p.stat().st_size > 10000:
+            for rp in resolved_paths:
+                try:
+                    p_rp = Path(rp).resolve()
+                    if p_rp != final_p and p_rp.exists():
+                        p_rp.unlink(missing_ok=True)
+                        cleaned_separate_count += 1
+                except Exception as ce:
+                    print(f"Cleanup error for {rp}: {ce}")
+
+            # Check destination directories and purge any separate episode files (Dubbed_EP_*.mp4)
+            dirs_to_clean = [final_p.parent]
+            if sanitized_cust and Path(sanitized_cust).exists():
+                dirs_to_clean.append(Path(sanitized_cust).resolve())
+            for root_dir in ('D:/SN_Dramas', 'C:/SN_Dramas'):
+                cand = Path(root_dir) / clean_title
+                if cand.exists():
+                    dirs_to_clean.append(cand.resolve())
+
+            for d_clean in set(dirs_to_clean):
+                if d_clean.exists():
+                    for ep_cand in list(d_clean.glob('Dubbed_*.mp4')):
+                        if ep_cand.resolve() != final_p and '_Full_Movie' not in ep_cand.name:
+                            try:
+                                ep_cand.unlink(missing_ok=True)
+                                cleaned_separate_count += 1
+                            except Exception:
+                                pass
+                    for srt_cand in list(d_clean.glob('Dubbed_*.srt')):
+                        if srt_cand.resolve() != final_p.with_suffix('.srt').resolve() and '_Full_Movie' not in srt_cand.name:
+                            try:
+                                srt_cand.unlink(missing_ok=True)
+                                cleaned_separate_count += 1
+                            except Exception:
+                                pass
+
         play_windows_completion_sound()
         return jsonify({
             "success": True,
             "merged_path": str(final_path),
             "merged_filename": output_filename,
-            "video_url": f"/media/{str(final_path).replace('\\', '/')}"
+            "video_url": f"/media/{str(final_path).replace('\\', '/')}",
+            "cleaned_separate_count": cleaned_separate_count
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -3426,33 +3688,109 @@ def pre_merge_raw_episodes_endpoint():
     """
     data = request.get_json(force=True) or {}
     video_paths = data.get("video_paths", [])
+    file_names = data.get("file_names", [])
     series_title = data.get("series_title", "Drama_Series")
+    folder_path = data.get("folder_path") or data.get("custom_export_dir")
+    auto_trim = bool(data.get("auto_trim_freeze", False))
 
     clean_title = re.sub(r'^(?:Dubbed_)+', '', str(series_title), flags=re.IGNORECASE)
+    clean_title = re.sub(r'^(?:Raw_Full_Movie_)+', '', clean_title, flags=re.IGNORECASE)
     clean_title = re.sub(r'[\\/*?:"<>|《》【】「」『』\(\)\[\]]', '_', clean_title).strip('_ ')
     if not clean_title or clean_title.lower() in ("drama_series", "full_movie"):
         clean_title = "Drama_Series"
 
-    if not video_paths:
-        return jsonify({"success": False, "error": "No video paths provided"}), 400
-
     resolved_paths = []
+
+    # 1. First, check direct paths if provided
     for vp in video_paths:
+        if not vp:
+            continue
         p = Path(vp)
-        if p.exists():
+        if p.exists() and p.is_file():
             resolved_paths.append(str(p.resolve()))
             continue
         p_base = (BASE_DIR / vp).resolve()
-        if p_base.exists():
+        if p_base.exists() and p_base.is_file():
             resolved_paths.append(str(p_base))
             continue
+        if folder_path and (Path(folder_path) / p.name).exists() and (Path(folder_path) / p.name).is_file():
+            resolved_paths.append(str((Path(folder_path) / p.name).resolve()))
+            continue
         p_uploads = (Path("data/uploads") / p.name).resolve()
-        if p_uploads.exists():
+        if p_uploads.exists() and p_uploads.is_file():
             resolved_paths.append(str(p_uploads))
             continue
 
+    # 2. If video_paths were missing or only contained relative filenames, search candidate folders
+    names_to_find = [Path(fn).name for fn in file_names if fn] or [Path(vp).name for vp in video_paths if vp]
+    if (len(resolved_paths) < len(names_to_find) or len(resolved_paths) == 0) and names_to_find:
+        candidate_dirs = []
+        if folder_path:
+            p_fold = Path(folder_path)
+            candidate_dirs.append(p_fold)
+            candidate_dirs.append(p_fold.parent)
+        for root_str in ("D:/SN_Dramas", "C:/SN_Dramas"):
+            rp = Path(root_str)
+            if rp.exists():
+                candidate_dirs.append(rp)
+                if clean_title and clean_title.lower() != "drama_series":
+                    candidate_dirs.append(rp / clean_title)
+                try:
+                    for sub in rp.iterdir():
+                        if sub.is_dir() and sub not in candidate_dirs:
+                            candidate_dirs.append(sub)
+                except Exception:
+                    pass
+        candidate_dirs.append(Path("data/uploads"))
+        candidate_dirs.append(BASE_DIR)
+
+        resolved_by_name = []
+        for fn in names_to_find:
+            found_p = None
+            for cdir in candidate_dirs:
+                cand = (cdir / fn).resolve()
+                if cand.exists() and cand.is_file():
+                    found_p = str(cand)
+                    break
+                if not found_p and cdir.exists():
+                    try:
+                        for m in cdir.rglob(fn):
+                            if m.is_file() and m.stat().st_size > 50000:
+                                found_p = str(m.resolve())
+                                break
+                    except Exception:
+                        pass
+                if found_p:
+                    break
+            if found_p and found_p not in resolved_by_name:
+                resolved_by_name.append(found_p)
+        if len(resolved_by_name) >= 2 or (len(resolved_by_name) > len(resolved_paths)):
+            resolved_paths = resolved_by_name
+
+    # 3. If still not resolved or empty, but folder_path is provided: scan folder_path directly on disk!
+    if (not resolved_paths or len(resolved_paths) < 2) and folder_path:
+        f_dir = Path(folder_path)
+        if f_dir.exists():
+            valid_exts = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".ts"}
+            scanned = []
+            for item in f_dir.rglob("*"):
+                if item.is_file() and item.suffix.lower() in valid_exts:
+                    if not item.name.startswith("Dubbed_") and not item.name.startswith("Raw_"):
+                        scanned.append(item)
+            if scanned:
+                def natural_sort_key(s):
+                    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s.name)]
+                scanned.sort(key=natural_sort_key)
+                resolved_paths = [str(x.resolve()) for x in scanned]
+
     if not resolved_paths:
         return jsonify({"success": False, "error": "None of the episode files were found on disk"}), 404
+
+    # Natural numerical sort to guarantee Ep1 -> Ep2 -> ... -> Ep99 order
+    def sort_resolved(p_str):
+        name = Path(p_str).name
+        return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', name)]
+    resolved_paths.sort(key=sort_resolved)
 
     # If series title was generic, resolve authentic drama name from the source episode folder!
     if clean_title.lower() in ("drama_series", "full_movie", "") and resolved_paths:
@@ -3474,7 +3812,7 @@ def pre_merge_raw_episodes_endpoint():
         out_filename = f"Raw_Full_Movie_{clean_title}_{int(time.time())}.mp4"
         out_file = upload_dir / out_filename
 
-        merge_res = merge_videos(resolved_paths, str(out_file), auto_trim_freeze=True, return_details=True)
+        merge_res = merge_videos(resolved_paths, str(out_file), auto_trim_freeze=auto_trim, return_details=True)
         final_path = merge_res["output_file"]
         file_size_mb = round(Path(final_path).stat().st_size / (1024 * 1024), 2)
         play_windows_completion_sound()

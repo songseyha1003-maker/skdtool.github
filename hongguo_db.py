@@ -8,6 +8,7 @@ import sys
 import sqlite3
 import json
 import time
+import random
 import urllib.request
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -79,7 +80,6 @@ def ensure_db_initialized():
     if _DB_INITIALIZED and DB_PATH.exists():
         return
 
-    base = Path(__file__).resolve().parent
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     cur = conn.cursor()
@@ -363,6 +363,17 @@ def get_platform_drama_count(platform_id: str) -> int:
         return 0
 
 
+# Contiguous rowid index intervals for instant <1ms random discovery across platforms
+_PLATFORM_ROWID_RANGES: Dict[str, Tuple[int, int]] = {
+    "hongguo": (1, 49591),
+    "ai_drama": (55958, 80038),
+    "freereels": (85762, 205761),
+    "anyreel": (205762, 405761),
+    "reelshort": (405762, 525761),
+    "shortmax": (525762, 645761),
+}
+
+
 def query_dramas(category: Optional[str] = None, query: Optional[str] = None, platform: Optional[str] = None, limit: int = 50, offset: int = 0, sort: str = "popular") -> Tuple[List[Dict[str, Any]], int]:
     """
     Query dramas from local SQLite with sub-millisecond performance.
@@ -448,18 +459,59 @@ def query_dramas(category: Optional[str] = None, query: Optional[str] = None, pl
         if plat_lower == "hongguo" and (not cat_lower or cat_lower in ("all", "")) and not query:
             total_count = TARGET_DRAMA_COUNT
 
-        # Order by rank_num ASC for leaderboard (Ranks 1 to 100), then ID
-        select_sql = f"SELECT * FROM hongguo_dramas{where_stmt} ORDER BY rank_num ASC, id ASC LIMIT ? OFFSET ?"
-        cur.execute(select_sql, params + [limit, offset])
-        rows = cur.fetchall()
+        # Check sort mode: "popular" (default leaderboard) or "random" / "shuffle" / "discover"
+        is_random = (sort in ("random", "shuffle", "discover"))
+
+        if is_random and not query:
+            rows = []
+            if not sql_clauses:
+                # Across All Platforms: 633,672 dramas (< 1ms instant random sampling)
+                cur.execute("SELECT max(rowid) FROM hongguo_dramas")
+                max_rowid = cur.fetchone()[0] or 645761
+                sample_count = min(limit * 3, 300)
+                sample_ids = random.sample(range(1, max_rowid + 1), sample_count)
+                in_c = ",".join(map(str, sample_ids))
+                cur.execute(f"SELECT * FROM hongguo_dramas WHERE rowid IN ({in_c}) LIMIT ?", [limit])
+                rows = cur.fetchall()
+            elif plat_lower and not cat_lower:
+                if plat_lower not in _PLATFORM_ROWID_RANGES:
+                    cur.execute("SELECT min(rowid), max(rowid) FROM hongguo_dramas WHERE LOWER(platform_id) = ?", (plat_lower,))
+                    r_bounds = cur.fetchone()
+                    if r_bounds and r_bounds[0] and r_bounds[1]:
+                        _PLATFORM_ROWID_RANGES[plat_lower] = (r_bounds[0], r_bounds[1])
+
+                if plat_lower in _PLATFORM_ROWID_RANGES:
+                    min_r, max_r = _PLATFORM_ROWID_RANGES[plat_lower]
+                    span = max_r - min_r + 1
+                    sample_count = min(limit * 3, span)
+                    sample_ids = random.sample(range(min_r, max_r + 1), sample_count)
+                    in_c = ",".join(map(str, sample_ids))
+                    cur.execute(f"SELECT * FROM hongguo_dramas WHERE rowid IN ({in_c}) LIMIT ?", [limit])
+                    rows = cur.fetchall()
+
+            # Fallback or top-up for specific categories
+            if len(rows) < limit and total_count > len(rows):
+                rand_offset = random.randint(0, max(0, total_count - limit))
+                cur.execute(f"SELECT * FROM hongguo_dramas{where_stmt} LIMIT ? OFFSET ?", params + [limit - len(rows), rand_offset])
+                rows = list(rows) + list(cur.fetchall())
+
+            rows = list(rows)
+            random.shuffle(rows)
+        else:
+            # Order by rank_num ASC for leaderboard (Ranks 1 to 100), then ID
+            select_sql = f"SELECT * FROM hongguo_dramas{where_stmt} ORDER BY rank_num ASC, id ASC LIMIT ? OFFSET ?"
+            cur.execute(select_sql, params + [limit, offset])
+            rows = cur.fetchall()
 
         results = []
-        for r in rows:
+        for idx, r in enumerate(rows, 1):
             d = dict(r)
             try:
                 d["tags"] = json.loads(d.get("tags") or "[]")
             except Exception:
                 d["tags"] = ["Hongguo"]
+            if is_random and not query:
+                d["rank_num"] = idx
             results.append(d)
 
         return results, total_count

@@ -1113,7 +1113,7 @@ def get_drama_episodes(drama: Any, drama_obj: Optional[Dict[str, Any]] = None, r
             for cand_d in cands:
                 cand_id = cand_d.get("id", "")
                 if cand_id != drama_id:
-                    cand_eps = get_drama_episodes(cand_d)
+                    cand_eps = get_drama_episodes(cand_d, resolve_streams=True)
                     cand_with_stream = [e for e in cand_eps if e.get("stream_url")]
                     if cand_with_stream and len(cand_with_stream) >= len(stream_eps):
                         stream_eps = cand_eps
@@ -2080,7 +2080,7 @@ class DramaDownloadManager:
                 self.add_log(f"🎬 Processing Queue Item: '{target_drama.get('title')}'...")
 
                 self.current_drama = target_drama
-                self.episodes = get_drama_episodes(target_drama)
+                self.episodes = get_drama_episodes(target_drama, resolve_streams=True)
 
                 res = self.start_download_batch(["all"], d_loc, save_poster=True, auto_merge_full=False)
 
@@ -3392,7 +3392,7 @@ class DramaDownloadManager:
                                         if compute_drama_title_similarity(target_title, cand_title) < 0.90:
                                             continue
                                         cand_plat = cand_d.get("platform_id", "cross-platform")
-                                        cand_eps = get_drama_episodes(cand_d)
+                                        cand_eps = get_drama_episodes(cand_d, resolve_streams=True)
                                         if cand_eps and ep_num <= len(cand_eps):
                                             alt_ep = cand_eps[ep_num - 1]
                                             alt_url = alt_ep.get("stream_url") or alt_ep.get("download_url")

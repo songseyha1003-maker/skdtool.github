@@ -15,8 +15,8 @@ import urllib.error
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
-CURRENT_VERSION = "1.1.7"
-APP_NAME = "SN TOOL - STUDIO PRO"
+CURRENT_VERSION = "2.0.5"
+APP_NAME = "SN TOOL"
 DEFAULT_UPDATE_ZIP_URL = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
 
 def parse_version_tuple(ver_str: str) -> Tuple[int, ...]:
@@ -198,8 +198,8 @@ def check_for_updates(github_token: str = None) -> Dict[str, Any]:
         "has_update": False,
         "current_version": local_ver,
         "latest_version": local_ver,
-        "title": "SN TOOL STUDIO PRO",
-        "release_notes": "You are currently running the official release of SN TOOL STUDIO PRO.",
+        "title": "SN TOOL",
+        "release_notes": "You are currently running the official release of SN TOOL.",
         "download_url": DEFAULT_UPDATE_ZIP_URL,
         "channel": "stable"
     }
@@ -242,6 +242,9 @@ def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any
         return {"success": False, "error": "No download URL provided for update."}
 
     resolved_url = resolve_gdrive_direct_url(download_url)
+    if "githubusercontent.com" in resolved_url or "github.com" in resolved_url:
+        sep = "&" if "?" in resolved_url else "?"
+        resolved_url = f"{resolved_url}{sep}_cb={int(time.time())}"
     cache_dir = app_dir / "data" / "cache" / "update"
     cache_dir.mkdir(parents=True, exist_ok=True)
     is_exe = resolved_url.lower().split("?")[0].endswith(".exe")
@@ -249,7 +252,9 @@ def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any
 
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache"
         }
         req = urllib.request.Request(resolved_url, headers=headers)
         with urllib.request.urlopen(req, timeout=300) as resp, open(dest_file, "wb") as out_f:
@@ -258,6 +263,15 @@ def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any
                 if not chunk:
                     break
                 out_f.write(chunk)
+
+        # 🛡️ SYSTEM 13: Secure Update Package Integrity Verification
+        try:
+            import license_engine
+            upg_ok, upg_msg = license_engine.verify_update_package_integrity(dest_file)
+            if not upg_ok:
+                return {"success": False, "error": f"Security check failed on downloaded update: {upg_msg}"}
+        except ImportError:
+            pass
 
         # Create detached PowerShell updater script
         ps1_file = app_dir / "apply_update.ps1"
@@ -365,6 +379,12 @@ if ($licBackup -ne $null) {{
         Log-Update "Error restoring license key: $_"
     }}
 }}
+
+# Signal auto-heal & re-sign for core manifest
+try {{
+    New-Item -ItemType File -Path (Join-Path $appDir "data\\.update_pending") -Force | Out-Null
+    Log-Update "Created update_pending signal for automatic manifest re-signing."
+}} catch {{}}
 
 # 5. Remove temporary download package
 Remove-Item -Force $destZip -ErrorAction SilentlyContinue

@@ -1,4 +1,4 @@
-# SN TOOL - Universal PowerShell Client Updater (v1.1.6+)
+﻿# SN TOOL - Universal PowerShell Client Updater (v1.1.6+)
 # Preserves license.key and updates all application files cleanly.
 # Can be run locally OR via 1-line web command: irm <url> | iex
 
@@ -64,22 +64,24 @@ if (Test-Path $licFile) {
 }
 
 # 4. Download update package
-$updateUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
-$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v200.zip"
+$cb = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+$updateUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip?_cb=$cb"
+$tempZip = Join-Path $env:TEMP "SN_TOOL_UPDATE_v205.zip"
 
-Write-Host "[*] Downloading v2.0.0 update package from Cloud CDN..." -ForegroundColor Yellow
+Write-Host "[*] Downloading v2.0.5 update package from Cloud CDN..." -ForegroundColor Yellow
 
 $downloadOk = $false
 try {
     $wc = New-Object System.Net.WebClient
     $wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+    $wc.Headers.Add("Cache-Control", "no-cache, no-store, must-revalidate")
     $wc.DownloadFile($updateUrl, $tempZip)
     if (Test-Path $tempZip) {
         $zipSize = (Get-Item $tempZip).Length
         if ($zipSize -gt 10000000) {
             $downloadOk = $true
             $mb = [math]::Round($zipSize / 1MB, 2)
-            Write-Host "[OK] Downloaded v2.0.0 update package ($mb MB) successfully!" -ForegroundColor Green
+            Write-Host "[OK] Downloaded v2.0.5 update package ($mb MB) successfully!" -ForegroundColor Green
         }
     }
 } catch {

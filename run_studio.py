@@ -21,7 +21,7 @@ from desktop_app import check_and_handle_running_server
 
 from server import app
 
-def launch_native_window(url="http://127.0.0.1:8000", title="SN TOOL - STUDIO PRO"):
+def launch_native_window(url="http://127.0.0.1:8000", title="SN TOOL"):
     """
     Launch SN TOOL as a dedicated native desktop software window:
     1. Try pywebview (Native Edge WebView2 window)
@@ -172,7 +172,7 @@ if __name__ == "__main__":
     os.makedirs("data/uploads", exist_ok=True)
 
     print("\n========================================================")
-    print(" 🎬 Starting SN TOOL - STUDIO PRO (Native Desktop App)...")
+    print(" 🎬 Starting SN TOOL (Native Desktop App)...")
     print(" 🎙️ Official Voiceover Models: Piseth (Male Solo) & Sreymom (Female Solo)")
     print(" 🌐 Server Address: http://127.0.0.1:8000")
     print("========================================================\n")

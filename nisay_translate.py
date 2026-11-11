@@ -75,7 +75,8 @@ def cache_translation(src: str, km: str):
     global _NEW_CACHE_COUNT
     s = (src or "").strip()
     k = (km or "").strip()
-    if s and k:
+    # Strictly reject caching if translation contains untranslated Chinese characters
+    if s and k and not any('\u4e00' <= c <= '\u9fff' for c in k):
         _TRANSLATION_CACHE[s] = k
         _NEW_CACHE_COUNT += 1
         if _NEW_CACHE_COUNT >= 8:
@@ -153,6 +154,67 @@ SUPPORTED_CATEGORIES = {
 }
 
 
+# ⚡ Persistent Circuit Breaker for upstream provider outages (prevents pipeline freezing)
+_NISAY_CIRCUIT_OPEN_UNTIL = 0.0
+CIRCUIT_FILE = CACHE_DIR / "nisay_circuit.dat"
+
+def is_nisay_circuit_open() -> bool:
+    global _NISAY_CIRCUIT_OPEN_UNTIL
+    now = time.time()
+    if now < _NISAY_CIRCUIT_OPEN_UNTIL:
+        return True
+    try:
+        if CIRCUIT_FILE.exists():
+            val = float(CIRCUIT_FILE.read_text(encoding="utf-8").strip())
+            if now < val:
+                _NISAY_CIRCUIT_OPEN_UNTIL = val
+                return True
+    except Exception:
+        pass
+    return False
+
+def trip_nisay_circuit(duration_sec: float = 300.0):
+    global _NISAY_CIRCUIT_OPEN_UNTIL
+    _NISAY_CIRCUIT_OPEN_UNTIL = time.time() + duration_sec
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        CIRCUIT_FILE.write_text(str(_NISAY_CIRCUIT_OPEN_UNTIL), encoding="utf-8")
+    except Exception:
+        pass
+
+def reset_nisay_circuit():
+    global _NISAY_CIRCUIT_OPEN_UNTIL
+    _NISAY_CIRCUIT_OPEN_UNTIL = 0.0
+    try:
+        if CIRCUIT_FILE.exists():
+            CIRCUIT_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+def _google_fallback_single(src_t: str, entity_glossary: Optional[Dict[str, str]] = None) -> str:
+    s_clean = (src_t or "").strip()
+    if not s_clean:
+        return ""
+    if entity_glossary:
+        for k, v in entity_glossary.items():
+            if k and v and k in s_clean:
+                s_clean = s_clean.replace(k, v)
+    try:
+        import urllib.request
+        import urllib.parse
+        url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=km&dt=t&q=" + urllib.parse.quote(s_clean)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            fb_data = json.loads(r.read().decode('utf-8'))
+            if fb_data and isinstance(fb_data, list) and fb_data[0]:
+                joined = "".join([part[0] for part in fb_data[0] if part and part[0]]).strip()
+                if joined:
+                    return joined
+    except Exception:
+        pass
+    return s_clean
+
+
 def normalize_category(category: Optional[str]) -> str:
     """Normalize any genre or custom mode string to one of Nisay Gateway's 4 supported categories."""
     cat = (category or "").lower().strip()
@@ -219,10 +281,11 @@ def translate_khmer(
 
     for i, t in enumerate(payload_text):
         s_clean = (t or "").strip()
+        cached = _TRANSLATION_CACHE.get(s_clean, "")
         if not s_clean:
             resolved_map[i] = ""
-        elif s_clean in _TRANSLATION_CACHE:
-            resolved_map[i] = _TRANSLATION_CACHE[s_clean]
+        elif cached and not any('\u4e00' <= c <= '\u9fff' for c in cached):
+            resolved_map[i] = cached
         else:
             uncached_indices.append(i)
             uncached_texts.append(t)
@@ -232,76 +295,116 @@ def translate_khmer(
         final_cached = [resolved_map[i] for i in range(len(payload_text))]
         return final_cached if is_batch else final_cached[0]
 
-    # Ultra-Fast failover retry schedule: 0.8s, 1.5s
-    backoff_delays = [0.8, 1.5]
-    max_retries = min(max_retries, 2)
+    # Fast failover: 1 single attempt with tight 4s timeout to prevent freezing
+    backoff_delays = [0.8]
+    max_retries = 1
 
-    session = get_nisay_session()
-    last_error = None
+    # If circuit is open due to recent outage/403, immediately engage fast parallel fallback
     translated_batch = None
+    if is_nisay_circuit_open():
+        last_error = "Nisay Cloud API circuit temporarily open"
+    else:
+        session = get_nisay_session()
+        last_error = None
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            payload = {
-                "text": uncached_texts if is_batch else uncached_texts[0],
-                "source_lang": "auto",
-                "target_lang": "km",
-                "model": MANDATORY_MODEL,
-                "category": safe_category,
-                "context": context_str,
-                "entity_glossary": entity_glossary or {}
-            }
+        for attempt in range(1, max_retries + 1):
+            try:
+                payload = {
+                    "text": uncached_texts if is_batch else uncached_texts[0],
+                    "source_lang": "auto",
+                    "target_lang": "km",
+                    "model": MANDATORY_MODEL,
+                    "category": safe_category,
+                    "context": context_str,
+                    "entity_glossary": entity_glossary or {}
+                }
 
-            resp = session.post(
-                TRANSLATE_ENDPOINT,
-                headers=headers,
-                json=payload,
-                timeout=(3.05, min(float(timeout), 12.0))
-            )
+                resp = session.post(
+                    TRANSLATE_ENDPOINT,
+                    headers=headers,
+                    json=payload,
+                    timeout=(2.5, min(float(timeout), 4.0))
+                )
 
-            if resp.status_code == 401 or resp.status_code == 403:
-                raise RuntimeError("403 Forbidden: check Cloud API Key in SN TOOL Settings")
-
-            if resp.status_code == 429:
-                retry_after = float(resp.headers.get("Retry-After", backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]))
-                last_error = f"HTTP 429 Rate Limit. Retry-After: {retry_after}s"
-                time.sleep(min(retry_after, 3.0))
-                continue
-
-            if resp.status_code >= 500:
-                sleep_s = backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]
-                last_error = f"HTTP {resp.status_code}: {resp.text[:120]}"
-                time.sleep(sleep_s)
-                continue
-
-            resp.raise_for_status()
-            data = resp.json()
-
-            items = data.get("translations", [])
-            if items:
-                res_texts = [item.get("text", "") for item in items]
-                if len(res_texts) == len(uncached_texts) and any(res_texts):
-                    translated_batch = res_texts
+                if resp.status_code in (401, 403):
+                    trip_nisay_circuit(300.0)
+                    last_error = f"HTTP {resp.status_code} Forbidden (Invalid or expired key)"
                     break
 
-            alt_items = data.get("translated_text") or []
-            if isinstance(alt_items, list) and len(alt_items) == len(uncached_texts):
-                translated_batch = alt_items
-                break
+                if resp.status_code == 429:
+                    retry_after = float(resp.headers.get("Retry-After", backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]))
+                    last_error = f"HTTP 429 Rate Limit. Retry-After: {retry_after}s"
+                    time.sleep(min(retry_after, 3.0))
+                    continue
 
-            single_res = data.get("translated_text") or data.get("text", "")
-            if single_res:
-                translated_batch = [single_res]
-                break
+                if resp.status_code >= 500:
+                    sleep_s = backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]
+                    last_error = f"HTTP {resp.status_code}: {resp.text[:120]}"
+                    time.sleep(sleep_s)
+                    continue
 
-        except requests.RequestException as e:
-            if "403" in str(e) or "401" in str(e):
-                raise
-            last_error = str(e)
-            sleep_s = backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]
-            time.sleep(sleep_s)
+                resp.raise_for_status()
+                data = resp.json()
+
+                items = data.get("translations", [])
+                if items:
+                    res_texts = [item.get("text", "") for item in items]
+                    if len(res_texts) == len(uncached_texts) and any(res_texts):
+                        translated_batch = res_texts
+                        reset_nisay_circuit()
+                        break
+
+                alt_items = data.get("translated_text") or []
+                if isinstance(alt_items, list) and len(alt_items) == len(uncached_texts):
+                    translated_batch = alt_items
+                    reset_nisay_circuit()
+                    break
+
+                single_res = data.get("translated_text") or data.get("text", "")
+                if single_res:
+                    translated_batch = [single_res]
+                    reset_nisay_circuit()
+                    break
+
+            except requests.RequestException as e:
+                if "403" in str(e) or "401" in str(e):
+                    trip_nisay_circuit(300.0)
+                    last_error = str(e)
+                    break
+                if "Read timed out" in str(e) or "ConnectTimeout" in str(e):
+                    trip_nisay_circuit(120.0)
+                last_error = str(e)
+                sleep_s = backoff_delays[min(attempt - 1, len(backoff_delays) - 1)]
+                time.sleep(sleep_s)
+
+    # ⚡ 2. Save translated lines into cache with per-line integrity verification
+    if translated_batch and len(translated_batch) == len(uncached_texts):
+        for orig_idx, (t_orig, t_km) in enumerate(zip(uncached_texts, translated_batch)):
+            clean_k = (t_orig or "").strip()
+            km_val = str(t_km or "").strip()
+            has_cjk = any('\u4e00' <= c <= '\u9fff' for c in km_val)
+            if not km_val or has_cjk:
+                recovered = _google_fallback_single(clean_k, entity_glossary)
+                km_val = str(recovered or clean_k).strip()
+
+            if clean_k and km_val:
+                cache_translation(clean_k, km_val)
+            real_idx = uncached_indices[orig_idx]
+            resolved_map[real_idx] = km_val
+
+        _save_persistent_cache()
+        final_res = [resolved_map[i] for i in range(len(payload_text))]
+        return final_res if is_batch else final_res[0]
+
+    # =========================================================================
+    # 🛡️ BULLETPROOF ULTRA-FAST PARALLEL FAILOVER:
+    # If Nisay AI Gateway is temporarily experiencing upstream provider outages,
+    # engage multi-threaded parallel translation so the pipeline NEVER freezes!
+    # =========================================================================
+    print(f"[Nisay Failover] Fast-failover engaged ({last_error}). Translating in parallel...")
 
     def _fallback_single(src_t: str) -> str:
+        return _google_fallback_single(src_t, entity_glossary)
         s_clean = (src_t or "").strip()
         if not s_clean:
             return ""
@@ -323,35 +426,6 @@ def translate_khmer(
         except Exception:
             pass
         return s_clean
-
-    # ⚡ 2. Save translated lines into cache with per-line integrity verification
-    if translated_batch and len(translated_batch) == len(uncached_texts):
-        for orig_idx, (t_orig, t_km) in enumerate(zip(uncached_texts, translated_batch)):
-            clean_k = (t_orig or "").strip()
-            km_val = str(t_km or "").strip()
-            has_cjk = any('\u4e00' <= c <= '\u9fff' for c in km_val)
-            has_khmer = any('\u1780' <= c <= '\u17ff' for c in km_val)
-            if not km_val or (has_cjk and not has_khmer):
-                recovered = _fallback_single(clean_k)
-                km_val = str(recovered or clean_k).strip()
-
-            if clean_k and km_val:
-                cache_translation(clean_k, km_val)
-            real_idx = uncached_indices[orig_idx]
-            resolved_map[real_idx] = km_val
-
-        _save_persistent_cache()
-        final_res = [resolved_map[i] for i in range(len(payload_text))]
-        return final_res if is_batch else final_res[0]
-
-    # =========================================================================
-    # 🛡️ BULLETPROOF ULTRA-FAST PARALLEL FAILOVER:
-    # If Nisay AI Gateway is temporarily experiencing upstream provider outages,
-    # engage multi-threaded parallel translation so the pipeline NEVER freezes!
-    # =========================================================================
-    print(f"[Nisay Failover] Fast-failover engaged ({last_error}). Translating in parallel...")
-
-    # (_fallback_single pre-defined above)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(12, len(uncached_texts) or 1)) as executor:
         fb_results = list(executor.map(_fallback_single, uncached_texts))

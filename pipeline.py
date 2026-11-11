@@ -372,11 +372,14 @@ class ProjectManager:
                     continue
 
                 spk_str = str(d.get("speaker", "")).lower()
-                if any(kw in spk_str for kw in ("female", "ស្រី", "s1", "s3", "s5")):
+                is_f = any(kw in spk_str for kw in ("female", "woman", "girl", "lady", "wife", "mother", "sister", "sreymom", "ស្រី", "女", "s1", "s3", "s5"))
+                is_m = any(kw in re.sub(r'female|woman', '', spk_str) for kw in ("male", "man", "boy", "husband", "father", "brother", "guy", "sir", "piseth", "ប្រុស", "男", "s0", "s2", "s4"))
+
+                if is_f and not is_m:
                     d["detected_role"] = "female"
                     d["voice"] = "sreymom"
                     last_role = "female"
-                elif any(kw in spk_str for kw in ("male", "ប្រុស", "s0", "s2", "s4")):
+                elif is_m and not is_f:
                     d["detected_role"] = "male"
                     d["voice"] = "piseth"
                     last_role = "male"

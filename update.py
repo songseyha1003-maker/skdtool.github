@@ -242,6 +242,9 @@ def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any
         return {"success": False, "error": "No download URL provided for update."}
 
     resolved_url = resolve_gdrive_direct_url(download_url)
+    if "githubusercontent.com" in resolved_url or "github.com" in resolved_url:
+        sep = "&" if "?" in resolved_url else "?"
+        resolved_url = f"{resolved_url}{sep}_cb={int(time.time())}"
     cache_dir = app_dir / "data" / "cache" / "update"
     cache_dir.mkdir(parents=True, exist_ok=True)
     is_exe = resolved_url.lower().split("?")[0].endswith(".exe")
@@ -249,7 +252,9 @@ def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any
 
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache"
         }
         req = urllib.request.Request(resolved_url, headers=headers)
         with urllib.request.urlopen(req, timeout=300) as resp, open(dest_file, "wb") as out_f:

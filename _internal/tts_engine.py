@@ -663,7 +663,8 @@ async def synthesize_khmer_speech(
     rate_percent: int = 0,
     pitch_hz: int = 0,
     output_path: Optional[str] = None,
-    use_cache: bool = True
+    use_cache: bool = True,
+    emotion: Optional[str] = None
 ) -> str:
     """
     Synthesize Khmer text into speech using Piseth or Sreymom voice.
@@ -712,9 +713,30 @@ async def synthesize_khmer_speech(
     # Advanced Phonetic Articulation Pre-Processing for crystal-clear, articulate speech:
     cleaned_text = prepare_khmer_phonetic_for_speech(cleaned_text)
 
+    # 🎭 Dynamic Emotion Modulation (Piseth & Sreymom Acting Intelligence)
+    eff_rate = rate_percent
+    eff_pitch = pitch_hz
+    if emotion and rate_percent == 0 and pitch_hz == 0:
+        emo = str(emotion).lower()
+        if emo == "angry":
+            eff_rate = 8
+            eff_pitch = 2
+        elif emo == "sad":
+            eff_rate = -5
+            eff_pitch = -2
+        elif emo == "tender":
+            eff_rate = -2
+            eff_pitch = -1
+        elif emo == "panic":
+            eff_rate = 12
+            eff_pitch = 3
+        elif emo == "authoritative":
+            eff_rate = 3
+            eff_pitch = -2
+
     voice_id = get_voice_id(voice)
-    rate_str = _format_rate(rate_percent)
-    pitch_str = _format_pitch(pitch_hz)
+    rate_str = _format_rate(eff_rate)
+    pitch_str = _format_pitch(eff_pitch)
 
     if output_path is None:
         if use_cache:
@@ -910,6 +932,7 @@ async def batch_synthesize(
             voice = item.get("voice") or default_voice
             start = float(item.get("start", 0.0))
             end = float(item.get("end", start + 2.0))
+            emotion = item.get("emotion") or "neutral"
 
             # Lip-sync mouth movement duration budget:
             # Allows natural Khmer spoken phrasing while tightly hugging the actor's mouth movement
@@ -943,7 +966,8 @@ async def batch_synthesize(
                         voice=voice,
                         rate_percent=rate,
                         pitch_hz=pitch,
-                        output_path=str(line_audio_path)
+                        output_path=str(line_audio_path),
+                        emotion=emotion
                     )
 
                 # If synthesized audio is still not audible, force direct Google Khmer failover!

@@ -30,6 +30,7 @@ let dlSearchQuery = "";
 let dlIsLoadingMore = false;
 let dlHasMore = true;
 let dlInfiniteScrollAttached = false;
+let dlIsRandomMode = false;
 let currentHwid = "";
 
 // ============================================================================
@@ -3899,6 +3900,7 @@ async function loadDownloaderCategories() {
 }
 
 function selectCategoryChip(catId) {
+    dlIsRandomMode = false;
     dlSelectedCategory = catId;
     const chips = document.querySelectorAll('.dl-category-chip-btn');
     chips.forEach(c => {
@@ -3987,11 +3989,14 @@ function showSavedFavoritesModal() {
 }
 
 function refreshDramaCatalog() {
+    dlIsRandomMode = true;
     const btn = document.getElementById('btn-dl-refresh-catalog');
     if (btn) {
         btn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> Refresh';
     }
-    loadDramaCatalog(dlSelectedPlatform, dlSearchQuery, dlSelectedCategory, false).finally(() => {
+    loadDramaCatalog(dlSelectedPlatform, dlSearchQuery, dlSelectedCategory, false, true).then(() => {
+        showToast("Refreshed with fresh dramas!");
+    }).finally(() => {
         if (btn) {
             btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Refresh';
         }
@@ -3999,6 +4004,7 @@ function refreshDramaCatalog() {
 }
 
 function filterByPlatform(platId, platName, totalCount, platLogo) {
+    dlIsRandomMode = false;
     dlSelectedPlatform = platId;
     loadDownloaderPlatforms();
 
@@ -4131,10 +4137,14 @@ function showSavedFavoritesModal() {
     showToast(`Saved (${list.length}): ${names.substring(0, 80)}...`);
 }
 
-async function loadDramaCatalog(platformId = "hongguo", query = "", category = "all", append = false) {
+async function loadDramaCatalog(platformId = "hongguo", query = "", category = "all", append = false, isRefresh = false) {
     const container = document.getElementById('dl-drama-cards-container');
     if (!container) return;
     setupCatalogInfiniteScroll();
+
+    if (isRefresh) {
+        dlIsRandomMode = true;
+    }
 
     if (!append) {
         dlCurrentPage = 1;
@@ -4150,7 +4160,8 @@ async function loadDramaCatalog(platformId = "hongguo", query = "", category = "
     }
 
     try {
-        const res = await fetch(`/api/downloader/catalog?platform=${platformId}&category=${category}&q=${encodeURIComponent(query)}&page=${dlCurrentPage}&limit=50`);
+        const sortParam = dlIsRandomMode ? '&sort=random&refresh=1' : '&sort=popular';
+        const res = await fetch(`/api/downloader/catalog?platform=${platformId}&category=${category}&q=${encodeURIComponent(query)}&page=${dlCurrentPage}&limit=50${sortParam}`);
         const data = await res.json();
 
         if (!append) container.innerHTML = '';
@@ -4266,7 +4277,7 @@ async function loadMoreDramas() {
 
     dlCurrentPage++;
     try {
-        await loadDramaCatalog(dlSelectedPlatform, dlSearchQuery, dlSelectedCategory, true);
+        await loadDramaCatalog(dlSelectedPlatform, dlSearchQuery, dlSelectedCategory, true, dlIsRandomMode);
     } finally {
         if (loader && loader.parentNode) {
             loader.parentNode.removeChild(loader);
@@ -4478,15 +4489,17 @@ async function analyzeEnteredLink() {
     const url = input ? input.value.trim() : "";
     if (!url) {
         dlSearchQuery = "";
+        dlIsRandomMode = false;
         await loadDramaCatalog(dlSelectedPlatform, "", dlSelectedCategory, false);
         return;
     }
 
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
-        // Search query mode across 49,509 dramas
+        // Search query mode across catalog
         dlSearchQuery = url;
+        dlIsRandomMode = false;
         showToast(`Searching: "${url}"...`);
-        appendDownloaderLog(`[${new Date().toLocaleTimeString()}] Searching 49,509 catalog for: "${url}"`);
+        appendDownloaderLog(`[${new Date().toLocaleTimeString()}] Searching catalog for: "${url}"`);
         await loadDramaCatalog(dlSelectedPlatform, dlSearchQuery, dlSelectedCategory, false);
         return;
     }
@@ -11569,12 +11582,13 @@ async function checkForAppUpdates(manual = false) {
             openModal('modal-update');
             if (manual) showToast(`New version available: v${latVer}`);
         } else {
-            // Already on latest official build: Do NOT pop up modal! Only log to Studio Processing & Activity Console!
+            // Already on latest official build: only pop up modal when manually requested so user can view notes or reinstall
             if (badgeText) badgeText.textContent = "LATEST OFFICIAL BUILD";
             if (subtitle) subtitle.textContent = `Official release notes and feature highlights for SN Tool Studio Pro (v${curVer}):`;
             if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-rotate"></i> <span id="btn-do-update-text">Reinstall / Update (v${curVer})</span>`;
             if (manual) {
                 showToast(`SN Tool Studio Pro v${curVer} is up to date!`);
+                openModal('modal-update');
             }
         }
     } catch (err) {

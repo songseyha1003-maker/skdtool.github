@@ -86,8 +86,6 @@ from downloader import (
 )
 import hongguo_db
 import shortmax_service
-import hongguo_service
-import reelshort_service
 from recap_engine import RecapEngine, VIRAL_KHMER_HOOKS
 from batch_engine import batch_manager, EXPORTS_DIR
 from video_processor import (
@@ -1224,7 +1222,7 @@ def license_status_endpoint():
         from update import get_local_version
         info["app_version"] = get_local_version()
     except Exception:
-        info["app_version"] = "1.1.8"
+        info["app_version"] = "2.0.5"
 
     cfg_path = get_data_file("license_config.json")
     if cfg_path.exists():
@@ -1364,6 +1362,10 @@ def downloader_catalog_endpoint():
     query = request.args.get("q", "").strip()
     page = int(request.args.get("page", 1))
     limit = int(request.args.get("limit", 60))
+    sort = request.args.get("sort", "popular").lower()
+    refresh = request.args.get("refresh", "0").lower() in ("1", "true", "yes")
+    if refresh:
+        sort = "random"
     offset = max(0, (page - 1) * limit)
 
     dramas, total_count = hongguo_db.query_dramas(
@@ -1371,16 +1373,18 @@ def downloader_catalog_endpoint():
         query=query if query else None,
         platform=platform if platform != "all" else None,
         limit=limit,
-        offset=offset
+        offset=offset,
+        sort=sort
     )
 
+    has_more = True if (sort == "random" or refresh) else ((offset + len(dramas)) < total_count)
     return jsonify({
         "success": True,
         "dramas": dramas,
         "total_count": total_count,
         "page": page,
         "limit": limit,
-        "has_more": (offset + len(dramas)) < total_count
+        "has_more": has_more
     })
 
 
