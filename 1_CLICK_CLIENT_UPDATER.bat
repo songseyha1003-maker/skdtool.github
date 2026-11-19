@@ -1,13 +1,13 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title SN TOOL - 1-Click Client Updater (Upgrade to v2.0.5)
+title SN TOOL - 1-Click Client Updater (Upgrade to v2.0.6)
 color 0b
 cls
 
 echo ========================================================================
-echo  🎬 SN TOOL - 1-CLICK CLIENT UPDATER (v2.0.5)
-echo  🎯 100% Genuine Downloader & Drama Engine Integrity
+echo  🎬 SN TOOL - 1-CLICK CLIENT UPDATER (v2.0.6)
+echo  🎙️ Studio Pro Audio, 100% Khmer Dubbing & Offline STT
 echo ========================================================================
 echo.
 

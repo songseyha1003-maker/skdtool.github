@@ -1,10 +1,10 @@
 {
-  "version": "2.0.5",
+  "version": "2.0.6",
   "app_name": "SN TOOL",
-  "release_date": "2026-11-11",
-  "title": "SN TOOL - Official Update v2.0.5 (Complete Genuine Downloader, Nisay AI & Catalog Upgrade)",
-  "subtitle": "Complete v2.0.5 release featuring Genuine Drama Downloader, Instant Fresh Catalog Discovery, Nisay Translation Circuit Breaker, and License/UI Integrity fixes.",
-  "release_notes": "• 🎯 100% Genuine Drama Downloader & Stream Resolution: Eliminated fake fallbacks and duplicate spoofing, enforced strict stream resolution, and accurately flagged unavailable episodes.\n• 🔄 Instant Random Discovery & Fresh Catalog Rotation: Refreshing the catalog now rotates fresh dramas dynamically across platforms.\n• 🧠 Nisay Translation Circuit Breaker & Fallback: Added automatic failover/circuit-breaker resilience plus expanded speaker persona detection for accurate male/female voice assignment.\n• 🛡️ License & UI Integrity Upgrades: Eliminated false-positive hardware lockouts, added dynamic days-left display on the license badge, and enabled manual Reinstall/Update modal access.\n• 🧹 Storage & Performance Optimization: Cleaned legacy caches and synchronized all runtime modules.",
+  "release_date": "2026-11-19",
+  "title": "SN TOOL - Official Update v2.0.6 (Studio Pro Audio, 100% Khmer Dubbing & Offline STT)",
+  "subtitle": "Major update featuring Studio Pro Audio Limiter, 10x Parallel TTS with Clarity EQ, 100% Khmer Dubbing Translation Guarantee, and Offline Faster-Whisper STT Fallback.",
+  "release_notes": "• 🎙️ Studio Pro Audio & Limiter: Built-in soft-knee limiter (-1.2 dBFS), adaptive lip-sync time-stretching up to 1.65x, and warm BGM preservation with intelligent ducking.\n• ⚡ High-Speed Parallel TTS Engine: Upgraded to 10 parallel workers with Studio Clarity EQ (75Hz HPF, 3.2k/8.5k air presence, compression) and ZWSP Edge-TTS error recovery.\n• 🌐 100% Khmer Dubbing Translation: Ultra-reliable Google Batch failover (25 lines/call) with strict CJK & Pinyin filtering guaranteeing 0% untranslated Chinese lines.\n• 🧠 Smart Offline STT Fallback: Seamless automatic fallback to local Faster-Whisper when cloud STT is unavailable.\n• 🛡️ Media Decoding Robustness: Added automatic FFmpeg MP3 container fallback for ID3 metadata compatibility.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }
