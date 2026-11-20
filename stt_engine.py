@@ -234,20 +234,15 @@ def get_system_ram_gb() -> float:
     return 8.0
 
 
-# Strict Drama First-Person Self-References, Kinship Terms & Direct Vocatives
+# Strict Drama First-Person Self-References & Exclusive Speaker Identifiers
 FEMALE_VOCATIVES = [
-    "老公", "相公", "夫君", "死鬼",
     "本宫", "臣妾", "奴婢", "小女子", "妾身", "本小姐",
-    "老娘", "妈妈我", "女兒我", "娘亲我", "妈咪", "阿姨", "婆婆",
-    "怀着孩子", "怀孕", "儿媳", "嫂嫂", "大嫂", "小姑子", "姐姐", "妹妹",
-    "오빠", "언니"
+    "老娘", "姑奶奶", "我怀着孩子", "我是你老婆", "我是你娘", "我是你妈"
 ]
 
 MALE_VOCATIVES = [
-    "老婆", "娘子", "夫人", "爱妃", "媳妇",
-    "本座", "本王", "朕", "老子", "为父", "为夫", "微臣",
-    "兄弟我", "爸爸我", "爹爹我", "儿子", "岳父", "岳母",
-    "형"
+    "本座", "本王", "朕", "老子", "为父", "为夫", "微臣", "本少爷",
+    "兄弟我", "爸爸我", "爹爹我", "我是你老公", "我是你爹", "我是你爸"
 ]
 
 
@@ -576,22 +571,13 @@ class SpeechToTextEngine:
                 except Exception as e:
                     print(f"Cloud Whisper note: {e}")
 
-        # Cloud-Server-Only Enforcement:
-        # 100% Online Cloud Server Only (SN Tool Speech Engine + Groq Cloud Whisper).
-        # Completely bypasses local Faster-Whisper models to prevent high CPU usage, local model downloads, and freezing.
-        CLOUD_SERVER_ONLY = True
-        if CLOUD_SERVER_ONLY:
-            if not raw_segments:
-                print("[CLOUD ONLY] Retrying cloud STT engines...")
-                try:
-                    cloud_segs = transcribe_with_groq_whisper(audio_path, source_lang=source_lang)
-                    if cloud_segs:
-                        raw_segments = cloud_segs
-                except Exception as e:
-                    print(f"Cloud STT retry note: {e}")
-
-            if not raw_segments:
-                raise RuntimeError("Cloud STT Error: SN Tool Cloud Servers returned no audio dialogues. Local processing is disabled (Cloud Server Only mode).")
+        # Cloud-First with Robust Local Fallback:
+        # If Cloud STT is temporarily unavailable or key is expired, fall back to local Faster-Whisper
+        # to ensure speech recognition NEVER crashes!
+        if not raw_segments:
+            print("[STT Fallback] Cloud STT unavailable or key expired. Falling back to local Faster-Whisper...")
+            if progress_callback:
+                progress_callback(46, "៣/៧ AI STT៖ កំពុងប្រើប្រាស់ Local Whisper...", "Using Local Whisper Fallback...")
 
         if not raw_segments:
             model = None
@@ -971,14 +957,10 @@ class SpeechToTextEngine:
                 speaker_title = acoustics["speaker"]
             else:
                 # Ambiguous acoustic frame:
-                # If there's a conversation turn gap (> 0.4s) from previous line, alternate speaker
+                # Keep current speaker continuity. Do NOT flip gender on pause, as characters
+                # often take breaths (>0.4s) while speaking consecutive lines.
                 if speaker_segments:
-                    prev_seg = speaker_segments[-1]
-                    turn_gap = start - prev_seg["end"]
-                    if turn_gap >= 0.40:
-                        role = "female" if prev_seg["detected_role"] == "male" else "male"
-                    else:
-                        role = prev_seg["detected_role"]
+                    role = speaker_segments[-1]["detected_role"]
                 else:
                     role = last_confirmed_role
 

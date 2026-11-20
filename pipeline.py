@@ -384,11 +384,9 @@ class ProjectManager:
                     d["voice"] = "piseth"
                     last_role = "male"
                 else:
-                    # Alternate conversation turn smoothly
-                    new_role = "female" if last_role == "male" else "male"
-                    d["detected_role"] = new_role
-                    d["voice"] = "sreymom" if new_role == "female" else "piseth"
-                    last_role = new_role
+                    # Maintain speaker continuity rather than blind alternating
+                    d["detected_role"] = last_role
+                    d["voice"] = "sreymom" if last_role == "female" else "piseth"
 
         proj_t = project.get("title") or ""
         ep_n = 1
@@ -423,6 +421,42 @@ class ProjectManager:
         self.save_project(project)
         return project
 
+    def _verify_and_recover_voices(
+        self,
+        synthesized: List[Dict[str, Any]],
+        voice_out_dir: Path,
+        fallback_voice: str = "piseth"
+    ) -> int:
+        """Verify synthesized audio clips without redundant FFmpeg spawns on already-verified lines."""
+        from tts_engine import is_valid_audible_audio, synthesize_via_google_khmer_api
+        recovered_count = 0
+        valid_count = 0
+        for idx, d in enumerate(synthesized):
+            af = d.get("audio_file")
+            af_p = Path(af) if af else None
+            already_verified = bool(
+                d.get("success")
+                and float(d.get("audio_duration") or 0.0) > 0.05
+                and af_p
+                and af_p.exists()
+                and af_p.stat().st_size >= 400
+            )
+            if already_verified or is_valid_audible_audio(af):
+                valid_count += 1
+                continue
+
+            txt = (d.get("text_km") or d.get("text", "")).strip()
+            v = d.get("voice") or fallback_voice or "piseth"
+            fix_out = voice_out_dir / f"line_recovered_{idx:04d}_{os.urandom(3).hex()}.mp3"
+            new_af = synthesize_via_google_khmer_api(txt, v, str(fix_out))
+            if new_af and is_valid_audible_audio(new_af):
+                d["audio_file"] = new_af
+                d["success"] = True
+                recovered_count += 1
+                valid_count += 1
+        print(f"[OK] TTS Voice Synthesis: {valid_count} / {len(synthesized)} lines verified with audible speech (recovered {recovered_count}).")
+        return valid_count
+
     async def generate_project_audio(self, project_id: str) -> Dict[str, Any]:
         project = self.load_project(project_id)
         if not project:
@@ -438,17 +472,11 @@ class ProjectManager:
             default_voice=project.get("voice_override", "piseth")
         )
 
-        # Strictly verify and recover any synthesized voices to ensure 100% audible speech
-        from tts_engine import is_valid_audible_audio, synthesize_via_google_khmer_api
-        for idx, d in enumerate(processed_dialogues):
-            af = d.get("audio_file")
-            if not is_valid_audible_audio(af):
-                txt = (d.get("text_km") or d.get("text", "")).strip()
-                v = d.get("voice") or project.get("voice_override") or "piseth"
-                fix_out = voice_out_dir / f"line_recovered_{idx:04d}_{os.urandom(3).hex()}.mp3"
-                new_af = synthesize_via_google_khmer_api(txt, v, str(fix_out))
-                if new_af and is_valid_audible_audio(new_af):
-                    d["audio_file"] = new_af
+        self._verify_and_recover_voices(
+            processed_dialogues,
+            voice_out_dir,
+            fallback_voice=project.get("voice_override", "piseth")
+        )
 
         project["dialogues"] = processed_dialogues
 
@@ -889,25 +917,12 @@ class ProjectManager:
         gc.collect()
 
         # Verify and recover any synthesized voices to ensure 100% audible, non-silent speech
-        from tts_engine import is_valid_audible_audio, synthesize_via_google_khmer_api
-        recovered_count = 0
-        for idx, d in enumerate(synthesized):
-            af = d.get("audio_file")
-            if not is_valid_audible_audio(af):
-                txt = (d.get("text_km") or d.get("text", "")).strip()
-                v = d.get("voice") or v_override or "piseth"
-                fix_out = voice_out_dir / f"line_recovered_{idx:04d}_{os.urandom(3).hex()}.mp3"
-                new_af = synthesize_via_google_khmer_api(txt, v, str(fix_out))
-                if new_af and is_valid_audible_audio(new_af):
-                    d["audio_file"] = new_af
-                    recovered_count += 1
-
-        valid_voices = [
-            d for d in synthesized
-            if is_valid_audible_audio(d.get("audio_file"))
-        ]
-        print(f"[OK] TTS Voice Synthesis: {len(valid_voices)} / {len(synthesized)} lines verified with audible speech (recovered {recovered_count}).")
-        if len(synthesized) > 0 and len(valid_voices) == 0:
+        valid_count = self._verify_and_recover_voices(
+            synthesized,
+            voice_out_dir,
+            fallback_voice=v_override or "piseth"
+        )
+        if len(synthesized) > 0 and valid_count == 0:
             raise RuntimeError(
                 "Khmer Voice Synthesis failed to generate audible speech for any dialogue lines. "
                 "ប្រព័ន្ធសំឡេង AI មិនអាចបង្កើតសំឡេងខ្មែរបានឡើយ។ សូមពិនិត្យមើលការភ្ជាប់អ៊ីនធឺណិត (Internet Connection) នៅលើកុំព្យូទ័ររបស់អ្នក។"
