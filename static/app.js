@@ -11669,21 +11669,31 @@ async function executeAppUpdate() {
 
     if (btnUpdate) btnUpdate.disabled = true;
     if (progContainer) progContainer.style.display = 'flex';
-    if (statusMsg) statusMsg.textContent = "Downloading update package from Google Drive Cloud...";
-    if (progressBar) progressBar.style.width = "35%";
-    if (progressPct) progressPct.textContent = "35%";
+    if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-cloud-arrow-down fa-bounce" style="color:#38bdf8;"></i> Connecting to Cloud CDN server...';
+    if (progressBar) progressBar.style.width = "5%";
+    if (progressPct) progressPct.textContent = "5%";
 
+    let pollProgressTimer = null;
     try {
-        // Step progress simulation while downloading
-        const simInterval = setInterval(() => {
-            if (progressBar) {
-                const currentW = parseInt(progressBar.style.width) || 35;
-                if (currentW < 85) {
-                    progressBar.style.width = (currentW + 12) + "%";
-                    if (progressPct) progressPct.textContent = (currentW + 12) + "%";
+        // Poll real server-side download progress every 400ms
+        pollProgressTimer = setInterval(async () => {
+            try {
+                const progResp = await fetch('/api/update/progress?_t=' + Date.now(), { cache: 'no-store' });
+                if (progResp.ok) {
+                    const pdata = await progResp.json();
+                    if (pdata && pdata.percent > 0) {
+                        const pct = Math.min(96, Math.max(5, pdata.percent));
+                        if (progressBar) progressBar.style.width = pct + "%";
+                        if (progressPct) progressPct.textContent = pct + "%";
+                        if (statusMsg && pdata.message) {
+                            statusMsg.innerHTML = '<i class="fa-solid fa-cloud-arrow-down fa-bounce" style="color:#38bdf8;"></i> ' + pdata.message;
+                        }
+                    }
                 }
+            } catch (e) {
+                // Ignore transient network errors during progress polling
             }
-        }, 600);
+        }, 400);
 
         const fallbackUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip";
         const dlUrl = (_latestUpdateInfo && _latestUpdateInfo.download_url) ? _latestUpdateInfo.download_url : fallbackUrl;
@@ -11694,27 +11704,29 @@ async function executeAppUpdate() {
                 download_url: dlUrl
             })
         });
-        clearInterval(simInterval);
+
+        if (pollProgressTimer) clearInterval(pollProgressTimer);
+
         const data = await res.json();
         if (data.success) {
-            const targetVer = (_latestUpdateInfo && _latestUpdateInfo.latest_version) ? _latestUpdateInfo.latest_version : '1.1.6';
-            if (progressBar) progressBar.style.width = "90%";
-            if (progressPct) progressPct.textContent = "90%";
+            const targetVer = (_latestUpdateInfo && _latestUpdateInfo.latest_version) ? _latestUpdateInfo.latest_version : '2.0.6';
+            if (progressBar) progressBar.style.width = "96%";
+            if (progressPct) progressPct.textContent = "96%";
             if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#10b981;"></i> Updating to v' + targetVer + '... Application is restarting automatically.';
             showToast("Update patch downloaded! Restarting to v" + targetVer + "...");
 
-            // Poll server until the newly updated version comes online
+            // Poll fast zero-latency /api/update/ping until newly updated version is online
             let pollAttempts = 0;
-            const maxPoll = 40;
+            const maxPoll = 45;
             setTimeout(() => {
                 const pollInterval = setInterval(async () => {
                     pollAttempts++;
                     try {
-                        const ping = await fetch('/api/update/check?_t=' + Date.now(), { cache: 'no-store' });
+                        const ping = await fetch('/api/update/ping?_t=' + Date.now(), { cache: 'no-store' });
                         if (ping.ok) {
                             const pdata = await ping.json();
                             clearInterval(pollInterval);
-                            const finalVer = (pdata && pdata.current_version) ? pdata.current_version : targetVer;
+                            const finalVer = (pdata && pdata.version) ? pdata.version : targetVer;
                             if (progressBar) progressBar.style.width = "100%";
                             if (progressPct) progressPct.textContent = "100%";
                             if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Update to v' + finalVer + ' complete! Refreshing...';
@@ -11728,14 +11740,15 @@ async function executeAppUpdate() {
                             window.location.href = window.location.pathname + '?_v=' + Date.now();
                         }
                     }
-                }, 1500);
-            }, 3500);
+                }, 1000);
+            }, 2500);
         } else {
             if (statusMsg) statusMsg.textContent = "Error: " + (data.error || "Update failed");
             if (btnUpdate) btnUpdate.disabled = false;
             showToast("Error: " + (data.error || "Update failed"));
         }
     } catch (err) {
+        if (pollProgressTimer) clearInterval(pollProgressTimer);
         if (statusMsg) statusMsg.textContent = "Error: " + err.message;
         if (btnUpdate) btnUpdate.disabled = false;
         showToast("Update error: " + err.message);

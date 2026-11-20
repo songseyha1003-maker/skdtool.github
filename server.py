@@ -1320,6 +1320,22 @@ def update_apply_endpoint():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/update/progress", methods=["GET"])
+def update_progress_endpoint():
+    """Get live download and installation progress of OTA update."""
+    try:
+        from update import get_update_progress
+        return jsonify(get_update_progress())
+    except Exception as e:
+        return jsonify({"status": "idle", "percent": 0, "message": str(e), "downloaded_mb": 0.0, "total_mb": 44.2})
+
+
+@app.route("/api/update/ping", methods=["GET"])
+def update_ping_endpoint():
+    """Fast zero-latency ping for OTA update restart polling without outbound network requests."""
+    return jsonify({"status": "ok", "version": APP_VERSION})
+
+
 
 # ==========================================================================
 # Downloader Studio REST APIs

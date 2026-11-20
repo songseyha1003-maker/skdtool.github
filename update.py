@@ -9,6 +9,7 @@ import sys
 import json
 import time
 import re
+import threading
 import subprocess
 import urllib.request
 import urllib.error
@@ -18,6 +19,29 @@ from typing import Dict, Any, Tuple
 CURRENT_VERSION = "2.0.6"
 APP_NAME = "SN TOOL"
 DEFAULT_UPDATE_ZIP_URL = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip"
+
+_UPDATE_PROGRESS_LOCK = threading.Lock()
+_UPDATE_PROGRESS = {
+    "status": "idle",
+    "percent": 0,
+    "downloaded_mb": 0.0,
+    "total_mb": 44.2,
+    "message": "Idle",
+    "error": None
+}
+
+def get_update_progress() -> Dict[str, Any]:
+    with _UPDATE_PROGRESS_LOCK:
+        return dict(_UPDATE_PROGRESS)
+
+def set_update_progress(status: str, percent: int, msg: str = "", downloaded_mb: float = 0.0, total_mb: float = 44.2, error: str = None):
+    with _UPDATE_PROGRESS_LOCK:
+        _UPDATE_PROGRESS["status"] = status
+        _UPDATE_PROGRESS["percent"] = percent
+        _UPDATE_PROGRESS["message"] = msg
+        _UPDATE_PROGRESS["downloaded_mb"] = downloaded_mb
+        _UPDATE_PROGRESS["total_mb"] = total_mb
+        _UPDATE_PROGRESS["error"] = error
 
 def parse_version_tuple(ver_str: str) -> Tuple[int, ...]:
     """Parse '1.0.7' into (1, 0, 7) tuple for accurate comparison."""
@@ -231,7 +255,7 @@ def apply_git_pull_update(app_dir: Path) -> Dict[str, Any]:
 
 def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any]:
     """
-    Download cloud update patch (SN_TOOL_UPDATE.zip ~26MB or Standalone Setup)
+    Download cloud update patch (SN_TOOL_UPDATE.zip ~44MB or Standalone Setup)
     and execute detached PowerShell updater script to extract directly over app_dir.
     License key and user configs are strictly preserved!
     """
@@ -239,6 +263,7 @@ def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any
         cfg = get_update_config()
         download_url = cfg.get("direct_download_url") or cfg.get("google_drive_zip_id") or DEFAULT_UPDATE_ZIP_URL
     if not download_url:
+        set_update_progress("error", 0, "No download URL provided for update.", error="No download URL provided")
         return {"success": False, "error": "No download URL provided for update."}
 
     resolved_url = resolve_gdrive_direct_url(download_url)
@@ -251,27 +276,52 @@ def apply_zip_download_update(download_url: str, app_dir: Path) -> Dict[str, Any
     dest_file = cache_dir / ("SN_TOOL_Setup.exe" if is_exe else "update_package.zip")
 
     try:
+        set_update_progress("downloading", 5, "Connecting to Cloud CDN server...", 0.0, 44.2)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache"
         }
         req = urllib.request.Request(resolved_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=300) as resp, open(dest_file, "wb") as out_f:
-            while True:
-                chunk = resp.read(65536)
-                if not chunk:
-                    break
-                out_f.write(chunk)
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            content_len_hdr = resp.headers.get("Content-Length")
+            total_size = int(content_len_hdr) if content_len_hdr and content_len_hdr.isdigit() else 46324069
+            tot_mb = round(total_size / (1024 * 1024), 1)
+            downloaded = 0
+            last_report_t = 0.0
+
+            with open(dest_file, "wb") as out_f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    out_f.write(chunk)
+                    downloaded += len(chunk)
+                    now_t = time.time()
+                    if now_t - last_report_t >= 0.25 or downloaded >= total_size:
+                        last_report_t = now_t
+                        cur_mb = round(downloaded / (1024 * 1024), 1)
+                        pct = min(82, max(5, int((downloaded / total_size) * 82)))
+                        set_update_progress(
+                            "downloading",
+                            pct,
+                            f"Downloading update: {cur_mb} MB / {tot_mb} MB ({pct}%)...",
+                            cur_mb,
+                            tot_mb
+                        )
 
         # 🛡️ SYSTEM 13: Secure Update Package Integrity Verification
+        set_update_progress("verifying", 86, "Verifying update package integrity (86%)...", tot_mb, tot_mb)
         try:
             import license_engine
             upg_ok, upg_msg = license_engine.verify_update_package_integrity(dest_file)
             if not upg_ok:
+                set_update_progress("error", 0, f"Security check failed: {upg_msg}", error=upg_msg)
                 return {"success": False, "error": f"Security check failed on downloaded update: {upg_msg}"}
         except ImportError:
             pass
+
+        set_update_progress("extracting", 92, "Preparing update files and installer (92%)...", tot_mb, tot_mb)
 
         # Create detached PowerShell updater script
         ps1_file = app_dir / "apply_update.ps1"
@@ -313,8 +363,15 @@ try {{
     }}
 }} catch {{}}
 
-Get-Process | Where-Object {{ $_.Path -like "$appDir*" }} | Stop-Process -Force -ErrorAction SilentlyContinue
-Stop-Process -Name "SN_TOOL" -Force -ErrorAction SilentlyContinue
+try {{
+    netstat -ano | Select-String ":8000\\s+.*LISTENING\\s+(\\d+)" | ForEach-Object {{
+        if ($_ -match "LISTENING\\s+(\\d+)") {{
+            Stop-Process -Id $matches[1] -Force -ErrorAction SilentlyContinue
+        }}
+    }}
+}} catch {{}}
+
+Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
 # 2. Backup existing license.key before extracting
@@ -363,6 +420,13 @@ for ($attempt = 1; $attempt -le 8; $attempt++) {{
         try {{
             Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object {{
                 Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+            }}
+        }} catch {{}}
+        try {{
+            netstat -ano | Select-String ":8000\\s+.*LISTENING\\s+(\\d+)" | ForEach-Object {{
+                if ($_ -match "LISTENING\\s+(\\d+)") {{
+                    Stop-Process -Id $matches[1] -Force -ErrorAction SilentlyContinue
+                }}
             }}
         }} catch {{}}
         Stop-Process -Name "SN_TOOL", "python", "pythonw" -Force -ErrorAction SilentlyContinue
