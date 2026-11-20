@@ -1,9 +1,9 @@
 {
   "version": "2.0.6",
   "app_name": "SN TOOL",
-  "release_date": "2026-11-19",
+  "release_date": "2026-11-20",
   "title": "SN TOOL - Official Release v2.0.6 (Studio Pro Audio, 100% Khmer Dubbing & Offline STT)",
-  "release_notes": "• 🎙️ Studio Pro Audio & Limiter: Built-in soft-knee limiter (-1.2 dBFS), adaptive lip-sync time-stretching up to 1.65x, and warm BGM preservation with intelligent ducking.\n• ⚡ High-Speed Parallel TTS Engine: Upgraded to 10 parallel workers with Studio Clarity EQ (75Hz HPF, 3.2k/8.5k air presence, compression) and ZWSP Edge-TTS error recovery.\n• 🌐 100% Khmer Dubbing Translation: Ultra-reliable Google Batch failover (25 lines/call) with strict CJK & Pinyin filtering guaranteeing 0% untranslated Chinese lines.\n• 🧠 Smart Offline STT Fallback: Seamless automatic fallback to local Faster-Whisper when cloud STT is unavailable.\n• 🛡️ Media Decoding Robustness: Added automatic FFmpeg MP3 container fallback for ID3 metadata compatibility.",
+  "release_notes": "• 🎙️ Studio Pro Audio & Clean Voice Separation: 100% authentic Piseth & Sreymom character separation with acoustic F0 locking and zero voice leakage.\n• 🗂️ Single Window Explorer: Resolved duplicate File Explorer folder popups upon export.\n• 🌐 100% Khmer Dubbing Translation: Ultra-reliable Google Batch failover with drama scriptwriting guaranteeing 0% untranslated lines.\n• 🧠 Smart Offline STT Fallback: Seamless automatic fallback when cloud STT is unavailable.\n• ⚡ High-Speed Parallel TTS Engine: 10 parallel workers with Studio Clarity EQ (-16 LUFS) and dynamic lip-sync tempo alignment.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }
