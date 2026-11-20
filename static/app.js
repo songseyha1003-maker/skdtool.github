@@ -1841,8 +1841,20 @@ async function executeMultiCompress() {
 // --------------------------------------------------------------------------
 // Global Power Tools Output Folder Opener
 // --------------------------------------------------------------------------
+let _lastPowerFolderOpenedTime = 0;
+let _lastPowerFolderOpenedPath = "";
+
 async function openPowerOutputFolder(type = 'merge') {
+    const now = Date.now();
     const targetPath = lastPowerOutputPaths[type] || lastPowerOutputPaths.merge || 'data/exports';
+    const norm = String(targetPath || '').trim().toLowerCase().replace(/\\/g, '/');
+    if (norm && (now - _lastPowerFolderOpenedTime < 8000) && (norm === _lastPowerFolderOpenedPath)) {
+        console.log(`[OpenFolder] Debounced duplicate power folder open: ${norm}`);
+        return;
+    }
+    _lastPowerFolderOpenedTime = now;
+    _lastPowerFolderOpenedPath = norm;
+
     try {
         const res = await fetch('/api/system/open-folder', {
             method: 'POST',
@@ -5284,8 +5296,20 @@ function updateDramaSavePathDisplay(customFolder = '') {
     if (qElem) qElem.textContent = winPath;
 }
 
+let _lastDramaFolderOpenedTime = 0;
+let _lastDramaFolderOpenedPath = "";
+
 async function openCurrentDramaFolder(specificFolder = '') {
+    const now = Date.now();
     const target = specificFolder || getComputedDramaFolder();
+    const norm = String(target || '').trim().toLowerCase().replace(/\\/g, '/');
+    if (norm && (now - _lastDramaFolderOpenedTime < 8000) && (norm === _lastDramaFolderOpenedPath)) {
+        console.log(`[OpenFolder] Debounced duplicate drama folder open: ${norm}`);
+        return;
+    }
+    _lastDramaFolderOpenedTime = now;
+    _lastDramaFolderOpenedPath = norm;
+
     showToast(`📂 Opening folder in File Explorer...`);
     try {
         const res = await fetch('/api/downloader/open-folder', {
@@ -10285,6 +10309,7 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
         let loggedDialogueIds = new Set();
         let sepProgressSim = 2;
         let sepTimerTicks = 0;
+        let isTaskCompletedHandled = false;
 
         appendLiveTerminalLine(`Dubbing engine dispatched in background. Task ID: ${activeDubbingTaskId}`, "[Video 1/1]", "info");
 
@@ -10357,8 +10382,12 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                 }
 
                 if (sData.status === "completed") {
-                    clearInterval(activeDubbingPollTimer);
-                    activeDubbingPollTimer = null;
+                    if (isTaskCompletedHandled) return;
+                    isTaskCompletedHandled = true;
+                    if (activeDubbingPollTimer) {
+                        clearInterval(activeDubbingPollTimer);
+                        activeDubbingPollTimer = null;
+                    }
                     activeDubbingTaskId = null;
                     currentDubbedProject = sData.project;
                     clearStagedFiles();
@@ -10422,8 +10451,12 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                     }
 
                 } else if (sData.status === "failed") {
-                    clearInterval(activeDubbingPollTimer);
-                    activeDubbingPollTimer = null;
+                    if (isTaskCompletedHandled) return;
+                    isTaskCompletedHandled = true;
+                    if (activeDubbingPollTimer) {
+                        clearInterval(activeDubbingPollTimer);
+                        activeDubbingPollTimer = null;
+                    }
                     activeDubbingTaskId = null;
 
                     const errTitle = sData.error || "Dubbing process interrupted";
@@ -10725,6 +10758,7 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
             let loggedDialogueIds = new Set();
             let sepProgressSim = 5;
             let sepTimerTicks = 0;
+            let isEpisodeHandled = false;
 
             const pollInterval = setInterval(async () => {
                 try {
@@ -10775,6 +10809,8 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                     }
 
                     if (sData.status === "completed") {
+                        if (isEpisodeHandled) return;
+                        isEpisodeHandled = true;
                         clearInterval(pollInterval);
                         completedProjects.push(sData.project);
                         currentDubbedProject = sData.project;
@@ -10799,6 +10835,8 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                         showToast(`EP ${epNum}/${totalBatchCount} dubbed successfully!`);
                         resolve(true);
                     } else if (sData.status === "failed") {
+                        if (isEpisodeHandled) return;
+                        isEpisodeHandled = true;
                         clearInterval(pollInterval);
                         const epErrTitle = sData.error || 'Episode dubbing failed';
                         const epErrStage = sData.error_stage || `Episode ${epNum}/${totalBatchCount}`;
@@ -10952,12 +10990,27 @@ function showDubbingSuccessNotification(data) {
     }
 }
 
+let _lastExportFolderOpenedTime = 0;
+let _lastExportFolderOpenedKey = "";
+
 async function openExportFolderDirect(targetPath) {
+    const now = Date.now();
     try {
         let pathToOpen = targetPath || currentCustomExportFolder || '';
         if (pathToOpen && typeof pathToOpen === 'string') {
             pathToOpen = sanitizeExportFolderPath(pathToOpen) || pathToOpen;
         }
+        // Folder-level debounce: extract directory to prevent file & directory double calls
+        const norm = String(pathToOpen || '').trim().replace(/\\/g, '/');
+        const folderKey = norm.replace(/\/[^/]+\.(mp4|mkv|mov|avi|ts|srt|json)$/i, '').toLowerCase();
+
+        if (folderKey && (now - _lastExportFolderOpenedTime < 8000) && (folderKey === _lastExportFolderOpenedKey)) {
+            console.log(`[OpenFolder] Debounced duplicate folder open: ${folderKey}`);
+            return;
+        }
+        _lastExportFolderOpenedTime = now;
+        _lastExportFolderOpenedKey = folderKey;
+
         const res = await fetch('/api/projects/open-folder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

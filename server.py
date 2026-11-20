@@ -783,12 +783,7 @@ def open_export_folder():
     if not target_dir:
         target_dir = EXPORTS_DIR.resolve()
 
-    if sys.platform == "win32":
-        try:
-            os.startfile(str(target_dir))
-            return jsonify({"success": True, "opened_path": str(target_dir)})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+    safe_open_explorer(target_dir, highlight_file=False)
     return jsonify({"success": True, "opened_path": str(target_dir)})
 
 
@@ -1222,7 +1217,7 @@ def license_status_endpoint():
         from update import get_local_version
         info["app_version"] = get_local_version()
     except Exception:
-        info["app_version"] = "2.0.5"
+        info["app_version"] = "2.0.6"
 
     cfg_path = get_data_file("license_config.json")
     if cfg_path.exists():
@@ -1895,48 +1890,54 @@ def downloader_status_endpoint():
 
 
 
+_EXPLORER_LOCK = threading.Lock()
 _LAST_EXPLORER_OPEN_TIME = 0.0
 _LAST_EXPLORER_OPEN_PATH = ""
 
 def safe_open_explorer(target_path, highlight_file: bool = True) -> bool:
-    """Safely open Windows File Explorer with strict 3.5-second debounce cooldown to eliminate duplicate window spam."""
+    """Safely open Windows File Explorer with strict folder-level deduplication and thread lock to eliminate duplicate window spam."""
     global _LAST_EXPLORER_OPEN_TIME, _LAST_EXPLORER_OPEN_PATH
     import time
-    now = time.time()
-    try:
-        p = Path(target_path).resolve()
-    except Exception:
-        p = Path(target_path)
-    path_key = str(p).lower().replace("/", "\\")
-
-    # 3.5-second debounce window per folder/file path
-    if (now - _LAST_EXPLORER_OPEN_TIME < 3.5) and (_LAST_EXPLORER_OPEN_PATH == path_key):
-        return True
-
-    _LAST_EXPLORER_OPEN_TIME = now
-    _LAST_EXPLORER_OPEN_PATH = path_key
-
-    if sys.platform == "win32":
+    with _EXPLORER_LOCK:
+        now = time.time()
         try:
-            import subprocess
-            if highlight_file and p.exists() and p.is_file():
-                subprocess.Popen(f'explorer.exe /select,"{str(p)}"', shell=True)
-            elif p.is_dir():
-                os.startfile(str(p))
-            else:
-                p.mkdir(parents=True, exist_ok=True)
-                os.startfile(str(p))
-            return True
+            p = Path(target_path).resolve()
         except Exception:
-            return False
-    else:
-        try:
-            import subprocess
-            target_dir = p.parent if (p.exists() and p.is_file()) else p
-            subprocess.Popen(["xdg-open", str(target_dir)])
+            p = Path(target_path)
+
+        # Normalize to parent folder key so file-level and directory-level calls share the same debounce identity
+        folder_dir = p.parent if (p.exists() and p.is_file()) or p.suffix.lower() in ('.mp4', '.mkv', '.avi', '.mov', '.ts', '.srt', '.json') else p
+        folder_key = str(folder_dir).lower().replace("/", "\\").rstrip("\\")
+
+        # 8-second debounce window per folder to completely stop multiple window popup spam
+        if (now - _LAST_EXPLORER_OPEN_TIME < 8.0) and (_LAST_EXPLORER_OPEN_PATH == folder_key):
+            print(f"[SafeExplorer] Debounced duplicate explorer request for: {folder_key}")
             return True
-        except Exception:
-            return False
+
+        _LAST_EXPLORER_OPEN_TIME = now
+        _LAST_EXPLORER_OPEN_PATH = folder_key
+
+        if sys.platform == "win32":
+            try:
+                import subprocess
+                if highlight_file and p.exists() and p.is_file():
+                    subprocess.Popen(f'explorer.exe /select,"{str(p)}"', shell=True)
+                elif p.is_dir():
+                    os.startfile(str(p))
+                else:
+                    folder_dir.mkdir(parents=True, exist_ok=True)
+                    os.startfile(str(folder_dir))
+                return True
+            except Exception:
+                return False
+        else:
+            try:
+                import subprocess
+                target_dir = p.parent if (p.exists() and p.is_file()) else p
+                subprocess.Popen(["xdg-open", str(target_dir)])
+                return True
+            except Exception:
+                return False
 
 
 @app.route("/api/downloader/open-folder", methods=["POST", "GET"])
