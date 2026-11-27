@@ -5002,18 +5002,45 @@ function toggleSelectAllQueueEpisodes() {
 
 let dlHlsInstance = null;
 
+function _normalizePreviewPlaybackUrl(rawUrl) {
+    if (!rawUrl) return '';
+    if (rawUrl.startsWith('/media/') || rawUrl.startsWith('/api/')) {
+        return rawUrl;
+    }
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+        const low = rawUrl.toLowerCase();
+        const extParam = (low.includes('.m3u8') || low.includes('hls_playlist') || low.includes('youtube.com') || low.includes('youtu.be'))
+            ? '&ext=.m3u8'
+            : '';
+        return `/api/downloader/stream-proxy?url=${encodeURIComponent(rawUrl)}${extParam}`;
+    }
+    return rawUrl;
+}
+
 function loadVideoWithHls(video, url, posterUrl) {
     if (dlHlsInstance) {
         dlHlsInstance.destroy();
         dlHlsInstance = null;
     }
+    const playUrl = _normalizePreviewPlaybackUrl(url);
     if (posterUrl) video.poster = posterUrl;
-    if (url && (url.includes('.m3u8') || url.includes('/hls/')) && window.Hls && Hls.isSupported()) {
-        dlHlsInstance = new Hls({ enableWorker: true });
-        dlHlsInstance.loadSource(url);
+    if (playUrl && (playUrl.includes('.m3u8') || playUrl.includes('/hls/')) && window.Hls && Hls.isSupported()) {
+        dlHlsInstance = new Hls({ enableWorker: true, maxBufferLength: 30, maxMaxBufferLength: 60 });
+        dlHlsInstance.on(Hls.Events.ERROR, (event, data) => {
+            if (data && data.fatal) {
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && data.details === 'manifestParsingError') {
+                    // Upstream resolved to direct MP4 instead of HLS playlist: fallback gracefully to native <video>
+                    dlHlsInstance.destroy();
+                    dlHlsInstance = null;
+                    video.src = playUrl.replace('&ext=.m3u8', '').replace('ext=.m3u8&', '');
+                    video.play().catch(() => {});
+                }
+            }
+        });
+        dlHlsInstance.loadSource(playUrl);
         dlHlsInstance.attachMedia(video);
     } else {
-        video.src = url;
+        video.src = playUrl;
     }
 }
 
@@ -11614,6 +11641,7 @@ async function checkForAppUpdates(manual = false) {
         if (progContainer) progContainer.style.display = 'none';
 
         const btnUpdate = document.getElementById('btn-do-update');
+        const btnCancel = document.getElementById('btn-cancel-update');
         const btnText = document.getElementById('btn-do-update-text');
         const badgeText = document.getElementById('update-badge-text');
         const subtitle = document.getElementById('update-subtitle');
@@ -11631,14 +11659,19 @@ async function checkForAppUpdates(manual = false) {
                     subtitle.textContent = `A new version (v${latVer}) is available with the latest neural engine upgrades and performance improvements.`;
                 }
             }
-            if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> <span id="btn-do-update-text">Update Now (v${latVer})</span>`;
+            if (btnCancel) btnCancel.textContent = "Remind Me Later";
+            if (btnUpdate) {
+                btnUpdate.style.display = 'inline-flex';
+                btnUpdate.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> <span id="btn-do-update-text">Update Now (v${latVer})</span>`;
+            }
             openModal('modal-update');
             if (manual) showToast(`New version available: v${latVer}`);
         } else {
-            // Already on latest official build: only pop up modal when manually requested so user can view notes or reinstall
-            if (badgeText) badgeText.textContent = "LATEST OFFICIAL BUILD";
-            if (subtitle) subtitle.textContent = `Official release notes and feature highlights for SN Tool Studio Pro (v${curVer}):`;
-            if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-rotate"></i> <span id="btn-do-update-text">Reinstall / Update (v${curVer})</span>`;
+            // Already on latest official build: confirm Up to Date and hide Update button so user isn't prompted to update again
+            if (badgeText) badgeText.textContent = "UP TO DATE • LATEST BUILD";
+            if (subtitle) subtitle.textContent = `កម្មវិធីរបស់អ្នកកំពុងប្រើប្រាស់ Version ថ្មីបំផុត (v${curVer}) រួចហើយ — មិនចាំបាច់ Update ម្ដងទៀតទេ។`;
+            if (btnCancel) btnCancel.textContent = "OK, Close";
+            if (btnUpdate) btnUpdate.style.display = 'none';
             if (manual) {
                 showToast(`SN Tool Studio Pro v${curVer} is up to date!`);
                 openModal('modal-update');
@@ -11697,11 +11730,13 @@ async function executeAppUpdate() {
 
         const fallbackUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip";
         const dlUrl = (_latestUpdateInfo && _latestUpdateInfo.download_url) ? _latestUpdateInfo.download_url : fallbackUrl;
+        const sha256 = (_latestUpdateInfo && _latestUpdateInfo.sha256) ? _latestUpdateInfo.sha256 : "";
         const res = await fetch('/api/update/apply', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                download_url: dlUrl
+                download_url: dlUrl,
+                sha256: sha256
             })
         });
 
@@ -11709,13 +11744,14 @@ async function executeAppUpdate() {
 
         const data = await res.json();
         if (data.success) {
-            const targetVer = (_latestUpdateInfo && _latestUpdateInfo.latest_version) ? _latestUpdateInfo.latest_version : '2.0.6';
+            const targetVer = (_latestUpdateInfo && _latestUpdateInfo.latest_version) ? _latestUpdateInfo.latest_version : '2.0.7';
+            const expectNewVer = Boolean(_latestUpdateInfo && _latestUpdateInfo.has_update);
             if (progressBar) progressBar.style.width = "96%";
             if (progressPct) progressPct.textContent = "96%";
             if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#10b981;"></i> Updating to v' + targetVer + '... Application is restarting automatically.';
             showToast("Update patch downloaded! Restarting to v" + targetVer + "...");
 
-            // Poll fast zero-latency /api/update/ping until newly updated version is online
+            // Poll fast zero-latency /api/update/ping until extraction completes and newly updated version is online
             let pollAttempts = 0;
             const maxPoll = 45;
             setTimeout(() => {
@@ -11725,14 +11761,18 @@ async function executeAppUpdate() {
                         const ping = await fetch('/api/update/ping?_t=' + Date.now(), { cache: 'no-store' });
                         if (ping.ok) {
                             const pdata = await ping.json();
-                            clearInterval(pollInterval);
-                            const finalVer = (pdata && pdata.version) ? pdata.version : targetVer;
-                            if (progressBar) progressBar.style.width = "100%";
-                            if (progressPct) progressPct.textContent = "100%";
-                            if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Update to v' + finalVer + ' complete! Refreshing...';
-                            setTimeout(() => {
-                                window.location.href = window.location.pathname + '?_v=' + Date.now();
-                            }, 1200);
+                            const verMatches = !expectNewVer || !pdata.version || pdata.version === targetVer;
+                            const isReady = pdata && pdata.status === 'ok' && !pdata.updating && verMatches;
+                            if (isReady) {
+                                clearInterval(pollInterval);
+                                const finalVer = (pdata && pdata.version) ? pdata.version : targetVer;
+                                if (progressBar) progressBar.style.width = "100%";
+                                if (progressPct) progressPct.textContent = "100%";
+                                if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Update to v' + finalVer + ' complete! Refreshing...';
+                                setTimeout(() => {
+                                    window.location.href = window.location.pathname + '?_v=' + Date.now();
+                                }, 1000);
+                            }
                         }
                     } catch (netErr) {
                         if (pollAttempts >= maxPoll) {
@@ -11741,14 +11781,18 @@ async function executeAppUpdate() {
                         }
                     }
                 }, 1000);
-            }, 2500);
+            }, 3500);
         } else {
+            if (progressBar) progressBar.style.width = "0%";
+            if (progressPct) progressPct.textContent = "Failed";
             if (statusMsg) statusMsg.textContent = "Error: " + (data.error || "Update failed");
             if (btnUpdate) btnUpdate.disabled = false;
             showToast("Error: " + (data.error || "Update failed"));
         }
     } catch (err) {
         if (pollProgressTimer) clearInterval(pollProgressTimer);
+        if (progressBar) progressBar.style.width = "0%";
+        if (progressPct) progressPct.textContent = "Failed";
         if (statusMsg) statusMsg.textContent = "Error: " + err.message;
         if (btnUpdate) btnUpdate.disabled = false;
         showToast("Update error: " + err.message);

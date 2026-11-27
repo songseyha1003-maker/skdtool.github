@@ -9,13 +9,44 @@ CACHE_DIR = Path("cache/audio_separation")
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _probe_mean_volume_db(audio_path: Path, start_sec: int) -> float:
+    """Measure short-window mean volume in dB via FFmpeg volumedetect."""
+    probe_cmd = [
+        get_ffmpeg_path(),
+        "-nostdin",
+        "-ss", str(start_sec),
+        "-t", "5",
+        "-i", str(audio_path),
+        "-af", "volumedetect",
+        "-f", "null",
+        "-"
+    ]
+    p_res = subprocess.run(
+        probe_cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=15,
+        **get_silent_kwargs()
+    )
+    for line in (p_res.stderr or "").splitlines():
+        if "mean_volume:" in line:
+            try:
+                return float(line.split("mean_volume:")[1].split("dB")[0].strip())
+            except Exception:
+                pass
+    return -50.0
+
+
 def separate_vocals_and_bgm(
     input_audio_path: str,
     output_dir: Optional[str] = None
 ) -> Tuple[str, str]:
     """
     Separate input audio into:
-    1. bgm_audio_path: Background Music & Sound Effects track with vocals removed.
+    1. bgm_audio_path: Background Music & Sound Effects track with vocals suppressed while preserving musical warmth.
     2. vocals_audio_path: Isolated Dialogue vocal track.
     Returns (bgm_audio_path, vocals_audio_path).
     """
@@ -29,22 +60,25 @@ def separate_vocals_and_bgm(
     bgm_output = target_dir / f"{in_p.stem}_bgm.wav"
     vocals_output = target_dir / f"{in_p.stem}_vocals.wav"
 
-    # Ultra-deep multi-band speech notch filter (vocal formant suppression without phase cancellation)
-    # Cuts dialogue vocal formants by -38dB to -45dB so foreign drama speech is inaudible
-    speech_notch_filter = (
-        "highpass=f=45,lowpass=f=15500,"
-        "equalizer=f=200:t=q:w=1.2:g=-30,"
-        "equalizer=f=450:t=q:w=1.5:g=-38,"
-        "equalizer=f=950:t=q:w=2.0:g=-45,"
-        "equalizer=f=1850:t=q:w=2.0:g=-45,"
-        "equalizer=f=2900:t=q:w=2.0:g=-38,"
-        "equalizer=f=4100:t=q:w=1.5:g=-30"
+    # Stereo Mid-Side vocal cancellation with surgical formant attenuation and warmth retention:
+    # Preserves sub-bass (<250Hz) and high air/SFX (>4.5kHz) while suppressing center dialogue cleanly
+    stereo_phase_filter = (
+        "stereotools=mlev=0.0:slev=1.35,"
+        "highpass=f=35,lowpass=f=16000,"
+        "equalizer=f=1050:t=q:w=1.8:g=-14,"
+        "equalizer=f=2200:t=q:w=1.8:g=-14,"
+        "equalizer=f=3400:t=q:w=2.0:g=-10,"
+        "volume=1.6"
     )
 
-    # 1. First attempt: Stereotools center-channel vocal suppression (Mid-Side extraction) + speech formant notch
-    phase_cancel_filter = (
-        "stereotools=mlev=0.0:slev=1.4,"
-        + speech_notch_filter
+    # Dual-mono fallback filter (when L == R so Mid-Side subtraction yields silence):
+    # Targets core speech intelligibility (450Hz-3.2kHz) while retaining music bass and highs
+    mono_speech_notch_filter = (
+        "highpass=f=40,lowpass=f=16000,"
+        "equalizer=f=450:t=q:w=1.6:g=-18,"
+        "equalizer=f=1050:t=q:w=1.8:g=-26,"
+        "equalizer=f=2100:t=q:w=1.8:g=-26,"
+        "equalizer=f=3200:t=q:w=1.8:g=-18"
     )
 
     cmd_bgm = [
@@ -53,7 +87,7 @@ def separate_vocals_and_bgm(
         "-y",
         "-threads", str(min(4, max(1, (os.cpu_count() or 2) - 1))),
         "-i", str(in_p),
-        "-af", phase_cancel_filter,
+        "-af", stereo_phase_filter,
         "-acodec", "pcm_s16le",
         "-ar", "44100",
         "-ac", "2",
@@ -68,62 +102,23 @@ def separate_vocals_and_bgm(
     else:
         try:
             # Dual-window probe to avoid false fallbacks on quiet drama intros
-            probe_cmd = [
-                get_ffmpeg_path(),
-                "-nostdin",
-                "-ss", "12",
-                "-t", "5",
-                "-i", str(bgm_output),
-                "-af", "volumedetect",
-                "-f", "null",
-                "-"
-            ]
-            p_res = subprocess.run(probe_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", timeout=15, **get_silent_kwargs())
-            m_db = -50.0
-            for line in (p_res.stderr or "").splitlines():
-                if "mean_volume:" in line:
-                    try:
-                        m_db = float(line.split("mean_volume:")[1].split("dB")[0].strip())
-                        break
-                    except Exception:
-                        pass
+            m_db = _probe_mean_volume_db(bgm_output, 12)
             if m_db < -60.0:
-                # Confirm with a second window at 28 seconds
-                probe_cmd2 = [
-                    get_ffmpeg_path(),
-                    "-nostdin",
-                    "-ss", "28",
-                    "-t", "5",
-                    "-i", str(bgm_output),
-                    "-af", "volumedetect",
-                    "-f", "null",
-                    "-"
-                ]
-                p_res2 = subprocess.run(probe_cmd2, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", timeout=15, **get_silent_kwargs())
-                m_db2 = -50.0
-                for line in (p_res2.stderr or "").splitlines():
-                    if "mean_volume:" in line:
-                        try:
-                            m_db2 = float(line.split("mean_volume:")[1].split("dB")[0].strip())
-                            break
-                        except Exception:
-                            pass
+                m_db2 = _probe_mean_volume_db(bgm_output, 28)
                 if m_db2 < -60.0:
-                    print(f"Notice: Phase cancellation resulted in mono silence (mean_volume={m_db:.1f}dB, {m_db2:.1f}dB), switching to deep speech notch filter.")
+                    print(f"Notice: Phase cancellation resulted in mono silence (mean_volume={m_db:.1f}dB, {m_db2:.1f}dB), switching to surgical speech notch filter.")
                     need_fallback = True
         except Exception:
             pass
 
     if need_fallback:
-        # Fallback: High-precision speech notch filter without phase subtraction
-        # Preserves 100% of music and background effects at full volume!
         cmd_bgm_fallback = [
             get_ffmpeg_path(),
             "-nostdin",
             "-y",
             "-threads", str(min(4, max(1, (os.cpu_count() or 2) - 1))),
             "-i", str(in_p),
-            "-af", speech_notch_filter,
+            "-af", mono_speech_notch_filter,
             "-acodec", "pcm_s16le",
             "-ar", "44100",
             "-ac", "2",
@@ -131,7 +126,6 @@ def separate_vocals_and_bgm(
         ]
         proc_fb = subprocess.run(cmd_bgm_fallback, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", timeout=3600, **get_silent_kwargs())
         if proc_fb.returncode != 0 or not bgm_output.exists():
-            import shutil
             shutil.copy2(str(in_p), str(bgm_output))
 
     # Vocal isolation filter: Extract center channel dialogue and suppress stereo BGM

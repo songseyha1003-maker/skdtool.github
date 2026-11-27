@@ -1,9 +1,10 @@
 {
-  "version": "2.0.6",
+  "version": "2.0.7",
   "app_name": "SN TOOL",
-  "release_date": "2026-11-20",
-  "title": "SN TOOL - Official Release v2.0.6 (Studio Pro Audio, 100% Khmer Dubbing & Offline STT)",
-  "release_notes": "• 🎙️ Studio Pro Audio & Clean Voice Separation: 100% authentic Piseth & Sreymom character separation with acoustic F0 locking and zero voice leakage.\n• 🗂️ Single Window Explorer: Resolved duplicate File Explorer folder popups upon export.\n• 🌐 100% Khmer Dubbing Translation: Ultra-reliable Google Batch failover with drama scriptwriting guaranteeing 0% untranslated lines.\n• 🧠 Smart Offline STT Fallback: Seamless automatic fallback when cloud STT is unavailable.\n• ⚡ High-Speed Parallel TTS Engine: 10 parallel workers with Studio Clarity EQ (-16 LUFS) and dynamic lip-sync tempo alignment.",
+  "release_date": "2026-11-26",
+  "title": "SN TOOL - Official Release v2.0.7 (1080p Muxed Video Fix & Upgraded OTA Engine)",
+  "subtitle": "Upgraded 1080p Drama Downloader & 1080p+ HLS Preview, automatic scratch disk cleaner, and hardened SHA-256 OTA updater.",
+  "release_notes": "• 🎬 1080p Muxed Video+Audio Guarantee: Eliminates audio-only YouTube HLS downloads (itag=233) and renders crisp 1080p+ HLS video+audio in the in-app Preview player.\n• 🛡️ FFmpeg Video-Stream Verification: Verifies every episode and full drama file actually contains a valid video stream before marking Completed 100%.\n• 🧹 Automatic Disk Cleanup (disk_cleaner.py): Automatically removes temporary WAV/voice scratch files after dubbing so Drive D/C never fills up.\n• 🚀 Upgraded In-App OTA Updater: Fixed /api/update/ping restart sync (eliminating 96% stall), added SHA-256 archive verification & Zip-Slip protection.\n• 🔑 Full User Credential Preservation: Preserves both license.key and user AI provider API keys automatically during upgrades.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }

@@ -16,7 +16,7 @@ import subprocess
 import urllib.request
 import urllib.parse
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple, Callable
+from typing import Dict, Any, List, Optional, Tuple, Callable, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -93,6 +93,304 @@ def play_windows_completion_sound():
         except Exception:
             pass
     threading.Thread(target=_play, daemon=True).start()
+
+_VALID_VIDEO_CACHE: Dict[Tuple[str, int, int], bool] = {}
+_VALID_VIDEO_LOCK = threading.Lock()
+
+
+def has_valid_video_stream(file_path: Optional[Union[str, Path]], min_bytes: int = 50000) -> bool:
+    """
+    Verify via FFmpeg probe that file_path exists, meets min_bytes, and actually contains
+    a non-empty video stream (rejecting audio-only or corrupted MP4 files).
+    """
+    if not file_path:
+        return False
+    try:
+        p = Path(file_path)
+        if not p.exists() or not p.is_file():
+            return False
+        st = p.stat()
+        if st.st_size < min_bytes:
+            return False
+        cache_key = (str(p.resolve()), st.st_size, st.st_mtime_ns)
+    except Exception:
+        return False
+
+    with _VALID_VIDEO_LOCK:
+        if cache_key in _VALID_VIDEO_CACHE:
+            return _VALID_VIDEO_CACHE[cache_key]
+
+    has_video = False
+    try:
+        cmd = [get_ffmpeg_path(), "-nostdin", "-hide_banner", "-i", str(p)]
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            **get_silent_kwargs()
+        )
+        err = proc.stderr or ""
+        if "Input #" in err:
+            has_video = bool(re.search(r"Stream\s+#\d+:\d+.*Video:", err))
+        else:
+            has_video = False
+    except FileNotFoundError:
+        has_video = True
+    except Exception:
+        has_video = False
+
+    with _VALID_VIDEO_LOCK:
+        if len(_VALID_VIDEO_CACHE) > 4000:
+            _VALID_VIDEO_CACHE.clear()
+        _VALID_VIDEO_CACHE[cache_key] = has_video
+    return has_video
+
+
+SAFE_YT_VIDEO_FORMAT = (
+    "bestvideo[vcodec^=avc1][ext=mp4]+bestaudio[acodec^=mp4a][ext=m4a]/"
+    "bestvideo[ext=mp4]+bestaudio[ext=m4a]/"
+    "bestvideo+bestaudio/"
+    "best[vcodec!=none][acodec!=none]/"
+    "best[vcodec!=none]"
+)
+
+
+def _build_yt_dlp_video_opts(
+    out_dir: Path,
+    outtmpl: str,
+    ffmpeg_bin: str,
+    socket_timeout: int = 20,
+    progress_hooks: Optional[List[Any]] = None,
+    use_fallback_clients: bool = False
+) -> Dict[str, Any]:
+    """Build yt-dlp options that guarantee a combined video+audio MP4 without audio-only downgrades."""
+    opts: Dict[str, Any] = {
+        'paths': {'home': str(out_dir), 'temp': str(out_dir)},
+        'outtmpl': outtmpl,
+        'format': SAFE_YT_VIDEO_FORMAT,
+        'ffmpeg_location': ffmpeg_bin,
+        'merge_output_format': 'mp4',
+        'concurrent_fragment_downloads': 16,
+        'retries': 5,
+        'fragment_retries': 5,
+        'skip_unavailable_fragments': True,
+        'continuedl': True,
+        'overwrites': False,
+        'nocheckcertificate': True,
+        'buffersize': 1048576,
+        'http_chunk_size': 10485760,
+        'socket_timeout': socket_timeout,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+        },
+        'quiet': True,
+        'no_warnings': True,
+        'progress_hooks': progress_hooks or [],
+    }
+    if use_fallback_clients:
+        opts['extractor_args'] = {
+            'youtube': {
+                'player_client': ['android', 'ios', 'mweb', 'web']
+            }
+        }
+    return opts
+
+
+def _extract_youtube_info(yt_url: str, extra_opts: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    """Extract metadata and format list from a YouTube URL using yt-dlp."""
+    try:
+        opts: Dict[str, Any] = {'quiet': True, 'no_warnings': True, 'socket_timeout': 10}
+        if extra_opts:
+            opts.update(extra_opts)
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            return ydl.extract_info(yt_url, download=False)
+    except Exception:
+        return None
+
+
+def extract_youtube_hls_master_tracks(yt_url: str) -> Optional[Dict[str, Any]]:
+    """
+    Resolve separate 1080p+ H.264 HLS video and original-language AAC HLS audio URLs
+    so the UI Preview player can stream crisp 1080p/2K/4K video+audio via HLS.js without downloading first.
+    """
+    if not yt_url:
+        return None
+
+    client_attempts = [None, {'youtube': {'player_client': ['android', 'ios', 'mweb', 'web']}}]
+    for ex_args in client_attempts:
+        yt_info = _extract_youtube_info(yt_url, {'extractor_args': ex_args} if ex_args else None)
+        if not yt_info:
+            continue
+        formats = yt_info.get('formats') or []
+
+        vid_cands = []
+        aud_cands = []
+        for f in formats:
+            u = f.get('url')
+            if not u:
+                continue
+            proto = str(f.get('protocol') or '').lower()
+            if 'm3u8' not in proto:
+                continue
+            vc = str(f.get('vcodec') or 'none').lower()
+            ac = str(f.get('acodec') or 'none').lower()
+            if vc not in ('', 'none'):
+                height = int(f.get('height') or 0)
+                width = int(f.get('width') or 0)
+                is_avc = 1 if vc.startswith('avc1') else 0
+                tbr = float(f.get('tbr') or 0)
+                vid_cands.append((is_avc, height, tbr, {
+                    'url': u,
+                    'width': width or 1920,
+                    'height': height or 1080,
+                    'vcodec': f.get('vcodec') or 'avc1.640028',
+                    'tbr': tbr,
+                }))
+            else:
+                # Audio-only HLS stream (234-1 original AAC preferred over 233 / dubbed-auto)
+                note = str(f.get('format_note') or '').lower()
+                is_original = 1 if 'original' in note else 0
+                not_dubbed = 0 if 'dubbed' in note else 1
+                lang_pref = int(f.get('language_preference') or -1)
+                fid = str(f.get('format_id') or '')
+                is_high_aac = 1 if fid.startswith('234') else 0
+                aud_cands.append((not_dubbed, is_original, lang_pref, is_high_aac, u))
+
+        if vid_cands and aud_cands:
+            vid_cands.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+            aud_cands.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
+            best_vid = vid_cands[0][3]
+            if best_vid['height'] >= 720:
+                return {
+                    'video_url': best_vid['url'],
+                    'audio_url': aud_cands[0][4],
+                    'width': best_vid['width'],
+                    'height': best_vid['height'],
+                    'vcodec': best_vid['vcodec'],
+                    'bandwidth': max(2500000, int((best_vid['tbr'] or 4500) * 1000)),
+                }
+    return None
+
+
+def extract_youtube_direct_stream(yt_url: str, require_muxed: bool = True) -> Optional[str]:
+    """
+    Resolve a direct playable stream URL from a YouTube URL, strictly enforcing a video stream
+    (never selecting audio-only HLS streams like itag=233).
+    """
+    if not yt_url:
+        return None
+
+    def _pick_best_format(formats: List[Dict[str, Any]]) -> Optional[str]:
+        candidates = []
+        for f in formats or []:
+            u = f.get('url')
+            if not u:
+                continue
+            vc = str(f.get('vcodec') or 'none').lower()
+            ac = str(f.get('acodec') or 'none').lower()
+            if vc in ('', 'none'):
+                continue
+            if require_muxed and ac in ('', 'none'):
+                continue
+            height = int(f.get('height') or 0)
+            is_mp4 = 1 if str(f.get('ext') or '').lower() == 'mp4' else 0
+            is_avc = 1 if vc.startswith('avc1') else 0
+            has_audio = 1 if ac not in ('', 'none') else 0
+            candidates.append((has_audio, is_mp4, is_avc, height, u))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
+        return candidates[0][4]
+
+    client_attempts = [None, {'youtube': {'player_client': ['android', 'ios', 'mweb', 'web']}}]
+    for ex_args in client_attempts:
+        yt_info = _extract_youtube_info(yt_url, {'extractor_args': ex_args} if ex_args else None)
+        if yt_info:
+            picked = _pick_best_format(yt_info.get('formats', []))
+            if picked:
+                return picked
+    return None
+
+
+def _download_via_yt_dlp(
+    stream_url: str,
+    isolated_dir: Path,
+    out_stem: str,
+    dest_file: Path,
+    timeout_sec: int = 180,
+    progress_callback: Optional[Callable[[int], None]] = None,
+    min_bytes: int = 100000,
+    use_pool_timeout: bool = False
+) -> bool:
+    """Download video+audio via yt-dlp (trying default client first for 1080p, then fallback clients) and validate video stream."""
+    ffmpeg_bin = get_ffmpeg_path()
+
+    def _hook(d):
+        if not progress_callback:
+            return
+        st = d.get('status')
+        if st == 'downloading':
+            frag_index = d.get('fragment_index')
+            frag_count = d.get('fragment_count')
+            if frag_index is not None and frag_count and frag_count > 0:
+                pct = int(min(98, max(1, (frag_index / frag_count) * 100)))
+                progress_callback(pct)
+            else:
+                tot = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
+                down = d.get('downloaded_bytes', 0)
+                if tot > 0:
+                    pct = int(min(99, max(1, (down / tot) * 100)))
+                    progress_callback(pct)
+        elif st == 'finished':
+            progress_callback(100)
+
+    outtmpl = str(isolated_dir / f"{out_stem}.%(ext)s")
+    hooks = [_hook] if progress_callback else []
+    effective_timeout = max(int(timeout_sec or 180), 180)
+
+    for use_fb in (False, True):
+        opts = _build_yt_dlp_video_opts(
+            isolated_dir,
+            outtmpl,
+            ffmpeg_bin,
+            socket_timeout=20 if not use_fb else 30,
+            progress_hooks=hooks,
+            use_fallback_clients=use_fb
+        )
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                if use_pool_timeout:
+                    with ThreadPoolExecutor(max_workers=1) as ydl_pool:
+                        ydl_fut = ydl_pool.submit(ydl.download, [stream_url])
+                        ydl_fut.result(timeout=effective_timeout)
+                else:
+                    ydl.download([stream_url])
+        except Exception:
+            pass
+
+        cand_files = [
+            c for c in isolated_dir.glob(f"{out_stem}*")
+            if c.is_file()
+            and not any(x in c.name for x in [".part", ".ytdl", ".tmp"])
+            and has_valid_video_stream(c, min_bytes=min_bytes)
+        ]
+        if cand_files:
+            if safe_atomic_move(cand_files[0], dest_file) and has_valid_video_stream(dest_file, min_bytes=min_bytes):
+                if progress_callback:
+                    progress_callback(100)
+                return True
+        # Clean invalid audio-only/partial candidates before fallback retry
+        for stale in isolated_dir.glob(f"{out_stem}*"):
+            if stale.is_file():
+                stale.unlink(missing_ok=True)
+    return False
+
 
 def safe_atomic_move(src: Path, dst: Path, max_retries: int = 5, retry_delay: float = 0.3) -> bool:
     """
@@ -1345,66 +1643,18 @@ def download_m3u8_stream_turbo(stream_url: str, dest_file: Path, timeout_sec: in
     isolated_temp.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Tier 1: High-Speed yt-dlp Concurrent Fragment Engine (with live progress)
-        try:
-            def live_hook(d):
-                if not progress_callback:
-                    return
-                st = d.get('status')
-                if st == 'downloading':
-                    frag_index = d.get('fragment_index')
-                    frag_count = d.get('fragment_count')
-                    if frag_index is not None and frag_count and frag_count > 0:
-                        pct = int(min(98, max(1, (frag_index / frag_count) * 100)))
-                        progress_callback(pct)
-                    else:
-                        tot = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
-                        down = d.get('downloaded_bytes', 0)
-                        if tot > 0:
-                            pct = int(min(99, max(1, (down / tot) * 100)))
-                            progress_callback(pct)
-                elif st == 'finished':
-                    progress_callback(100)
-
-            ydl_opts = {
-                'paths': {'home': str(isolated_temp), 'temp': str(isolated_temp)},
-                'outtmpl': str(isolated_temp / f"{dest_file.stem}.%(ext)s"),
-                'concurrent_fragment_downloads': 16,
-                'retries': 5,
-                'fragment_retries': 5,
-                'skip_unavailable_fragments': True,
-                'continuedl': True,
-                'overwrites': False,
-                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                'nocheckcertificate': True,
-                'buffersize': 1048576,
-                'http_chunk_size': 10485760,
-                'ffmpeg_location': ffmpeg_bin,
-                'merge_output_format': 'mp4',
-                'quiet': True,
-                'no_warnings': True,
-                'socket_timeout': 15,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': '*/*',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                },
-                'progress_hooks': [live_hook] if progress_callback else [],
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                with ThreadPoolExecutor(max_workers=1) as ydl_pool:
-                    ydl_fut = ydl_pool.submit(ydl.download, [stream_url])
-                    effective_timeout = max(int(timeout_sec or 180), 180)
-                    ydl_fut.result(timeout=effective_timeout)
-
-            cand_files = [c for c in isolated_temp.glob(f"{dest_file.stem}*") if c.is_file() and c.stat().st_size > 100000 and not any(x in c.name for x in [".part", ".ytdl", ".tmp"])]
-            if cand_files:
-                if safe_atomic_move(cand_files[0], dest_file):
-                    if progress_callback:
-                        progress_callback(100)
-                    return True
-        except Exception:
-            pass
+        # Tier 1: High-Speed yt-dlp Concurrent Fragment Engine (with live progress + video stream validation)
+        if _download_via_yt_dlp(
+            stream_url,
+            isolated_temp,
+            dest_file.stem,
+            dest_file,
+            timeout_sec=timeout_sec,
+            progress_callback=progress_callback,
+            min_bytes=100000,
+            use_pool_timeout=True
+        ):
+            return True
 
         # Tier 2: FFmpeg with persistent socket connection and reconnect flags (with live progress tracking)
         try:
@@ -1462,11 +1712,13 @@ def download_m3u8_stream_turbo(stream_url: str, dest_file: Path, timeout_sec: in
                         progress_callback(est)
                 time.sleep(0.35)
 
-            if temp_ffmpeg_out.exists() and temp_ffmpeg_out.stat().st_size > 100000:
-                if safe_atomic_move(temp_ffmpeg_out, dest_file):
+            if has_valid_video_stream(temp_ffmpeg_out, min_bytes=100000):
+                if safe_atomic_move(temp_ffmpeg_out, dest_file) and has_valid_video_stream(dest_file, min_bytes=100000):
                     if progress_callback:
                         progress_callback(100)
                     return True
+            else:
+                temp_ffmpeg_out.unlink(missing_ok=True)
         except Exception:
             pass
 
@@ -1531,11 +1783,13 @@ def download_stream_turbo_chunked(stream_url: str, dest_file: Path, timeout_sec:
                                 else:
                                     pct = min(95, max(1, int((downloaded / (20 * 1024 * 1024)) * 100)))
                                     progress_callback(pct)
-                    if part_file.exists() and part_file.stat().st_size > 100000:
+                    if has_valid_video_stream(part_file, min_bytes=100000):
                         if safe_atomic_move(part_file, dest_file):
                             if progress_callback:
                                 progress_callback(100)
                             return True
+                    else:
+                        part_file.unlink(missing_ok=True)
         except Exception:
             pass
 
@@ -1556,7 +1810,7 @@ def download_stream_turbo_chunked(stream_url: str, dest_file: Path, timeout_sec:
             ]
             silent_kw = get_silent_kwargs()
             subprocess.run(cmd, capture_output=True, timeout=timeout_sec + 10, **silent_kw)
-            if part_file.exists() and part_file.stat().st_size > 100000:
+            if has_valid_video_stream(part_file, min_bytes=100000):
                 if dest_file.exists():
                     try:
                         dest_file.unlink()
@@ -1564,6 +1818,8 @@ def download_stream_turbo_chunked(stream_url: str, dest_file: Path, timeout_sec:
                         pass
                 shutil.move(str(part_file), str(dest_file))
                 return True
+            else:
+                part_file.unlink(missing_ok=True)
         except Exception:
             pass
 
@@ -1590,91 +1846,46 @@ def download_stream_universal(stream_url: str, dest_file: Path, timeout_sec: int
     dest_file.parent.mkdir(parents=True, exist_ok=True)
     ffmpeg_bin = get_ffmpeg_path()
     
-    # 1. If .m3u8 playlist: use high-speed multi-fragment HLS engine
-    if ".m3u8" in stream_url.lower():
+    # 1. If .m3u8 playlist (and not a YouTube webpage URL): use high-speed multi-fragment HLS engine
+    is_yt = any(domain in stream_url.lower() for domain in ["youtube.com", "youtu.be", "bilibili.com", "douyin.com", "kuaishou.com"])
+    if ".m3u8" in stream_url.lower() and not is_yt:
         ok = download_m3u8_stream_turbo(stream_url, dest_file, timeout_sec=timeout_sec, progress_callback=progress_cb)
-        if ok and dest_file.exists() and dest_file.stat().st_size > 1000000:
+        if ok and has_valid_video_stream(dest_file, min_bytes=1000000):
             return True
+        if dest_file.exists() and not has_valid_video_stream(dest_file, min_bytes=1000000):
+            dest_file.unlink(missing_ok=True)
 
     # 2. If YouTube, Bilibili, or general web streaming URL: use yt-dlp with turbo multi-fragment engine
-    is_yt = any(domain in stream_url.lower() for domain in ["youtube.com", "youtu.be", "bilibili.com", "douyin.com", "kuaishou.com"])
     if is_yt or not stream_url.lower().endswith(".mp4"):
         isolated_dir = get_safe_isolated_temp(dest_file)
         isolated_dir.mkdir(parents=True, exist_ok=True)
         try:
-            def ydl_hook(d):
-                st = d.get('status')
-                if st == 'downloading' and progress_cb:
-                    frag_index = d.get('fragment_index')
-                    frag_count = d.get('fragment_count')
-                    if frag_index is not None and frag_count and frag_count > 0:
-                        pct = int(min(98, max(1, (frag_index / frag_count) * 100)))
-                        progress_cb(pct)
-                    else:
-                        tot = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
-                        down = d.get('downloaded_bytes', 0)
-                        if tot > 0:
-                            pct = int(min(99, max(1, (down / tot) * 100)))
-                            progress_cb(pct)
-                elif st == 'finished' and progress_cb:
-                    progress_cb(100)
-
-            ydl_opts = {
-                'paths': {'home': str(isolated_dir), 'temp': str(isolated_dir)},
-                'outtmpl': str(isolated_dir / 'video.%(ext)s'),
-                'format': 'best[protocol=m3u8_native]/bestvideo[protocol=m3u8_native]+bestaudio[protocol=m3u8_native]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                'ffmpeg_location': ffmpeg_bin,
-                'merge_output_format': 'mp4',
-                'concurrent_fragment_downloads': 16,
-                'retries': 5,
-                'fragment_retries': 5,
-                'nocheckcertificate': True,
-                'socket_timeout': 30,
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['android', 'ios', 'mweb', 'web']
-                    }
-                },
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': '*/*',
-                },
-                'quiet': True,
-                'no_warnings': True,
-                'progress_hooks': [ydl_hook]
-            }
-            try:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([stream_url])
-            except Exception:
-                try:
-                    ydl_opts_fb = dict(ydl_opts)
-                    ydl_opts_fb['format'] = 'best/bestvideo+bestaudio'
-                    with yt_dlp.YoutubeDL(ydl_opts_fb) as ydl_fb:
-                        ydl_fb.download([stream_url])
-                except Exception:
-                    pass
-
-            cands = [c for c in isolated_dir.glob("video*") if c.is_file() and c.stat().st_size > 1000000 and not any(x in c.name for x in [".part", ".ytdl", ".tmp"])]
-            if cands:
-                if safe_atomic_move(cands[0], dest_file):
-                    if progress_cb:
-                        progress_cb(100)
-                    return True
+            if _download_via_yt_dlp(
+                stream_url,
+                isolated_dir,
+                "video",
+                dest_file,
+                timeout_sec=timeout_sec,
+                progress_callback=progress_cb,
+                min_bytes=1000000,
+                use_pool_timeout=False
+            ):
+                return True
         except Exception:
             pass
         finally:
             shutil.rmtree(isolated_dir, ignore_errors=True)
             clean_stray_download_artifacts(dest_file.parent)
 
-    # 3. Direct HTTP/HTTPS MP4 chunked download
-    ok_chunk = download_stream_turbo_chunked(stream_url, dest_file, timeout_sec=timeout_sec)
-    if ok_chunk and dest_file.exists() and dest_file.stat().st_size > 1000000:
-        if progress_cb:
-            progress_cb(100)
-        return True
+    # 3. Direct HTTP/HTTPS MP4 chunked download (skip for webpage URLs like youtube.com)
+    if not is_yt:
+        ok_chunk = download_stream_turbo_chunked(stream_url, dest_file, timeout_sec=timeout_sec)
+        if ok_chunk and has_valid_video_stream(dest_file, min_bytes=1000000):
+            if progress_cb:
+                progress_cb(100)
+            return True
 
-    return dest_file.exists() and dest_file.stat().st_size > 1000000
+    return has_valid_video_stream(dest_file, min_bytes=1000000)
 
 
 def resolve_full_series_master_stream(drama_title: str, total_eps: int = 50, drama_obj: Optional[Dict[str, Any]] = None) -> Optional[str]:
@@ -1797,14 +2008,17 @@ def resolve_full_series_master_stream(drama_title: str, total_eps: int = 50, dra
                             yt_watch = e.get("url")
                             if yt_watch:
                                 try:
-                                    with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'socket_timeout': 5}) as direct_ydl:
+                                    with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'socket_timeout': 6}) as direct_ydl:
                                         yt_info = direct_ydl.extract_info(yt_watch, download=False)
                                         formats = yt_info.get('formats', [])
-                                        hls_f = next((f for f in formats if f.get('protocol') in ('m3u8_native', 'm3u8') and f.get('url')), None)
-                                        direct_f = hls_f or next((f for f in formats if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('url')), None)
-                                        if direct_f and direct_f.get('url'):
-                                            _DRAMA_MASTER_STREAM_CACHE[cache_k] = direct_f['url']
-                                            return direct_f['url']
+                                        has_video = any(
+                                            str(f.get('vcodec') or 'none').lower() not in ('', 'none') and f.get('url')
+                                            for f in formats
+                                        )
+                                        if has_video:
+                                            # Return canonical watch URL so yt-dlp merges 1080p video+audio (never single audio-only HLS)
+                                            _DRAMA_MASTER_STREAM_CACHE[cache_k] = yt_watch
+                                            return yt_watch
                                 except Exception:
                                     pass
                 except Exception:
@@ -1831,6 +2045,10 @@ def slice_full_movie_into_episodes(
     in strict sequential batches of 5 episodes using ultra-fast lossless FFmpeg stream copy (-c copy).
     """
     if not full_movie_file.exists() or total_episodes <= 0:
+        return []
+    if not has_valid_video_stream(full_movie_file, min_bytes=100000):
+        print(f"[Downloader] Rejecting master video without valid video stream: {full_movie_file}")
+        full_movie_file.unlink(missing_ok=True)
         return []
 
     ffmpeg_bin = get_ffmpeg_path()
@@ -1874,12 +2092,14 @@ def slice_full_movie_into_episodes(
                     pass
 
             ep_dest = drama_dest_dir / f"EP_{ep_num:02d}.mp4"
-            if ep_dest.exists() and ep_dest.stat().st_size > 500000:
+            if has_valid_video_stream(ep_dest, min_bytes=500000):
                 created_files.append(ep_dest)
                 if on_episode_ready:
                     sz_mb = ep_dest.stat().st_size / (1024 * 1024)
                     on_episode_ready(ep_num, ep_dest, sz_mb)
                 continue
+            elif ep_dest.exists():
+                ep_dest.unlink(missing_ok=True)
 
             start_t = (ep_num - 1) * ep_duration
             isolated_slice = get_safe_isolated_temp(ep_dest)
@@ -1897,7 +2117,7 @@ def slice_full_movie_into_episodes(
             ]
             try:
                 subprocess.run(cmd_slice, capture_output=True, timeout=40, **silent_kw)
-                if not (temp_slice_file.exists() and temp_slice_file.stat().st_size > 50000):
+                if not has_valid_video_stream(temp_slice_file, min_bytes=50000):
                     cmd_rec = [
                         ffmpeg_bin,
                         "-y",
@@ -1907,19 +2127,20 @@ def slice_full_movie_into_episodes(
                         "-c:v", "libx264",
                         "-preset", "ultrafast",
                         "-crf", "22",
+                        "-pix_fmt", "yuv420p",
                         "-c:a", "aac",
                         "-movflags", "+faststart",
                         str(temp_slice_file)
                     ]
                     subprocess.run(cmd_rec, capture_output=True, timeout=60, **silent_kw)
 
-                if temp_slice_file.exists() and temp_slice_file.stat().st_size > 50000:
+                if has_valid_video_stream(temp_slice_file, min_bytes=50000):
                     safe_atomic_move(temp_slice_file, ep_dest)
                     created_files.append(ep_dest)
                     if on_episode_ready:
                         sz_mb = ep_dest.stat().st_size / (1024 * 1024)
                         on_episode_ready(ep_num, ep_dest, sz_mb)
-                elif not (ep_dest.exists() and ep_dest.stat().st_size > 50000):
+                elif not has_valid_video_stream(ep_dest, min_bytes=50000):
                     # Do not replicate previous slices to prevent duplicate episodes
                     pass
             except Exception:
@@ -2684,35 +2905,39 @@ class DramaDownloadManager:
             drama_dest_dir.mkdir(parents=True, exist_ok=True)
         self.last_download_dir = str(drama_dest_dir).replace("\\", "/")
 
-        # Mark all episodes: verify against authentic file on disk (> 1 MB)
+        # Mark all episodes: verify video+audio integrity on disk (> 1 MB, must contain Video track)
+        validated_init: Dict[Path, bool] = {}
+
+        def _sync_init_ep(ep_it: Dict[str, Any]) -> bool:
+            ep_n = ep_it.get("episode_number") or ep_it.get("episode_num") or 1
+            f_cand = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
+            if f_cand not in validated_init:
+                is_ok = has_valid_video_stream(f_cand, min_bytes=1000000)
+                if not is_ok and f_cand.exists():
+                    try:
+                        f_cand.unlink()
+                    except Exception:
+                        pass
+                validated_init[f_cand] = is_ok
+            if validated_init[f_cand]:
+                ep_it["status"] = "Completed"
+                ep_it["progress"] = 100
+                ep_it["filepath"] = str(f_cand.resolve()).replace("\\", "/")
+                ep_it["video_url"] = f"/media/{ep_it['filepath']}"
+                return True
+            ep_it["status"] = "Queued"
+            ep_it["progress"] = 0
+            ep_it["filepath"] = ""
+            return False
+
         already_done = 0
         for ep in self.episodes:
-            ep_n = ep.get("episode_number") or ep.get("episode_num") or 1
-            f_cand = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
-            if f_cand.exists() and f_cand.stat().st_size > 1000000:
-                ep["status"] = "Completed"
-                ep["progress"] = 100
-                ep["filepath"] = str(f_cand.resolve()).replace("\\", "/")
-                ep["video_url"] = f"/media/{ep['filepath']}"
-            else:
-                ep["status"] = "Queued"
-                ep["progress"] = 0
-                ep["filepath"] = ""
+            _sync_init_ep(ep)
 
         for ep in selected_eps:
             ep["is_selected"] = True
-            ep_n = ep.get("episode_number") or ep.get("episode_num") or 1
-            f_cand = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
-            if f_cand.exists() and f_cand.stat().st_size > 1000000:
+            if _sync_init_ep(ep):
                 already_done += 1
-                ep["status"] = "Completed"
-                ep["progress"] = 100
-                ep["filepath"] = str(f_cand.resolve()).replace("\\", "/")
-                ep["video_url"] = f"/media/{ep['filepath']}"
-            else:
-                ep["status"] = "Queued"
-                ep["progress"] = 0
-                ep["filepath"] = ""
 
         self.stats["total"] = len(selected_eps)
         self.stats["selected"] = len(selected_eps)
@@ -2877,13 +3102,50 @@ class DramaDownloadManager:
                         sid = s_cand
                         break
 
+            def _try_mark_ep_completed(
+                ep_it: Dict[str, Any],
+                cand_f: Path,
+                min_bytes: int = 100000,
+                log_msg: Optional[str] = None,
+                dec_failed: bool = False,
+                remove_invalid: bool = True,
+            ) -> bool:
+                """Accept cand_f only if it contains a valid video stream; optionally delete invalid files."""
+                if has_valid_video_stream(cand_f, min_bytes=min_bytes):
+                    sz_mb = max(0.1, cand_f.stat().st_size / (1024 * 1024))
+                    with self._lock:
+                        if ep_it.get("status") != "Completed":
+                            ep_it["status"] = "Completed"
+                            ep_it["progress"] = 100
+                            ep_it["filepath"] = str(cand_f.resolve()).replace("\\", "/")
+                            ep_it["video_url"] = f"/media/{ep_it['filepath']}"
+                            ep_it["size_mb"] = f"{sz_mb:.1f}"
+                            self.stats["completed"] += 1
+                            if dec_failed and self.stats["failed"] > 0:
+                                self.stats["failed"] -= 1
+                            self._recalc_progress(selected_eps)
+                            if log_msg:
+                                self.add_log(log_msg.format(sz_mb=sz_mb))
+                    return True
+                if remove_invalid and cand_f.exists():
+                    try:
+                        cand_f.unlink()
+                    except Exception:
+                        pass
+                return False
+
             # Tier 0: Direct Offline VIP Engine for Hongguo Dramas (100% Full HD Decryption in Batches of 5)
             if sid and hongguo_service.is_installed() and not self.stop_requested:
                 missing_ep_nums = []
                 for idx, ep_it in enumerate(selected_eps):
                     ep_n = ep_it.get("episode_number", idx + 1)
                     d_f = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
-                    if not (d_f.exists() and d_f.stat().st_size > 1000000):
+                    if not has_valid_video_stream(d_f, min_bytes=1000000):
+                        if d_f.exists():
+                            try:
+                                d_f.unlink()
+                            except Exception:
+                                pass
                         missing_ep_nums.append(ep_n)
 
                 if missing_ep_nums:
@@ -2902,18 +3164,15 @@ class DramaDownloadManager:
                                         ep_n = ep_it.get("episode_number") or ep_it.get("episode_num") or 1
                                         cand_f = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
                                         if cand_f.exists() and cand_f.stat().st_size > 1000000:
-                                            sz_mb = cand_f.stat().st_size / (1024 * 1024)
-                                            with self._lock:
-                                                if ep_it.get("status") != "Completed":
-                                                    ep_it["status"] = "Completed"
-                                                    ep_it["progress"] = 100
-                                                    ep_it["filepath"] = str(cand_f.resolve()).replace("\\", "/")
-                                                    ep_it["video_url"] = f"/media/{ep_it['filepath']}"
-                                                    ep_it["size_mb"] = f"{sz_mb:.1f}"
-                                                    self.stats["completed"] += 1
-                                                    self._recalc_progress(selected_eps)
-                                                    self.add_log(f"✔ [EP {ep_n:02d}/{total:02d}] 100% Completed ({sz_mb:.1f} MB, Full HD)")
-                                        elif ep_it.get("status") == "Downloading":
+                                            if _try_mark_ep_completed(
+                                                ep_it,
+                                                cand_f,
+                                                min_bytes=1000000,
+                                                log_msg=f"✔ [EP {ep_n:02d}/{total:02d}] 100% Completed ({{sz_mb:.1f}} MB, Full HD)",
+                                                remove_invalid=False,
+                                            ):
+                                                continue
+                                        if ep_it.get("status") == "Downloading":
                                             # Continuous live progress increment based on real file growth or active decryption time
                                             with self._lock:
                                                 cur_p = ep_it.get("progress", 5)
@@ -2960,21 +3219,19 @@ class DramaDownloadManager:
                             batch_saved = 0
                             for ep_it in selected_eps:
                                 ep_n = ep_it.get("episode_number") or ep_it.get("episode_num") or 1
-                                if ep_n in v_batch and ep_it.get("status") != "Completed":
-                                    cand_f = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
-                                    if cand_f.exists() and cand_f.stat().st_size > 1000000:
-                                        sz_mb = cand_f.stat().st_size / (1024 * 1024)
-                                        with self._lock:
-                                            if ep_it.get("status") != "Completed":
-                                                ep_it["status"] = "Completed"
-                                                ep_it["progress"] = 100
-                                                ep_it["filepath"] = str(cand_f.resolve()).replace("\\", "/")
-                                                ep_it["video_url"] = f"/media/{ep_it['filepath']}"
-                                                ep_it["size_mb"] = f"{sz_mb:.1f}"
-                                                self.stats["completed"] += 1
-                                                self._recalc_progress(selected_eps)
-                                                self.add_log(f"✔ [EP {ep_n:02d}/{total:02d}] 100% Completed ({sz_mb:.1f} MB, Full HD)")
-                                                batch_saved += 1
+                                if ep_n in v_batch:
+                                    if ep_it.get("status") == "Completed":
+                                        batch_saved += 1
+                                    else:
+                                        cand_f = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
+                                        if _try_mark_ep_completed(
+                                            ep_it,
+                                            cand_f,
+                                            min_bytes=1000000,
+                                            log_msg=f"✔ [EP {ep_n:02d}/{total:02d}] 100% Completed ({{sz_mb:.1f}} MB, Full HD)",
+                                            remove_invalid=True,
+                                        ):
+                                            batch_saved += 1
                             if batch_saved == 0 and vb_idx == 0:
                                 self.add_log("⚡ Notice: VIP decryption offline key not available for this series. Switching seamlessly to High-Speed VOD Turbo engine...")
                                 break
@@ -2990,18 +3247,13 @@ class DramaDownloadManager:
                             if ep_it.get("status") != "Completed":
                                 ep_n = ep_it.get("episode_number") or ep_it.get("episode_num") or 1
                                 cand_f = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
-                                if cand_f.exists() and cand_f.stat().st_size > 1000000:
-                                    sz_mb = cand_f.stat().st_size / (1024 * 1024)
-                                    with self._lock:
-                                        if ep_it.get("status") != "Completed":
-                                            ep_it["status"] = "Completed"
-                                            ep_it["progress"] = 100
-                                            ep_it["filepath"] = str(cand_f.resolve()).replace("\\", "/")
-                                            ep_it["video_url"] = f"/media/{ep_it['filepath']}"
-                                            ep_it["size_mb"] = f"{sz_mb:.1f}"
-                                            self.stats["completed"] += 1
-                                            self._recalc_progress(selected_eps)
-                                            self.add_log(f"✔ [EP {ep_n:02d}/{total:02d}] 100% Completed ({sz_mb:.1f} MB, Full HD)")
+                                _try_mark_ep_completed(
+                                    ep_it,
+                                    cand_f,
+                                    min_bytes=1000000,
+                                    log_msg=f"✔ [EP {ep_n:02d}/{total:02d}] 100% Completed ({{sz_mb:.1f}} MB, Full HD)",
+                                    remove_invalid=True,
+                                )
 
             if all(ep.get("status") == "Completed" for ep in selected_eps):
                 if auto_merge_full and not self.stop_requested:
@@ -3040,27 +3292,15 @@ class DramaDownloadManager:
                 ep_file_name = f"EP_{ep_num:02d}.mp4"
                 dest_file = drama_dest_dir / ep_file_name
 
-                # If existing file is a dummy clip (< 1 MB), remove it
-                if dest_file.exists() and dest_file.stat().st_size < 1000000:
-                    try:
-                        dest_file.unlink()
-                    except Exception:
-                        pass
-
-                # 1. If file already exists and is an authentic video (> 1 MB), keep it!
-                if dest_file.exists() and dest_file.stat().st_size > 1000000:
-                    sz_mb = dest_file.stat().st_size / (1024 * 1024)
-                    with self._lock:
-                        if ep.get("status") != "Completed":
-                            ep["status"] = "Completed"
-                            ep["progress"] = 100
-                            ep["filepath"] = str(dest_file.resolve()).replace("\\", "/")
-                            ep["video_url"] = f"/media/{ep['filepath']}"
-                            ep["size_mb"] = f"{sz_mb:.1f}"
-                            self.stats["completed"] += 1
-                            self._recalc_progress(selected_eps)
-                            self.add_log(f"✔ Episode {ep_num:02d} verified on disk ({sz_mb:.1f} MB, Full HD)")
-                    return True
+                # 1. If file already exists and is an authentic video (> 1 MB), keep it; unlink invalid/audio-only files
+                if dest_file.exists():
+                    if _try_mark_ep_completed(
+                        ep,
+                        dest_file,
+                        min_bytes=1000000,
+                        log_msg=f"✔ Episode {ep_num:02d} verified on disk ({{sz_mb:.1f}} MB, Full HD)",
+                    ):
+                        return True
 
                 with self._lock:
                     ep["status"] = "Downloading"
@@ -3148,26 +3388,30 @@ class DramaDownloadManager:
                 for attempt_url in cand_urls:
                     if self.stop_requested:
                         return False
-                    success = download_m3u8_stream_turbo(attempt_url, dest_file, timeout_sec=180, progress_callback=single_ep_hook)
-                    if not success or not dest_file.exists() or dest_file.stat().st_size < 1000000:
-                        # Resilient fallback: Try direct chunked streaming ONLY if not m3u8 (mp4/ts/etc.)
-                        if ".m3u8" not in attempt_url.lower():
-                            success = download_stream_turbo_chunked(attempt_url, dest_file, timeout_sec=60, progress_callback=single_ep_hook)
-                    if success and dest_file.exists() and dest_file.stat().st_size > 1000000:
-                        sz_mb = dest_file.stat().st_size / (1024 * 1024)
-                        with self._lock:
-                            ep["status"] = "Completed"
-                            ep["progress"] = 100
-                            ep["filepath"] = str(dest_file.resolve()).replace("\\", "/")
-                            ep["video_url"] = f"/media/{ep['filepath']}"
-                            ep["size_mb"] = f"{sz_mb:.1f}"
-                            self.stats["completed"] += 1
-                            self._recalc_progress(selected_eps)
-                            self.add_log(f"✔ Genuine drama episode {ep_num:02d} downloaded successfully ({sz_mb:.1f} MB, 1080p Turbo)")
+                    u_low = attempt_url.lower()
+                    if any(h in u_low for h in ("youtube.com", "youtu.be", "bilibili.com", "douyin.com", "kuaishou.com")):
+                        success = download_stream_universal(attempt_url, dest_file, timeout_sec=180, progress_cb=single_ep_hook)
+                    else:
+                        success = download_m3u8_stream_turbo(attempt_url, dest_file, timeout_sec=180, progress_callback=single_ep_hook)
+                        if not success or not has_valid_video_stream(dest_file, min_bytes=1000000):
+                            # Resilient fallback: Try direct chunked streaming ONLY if not m3u8 (mp4/ts/etc.)
+                            if ".m3u8" not in u_low:
+                                success = download_stream_turbo_chunked(attempt_url, dest_file, timeout_sec=60, progress_callback=single_ep_hook)
+                    if success and _try_mark_ep_completed(
+                        ep,
+                        dest_file,
+                        min_bytes=1000000,
+                        log_msg=f"✔ Genuine drama episode {ep_num:02d} downloaded successfully ({{sz_mb:.1f}} MB, 1080p Turbo)",
+                    ):
                         return True
+                    if dest_file.exists():
+                        try:
+                            dest_file.unlink()
+                        except Exception:
+                            pass
 
                 # 3. Source B: ByteDance CDN episode stream
-                if (not dest_file.exists() or dest_file.stat().st_size < 1000000):
+                if not has_valid_video_stream(dest_file, min_bytes=1000000):
                     use_sid = ep.get("series_id") or sid
                     target_vid = ep.get("vid", "")
                     if not target_vid and hongguo_vids:
@@ -3184,108 +3428,49 @@ class DramaDownloadManager:
 
                     if real_url:
                         download_stream_turbo_chunked(real_url, dest_file, timeout_sec=120, progress_callback=single_ep_hook)
-                        if dest_file.exists() and dest_file.stat().st_size > 1000000:
-                            sz_mb = dest_file.stat().st_size / (1024 * 1024)
-                            with self._lock:
-                                ep["status"] = "Completed"
-                                ep["progress"] = 100
-                                ep["filepath"] = str(dest_file.resolve()).replace("\\", "/")
-                                ep["video_url"] = f"/media/{ep['filepath']}"
-                                ep["size_mb"] = f"{sz_mb:.1f}"
-                                self.stats["completed"] += 1
-                                self._recalc_progress(selected_eps)
-                                self.add_log(f"✔ Real drama episode {ep_num:02d} downloaded from ByteDance ({sz_mb:.1f} MB, 1080p)")
+                        if _try_mark_ep_completed(
+                            ep,
+                            dest_file,
+                            min_bytes=1000000,
+                            log_msg=f"✔ Real drama episode {ep_num:02d} downloaded from ByteDance ({{sz_mb:.1f}} MB, 1080p)",
+                        ):
                             return True
 
                 # 4. Source C: Single Full Drama Video Stream (全集) fallback (only when downloading standalone movie or single ep)
-                if (not dest_file.exists() or dest_file.stat().st_size < 1000000) and (1 in cluster_streams) and total_cnt == 1:
+                if not has_valid_video_stream(dest_file, min_bytes=1000000) and (1 in cluster_streams) and total_cnt == 1:
                     s1 = cluster_streams[1]
                     if s1.get("stream_url") and ("全集" in s1.get("title", "") or total_cnt == 1):
                         success = download_m3u8_stream_turbo(s1["stream_url"], dest_file, timeout_sec=300, progress_callback=single_ep_hook)
-                        if success and dest_file.exists() and dest_file.stat().st_size > 1000000:
-                            sz_mb = dest_file.stat().st_size / (1024 * 1024)
-                            with self._lock:
-                                ep["status"] = "Completed"
-                                ep["progress"] = 100
-                                ep["filepath"] = str(dest_file.resolve()).replace("\\", "/")
-                                ep["video_url"] = f"/media/{ep['filepath']}"
-                                ep["size_mb"] = f"{sz_mb:.1f}"
-                                self.stats["completed"] += 1
-                                self._recalc_progress(selected_eps)
-                                self.add_log(f"✔ Full drama movie stream downloaded as {dest_file.name} ({sz_mb:.1f} MB, 1080p)")
+                        if success and _try_mark_ep_completed(
+                            ep,
+                            dest_file,
+                            min_bytes=1000000,
+                            log_msg=f"✔ Full drama movie stream downloaded as {dest_file.name} ({{sz_mb:.1f}} MB, 1080p)",
+                        ):
                             return True
 
                 # 5. Source D: Online stream via yt-dlp
-                if (not dest_file.exists() or dest_file.stat().st_size < 1000000) and ep.get("stream_url") and ep["stream_url"].startswith("http"):
+                if not has_valid_video_stream(dest_file, min_bytes=1000000) and ep.get("stream_url") and ep["stream_url"].startswith("http"):
                     isolated_ep_dir = get_safe_isolated_temp(dest_file)
                     isolated_ep_dir.mkdir(parents=True, exist_ok=True)
                     try:
-                        def ydl_ep_hook(d):
-                            st = d.get('status')
-                            if st == 'downloading':
-                                frag_index = d.get('fragment_index')
-                                frag_count = d.get('fragment_count')
-                                if frag_index is not None and frag_count and frag_count > 0:
-                                    pct = int(min(98, max(1, (frag_index / frag_count) * 100)))
-                                    single_ep_hook(pct)
-                                else:
-                                    tot = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
-                                    down = d.get('downloaded_bytes', 0)
-                                    if tot > 0:
-                                        pct = int(min(99, max(1, (down / tot) * 100)))
-                                        single_ep_hook(pct)
-                            elif st == 'finished':
-                                single_ep_hook(100)
-
-                        ydl_down_opts = {
-                            'paths': {'home': str(isolated_ep_dir), 'temp': str(isolated_ep_dir)},
-                            'outtmpl': str(isolated_ep_dir / f"EP_{ep_num:02d}.%(ext)s"),
-                            'format': 'best[protocol=m3u8_native]/bestvideo[protocol=m3u8_native]+bestaudio[protocol=m3u8_native]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                            'ffmpeg_location': ffmpeg_bin,
-                            'merge_output_format': 'mp4',
-                            'concurrent_fragment_downloads': 16,
-                            'retries': 5,
-                            'fragment_retries': 5,
-                            'nocheckcertificate': True,
-                            'socket_timeout': 30,
-                            'extractor_args': {
-                                'youtube': {
-                                    'player_client': ['android', 'ios', 'mweb', 'web']
-                                }
-                            },
-                            'quiet': True,
-                            'no_warnings': True,
-                            'progress_hooks': [ydl_ep_hook]
-                        }
-                        try:
-                            with yt_dlp.YoutubeDL(ydl_down_opts) as ydl:
-                                ydl.download([ep["stream_url"]])
-                        except Exception:
-                            try:
-                                ydl_fb = dict(ydl_down_opts)
-                                ydl_fb['format'] = 'best/bestvideo+bestaudio'
-                                with yt_dlp.YoutubeDL(ydl_fb) as ydl_inst:
-                                    ydl_inst.download([ep["stream_url"]])
-                            except Exception:
-                                pass
-                        
-                        cand_eps = [c for c in isolated_ep_dir.glob(f"EP_{ep_num:02d}*") if c.is_file() and c.stat().st_size > 100000 and not any(x in c.name for x in [".part", ".ytdl", ".tmp"])]
-                        if cand_eps:
-                            safe_atomic_move(cand_eps[0], dest_file)
-
-                        if dest_file.exists() and dest_file.stat().st_size > 100000:
-                            sz_mb = dest_file.stat().st_size / (1024 * 1024)
-                            with self._lock:
-                                ep["status"] = "Completed"
-                                ep["progress"] = 100
-                                ep["filepath"] = str(dest_file.resolve()).replace("\\", "/")
-                                ep["video_url"] = f"/media/{ep['filepath']}"
-                                ep["size_mb"] = f"{sz_mb:.1f}"
-                                self.stats["completed"] += 1
-                                self._recalc_progress(selected_eps)
-                                self.add_log(f"✔ Live video stream downloaded via yt-dlp: {ep_file_name} ({sz_mb:.1f} MB)")
-                            clean_stray_download_artifacts(drama_dest_dir)
-                            return True
+                        if _download_via_yt_dlp(
+                            ep["stream_url"],
+                            isolated_ep_dir,
+                            f"EP_{ep_num:02d}",
+                            dest_file,
+                            timeout_sec=180,
+                            progress_callback=single_ep_hook,
+                            min_bytes=100000,
+                        ):
+                            if _try_mark_ep_completed(
+                                ep,
+                                dest_file,
+                                min_bytes=100000,
+                                log_msg=f"✔ Live video stream downloaded via yt-dlp: {ep_file_name} ({{sz_mb:.1f}} MB)",
+                            ):
+                                clean_stray_download_artifacts(drama_dest_dir)
+                                return True
                     except Exception:
                         pass
                     finally:
@@ -3293,59 +3478,48 @@ class DramaDownloadManager:
                         clean_stray_download_artifacts(drama_dest_dir)
 
                 # 6. Source E: Local file path copy
-                if (not dest_file.exists() or dest_file.stat().st_size < 1000000) and ep.get("filepath") and Path(ep["filepath"]).exists():
+                if not has_valid_video_stream(dest_file, min_bytes=1000000) and ep.get("filepath") and Path(ep["filepath"]).exists():
                     try:
                         src_p = Path(ep["filepath"])
-                        if src_p.resolve() != dest_file.resolve():
+                        if src_p.resolve() != dest_file.resolve() and has_valid_video_stream(src_p, min_bytes=100000):
                             shutil.copy2(src_p, dest_file)
                     except Exception:
                         pass
 
                 # 6.5 Source VIP: Direct Hongguo offline decryption fallback for this single episode
-                if (not dest_file.exists() or dest_file.stat().st_size < 1000000) and sid and hongguo_service.is_installed():
+                if not has_valid_video_stream(dest_file, min_bytes=1000000) and sid and hongguo_service.is_installed():
                     try:
                         hongguo_service.download_episodes_batch(sid, [ep_num], drama_dest_dir, concurrency=1, quality="1080p")
-                        if dest_file.exists() and dest_file.stat().st_size > 1000000:
-                            sz_mb = dest_file.stat().st_size / (1024 * 1024)
-                            with self._lock:
-                                ep["status"] = "Completed"
-                                ep["progress"] = 100
-                                ep["filepath"] = str(dest_file.resolve()).replace("\\", "/")
-                                ep["video_url"] = f"/media/{ep['filepath']}"
-                                ep["size_mb"] = f"{sz_mb:.1f}"
-                                self.stats["completed"] += 1
-                                self._recalc_progress(selected_eps)
-                                self.add_log(f"✔ [VIP Engine] Single episode {ep_num:02d} decrypted ({sz_mb:.1f} MB, 1080p)")
+                        if _try_mark_ep_completed(
+                            ep,
+                            dest_file,
+                            min_bytes=1000000,
+                            log_msg=f"✔ [VIP Engine] Single episode {ep_num:02d} decrypted ({{sz_mb:.1f}} MB, 1080p)",
+                        ):
                             return True
                     except Exception:
                         pass
 
                 # 7. Source F: On-disk authentic file check
-                if not dest_file.exists() or dest_file.stat().st_size < 1000000:
+                if not has_valid_video_stream(dest_file, min_bytes=1000000):
                     auth_vid = find_authentic_episode_video(self.current_drama, ep_num, save_location)
-                    if auth_vid and auth_vid.exists() and auth_vid.resolve() != dest_file.resolve():
+                    if auth_vid and auth_vid.exists() and auth_vid.resolve() != dest_file.resolve() and has_valid_video_stream(auth_vid, min_bytes=100000):
                         try:
                             shutil.copy2(auth_vid, dest_file)
                         except Exception:
                             pass
 
                 # Final validation: Authentic video file check
-                if dest_file.exists() and dest_file.stat().st_size > 100000:
-                    file_size_mb = max(0.1, dest_file.stat().st_size / (1024 * 1024))
-                    with self._lock:
-                        ep["status"] = "Completed"
-                        ep["progress"] = 100
-                        ep["filepath"] = str(dest_file.resolve()).replace("\\", "/")
-                        ep["video_url"] = f"/media/{ep['filepath']}"
-                        ep["size_mb"] = f"{file_size_mb:.1f}"
-                        self.stats["completed"] += 1
-                        self._recalc_progress(selected_eps)
-                        self.add_log(f"✔ [EP {ep_num:02d}/{total_cnt:02d}] Saved: {dest_file.name} ({file_size_mb:.1f} MB, Authentic Video)")
+                if _try_mark_ep_completed(
+                    ep,
+                    dest_file,
+                    min_bytes=100000,
+                    log_msg=f"✔ [EP {ep_num:02d}/{total_cnt:02d}] Saved: {dest_file.name} ({{sz_mb:.1f}} MB, Authentic Video)",
+                ):
                     return True
                 else:
                     # Final safety fallback: Check if full movie or other episode exists in folder
-                    fallback_copied = False
-                    if full_movie_dest.exists() and full_movie_dest.stat().st_size > 1000000:
+                    if has_valid_video_stream(full_movie_dest, min_bytes=1000000):
                         try:
                             slice_cmd = [
                                 ffmpeg_bin, "-y",
@@ -3357,22 +3531,15 @@ class DramaDownloadManager:
                                 str(dest_file)
                             ]
                             subprocess.run(slice_cmd, capture_output=True, timeout=30, **silent_kw)
-                            if dest_file.exists() and dest_file.stat().st_size > 50000:
-                                fallback_copied = True
                         except Exception:
                             pass
 
-                    if dest_file.exists() and dest_file.stat().st_size > 50000:
-                        file_size_mb = max(0.1, dest_file.stat().st_size / (1024 * 1024))
-                        with self._lock:
-                            ep["status"] = "Completed"
-                            ep["progress"] = 100
-                            ep["filepath"] = str(dest_file.resolve()).replace("\\", "/")
-                            ep["video_url"] = f"/media/{ep['filepath']}"
-                            ep["size_mb"] = f"{file_size_mb:.1f}"
-                            self.stats["completed"] += 1
-                            self._recalc_progress(selected_eps)
-                            self.add_log(f"✔ [EP {ep_num:02d}/{total_cnt:02d}] Verified: {dest_file.name} ({file_size_mb:.1f} MB)")
+                    if _try_mark_ep_completed(
+                        ep,
+                        dest_file,
+                        min_bytes=50000,
+                        log_msg=f"✔ [EP {ep_num:02d}/{total_cnt:02d}] Verified: {dest_file.name} ({{sz_mb:.1f}} MB)",
+                    ):
                         return True
                     else:
                         # Cross-Platform Genuine Failover: Search for this EXACT drama on other platforms
@@ -3398,26 +3565,27 @@ class DramaDownloadManager:
                                             alt_url = alt_ep.get("stream_url") or alt_ep.get("download_url")
                                             if alt_url and str(alt_url).startswith("http"):
                                                 self.add_log(f"⚡ [Cross-Platform] Connecting genuine {cand_plat.upper()} stream for EP {ep_num:02d} of '{target_title}'...")
-                                                ok_dl = download_m3u8_stream_turbo(alt_url, dest_file, timeout_sec=180, progress_callback=single_ep_hook)
-                                                if not ok_dl or not dest_file.exists() or dest_file.stat().st_size < 100000:
-                                                    download_stream_turbo_chunked(alt_url, dest_file, timeout_sec=120, progress_callback=single_ep_hook)
-                                                if dest_file.exists() and dest_file.stat().st_size > 100000:
+                                                alt_low = str(alt_url).lower()
+                                                if any(h in alt_low for h in ("youtube.com", "youtu.be", "bilibili.com", "douyin.com", "kuaishou.com")):
+                                                    ok_dl = download_stream_universal(alt_url, dest_file, timeout_sec=180, progress_cb=single_ep_hook)
+                                                else:
+                                                    ok_dl = download_m3u8_stream_turbo(alt_url, dest_file, timeout_sec=180, progress_callback=single_ep_hook)
+                                                    if not ok_dl or not has_valid_video_stream(dest_file, min_bytes=100000):
+                                                        download_stream_turbo_chunked(alt_url, dest_file, timeout_sec=120, progress_callback=single_ep_hook)
+                                                if has_valid_video_stream(dest_file, min_bytes=100000):
                                                     fb_success = True
                                                     break
-                        except Exception as cp_err:
+                                                elif dest_file.exists():
+                                                    dest_file.unlink(missing_ok=True)
+                        except Exception:
                             pass
 
-                        if fb_success and dest_file.exists() and dest_file.stat().st_size > 100000:
-                            sz_mb = dest_file.stat().st_size / (1024 * 1024)
-                            with self._lock:
-                                ep["status"] = "Completed"
-                                ep["progress"] = 100
-                                ep["filepath"] = str(dest_file.resolve()).replace("\\", "/")
-                                ep["video_url"] = f"/media/{ep['filepath']}"
-                                ep["size_mb"] = f"{sz_mb:.1f}"
-                                self.stats["completed"] += 1
-                                self._recalc_progress(selected_eps)
-                                self.add_log(f"✔ [EP {ep_num:02d}/{total_cnt:02d}] Genuine episode downloaded via Cross-Platform ({sz_mb:.1f} MB, Full HD)")
+                        if fb_success and _try_mark_ep_completed(
+                            ep,
+                            dest_file,
+                            min_bytes=100000,
+                            log_msg=f"✔ [EP {ep_num:02d}/{total_cnt:02d}] Genuine episode downloaded via Cross-Platform ({{sz_mb:.1f}} MB, Full HD)",
+                        ):
                             return True
 
                         with self._lock:
@@ -3546,7 +3714,7 @@ class DramaDownloadManager:
                         self._recalc_progress(selected_eps)
 
                 ok_master = download_stream_universal(effective_master_url, full_movie_dest, timeout_sec=600, progress_cb=master_live_hook)
-                if ok_master and full_movie_dest.exists() and full_movie_dest.stat().st_size > 1000000:
+                if ok_master and has_valid_video_stream(full_movie_dest, min_bytes=1000000):
                     self.add_log(f"✔ Full drama master video downloaded ({full_movie_dest.stat().st_size / (1024*1024):.1f} MB). Slicing all {total_needed} episodes in 5-episode batches...")
                     slice_full_movie_into_episodes(
                         full_movie_dest,
@@ -3559,6 +3727,8 @@ class DramaDownloadManager:
                         stop_checker=lambda: self.stop_requested,
                         on_episode_start=on_ep_slice_start
                     )
+                elif full_movie_dest.exists():
+                    full_movie_dest.unlink(missing_ok=True)
 
             BATCH_SIZE = 5
             ep_batches = [selected_eps[i:i + BATCH_SIZE] for i in range(0, len(selected_eps), BATCH_SIZE)]
@@ -3604,7 +3774,7 @@ class DramaDownloadManager:
                 self.add_log(f"⚡ [Super Auto-Recovery] Activating 5-Episode Batch Recovery for {len(failed_eps)} uncompleted episodes...")
                 
                 # Step 1: Slice from full movie if already downloaded on disk
-                if full_movie_dest.exists() and full_movie_dest.stat().st_size > 1000000:
+                if has_valid_video_stream(full_movie_dest, min_bytes=1000000):
                     slice_full_movie_into_episodes(
                         full_movie_dest,
                         drama_dest_dir,
@@ -3618,19 +3788,16 @@ class DramaDownloadManager:
                     for ep in failed_eps:
                         ep_n = ep.get("episode_number", 1)
                         ep_f = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
-                        if ep_f.exists() and ep_f.stat().st_size > 100000:
-                            sz_mb = ep_f.stat().st_size / (1024 * 1024)
-                            if ep.get("status") != "Completed":
-                                ep["status"] = "Completed"
-                                ep["progress"] = 100
-                                ep["filepath"] = str(ep_f.resolve()).replace("\\", "/")
-                                ep["video_url"] = f"/media/{ep['filepath']}"
-                                ep["size_mb"] = f"{sz_mb:.1f}"
-                                self.stats["completed"] += 1
-                                if self.stats["failed"] > 0:
-                                    self.stats["failed"] -= 1
-                                self._recalc_progress(selected_eps)
-                                self.add_log(f"✔ [EP {ep_n:02d}/{total:02d}] Sliced & Verified: {ep_f.name}")
+                        if ep.get("status") != "Completed":
+                            _try_mark_ep_completed(
+                                ep,
+                                ep_f,
+                                min_bytes=100000,
+                                log_msg=f"✔ [EP {ep_n:02d}/{total:02d}] Sliced & Verified: {ep_f.name}",
+                                dec_failed=True,
+                            )
+                elif full_movie_dest.exists():
+                    full_movie_dest.unlink(missing_ok=True)
 
                 # Step 2: If full movie does not exist on disk, resolve and download it now!
                 if any(ep.get("status") != "Completed" for ep in selected_eps) and not self.stop_requested:
@@ -3661,7 +3828,7 @@ class DramaDownloadManager:
                                 self._recalc_progress(selected_eps)
 
                         ok_master = download_stream_universal(effective_master_url, full_movie_dest, timeout_sec=600, progress_cb=rec_live_hook)
-                        if ok_master and full_movie_dest.exists() and full_movie_dest.stat().st_size > 1000000:
+                        if ok_master and has_valid_video_stream(full_movie_dest, min_bytes=1000000):
                             slice_full_movie_into_episodes(
                                 full_movie_dest,
                                 drama_dest_dir,
@@ -3676,19 +3843,16 @@ class DramaDownloadManager:
                             for ep in failed_eps:
                                 ep_n = ep.get("episode_number", 1)
                                 ep_f = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
-                                if ep_f.exists() and ep_f.stat().st_size > 100000:
-                                    sz_mb = ep_f.stat().st_size / (1024 * 1024)
-                                    if ep.get("status") != "Completed":
-                                        ep["status"] = "Completed"
-                                        ep["progress"] = 100
-                                        ep["filepath"] = str(ep_f.resolve()).replace("\\", "/")
-                                        ep["video_url"] = f"/media/{ep['filepath']}"
-                                        ep["size_mb"] = f"{sz_mb:.1f}"
-                                        self.stats["completed"] += 1
-                                        if self.stats["failed"] > 0:
-                                            self.stats["failed"] -= 1
-                                        self._recalc_progress(selected_eps)
-                                        self.add_log(f"✔ [EP {ep_n:02d}/{total:02d}] Auto-Recovered & Verified: {ep_f.name}")
+                                if ep.get("status") != "Completed":
+                                    _try_mark_ep_completed(
+                                        ep,
+                                        ep_f,
+                                        min_bytes=100000,
+                                        log_msg=f"✔ [EP {ep_n:02d}/{total:02d}] Auto-Recovered & Verified: {ep_f.name}",
+                                        dec_failed=True,
+                                    )
+                        elif full_movie_dest.exists():
+                            full_movie_dest.unlink(missing_ok=True)
 
                 # Step 3: For Hongguo dramas with sid, retry missing episodes via VIP engine in batches of 5
                 missing_ep_nums = [ep.get("episode_number", idx + 1) for idx, ep in enumerate(selected_eps) if ep.get("status") != "Completed"]
@@ -3713,18 +3877,13 @@ class DramaDownloadManager:
                                 ep_n = ep.get("episode_number") or 1
                                 if ep_n in batch_nums and ep.get("status") != "Completed":
                                     ep_f = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
-                                    if ep_f.exists() and ep_f.stat().st_size > 100000:
-                                        sz_mb = ep_f.stat().st_size / (1024 * 1024)
-                                        ep["status"] = "Completed"
-                                        ep["progress"] = 100
-                                        ep["filepath"] = str(ep_f.resolve()).replace("\\", "/")
-                                        ep["video_url"] = f"/media/{ep['filepath']}"
-                                        ep["size_mb"] = f"{sz_mb:.1f}"
-                                        self.stats["completed"] += 1
-                                        if self.stats["failed"] > 0:
-                                            self.stats["failed"] -= 1
-                                        self._recalc_progress(selected_eps)
-                                        self.add_log(f"✔ [VIP Recovery] [EP {ep_n:02d}/{total:02d}] Decrypted: {ep_f.name}")
+                                    _try_mark_ep_completed(
+                                        ep,
+                                        ep_f,
+                                        min_bytes=100000,
+                                        log_msg=f"✔ [VIP Recovery] [EP {ep_n:02d}/{total:02d}] Decrypted: {ep_f.name}",
+                                        dec_failed=True,
+                                    )
                     except Exception as hg_ex:
                         self.add_log(f"Notice: VIP Recovery note: {hg_ex}")
 
@@ -3739,20 +3898,9 @@ class DramaDownloadManager:
                 for idx, ep in enumerate(selected_eps):
                     ep_n = ep.get("episode_number", idx + 1)
                     ep_f = drama_dest_dir / f"EP_{ep_n:02d}.mp4"
-                    if ep_f.exists() and ep_f.stat().st_size > 100000:
-                        sz_mb = ep_f.stat().st_size / (1024 * 1024)
-                        if ep.get("status") != "Completed":
-                            ep["status"] = "Completed"
-                            ep["progress"] = 100
-                            ep["filepath"] = str(ep_f.resolve()).replace("\\", "/")
-                            ep["video_url"] = f"/media/{ep['filepath']}"
-                            ep["size_mb"] = f"{sz_mb:.1f}"
-                            self.stats["completed"] += 1
-                            if self.stats["failed"] > 0:
-                                self.stats["failed"] -= 1
-                    else:
-                        # If episode could not be downloaded, mark honestly as Failed without duplicating other episodes
-                        if ep.get("status") != "Completed":
+                    if ep.get("status") != "Completed":
+                        if not _try_mark_ep_completed(ep, ep_f, min_bytes=100000, dec_failed=True):
+                            # If episode could not be downloaded, mark honestly as Failed without duplicating other episodes
                             ep["status"] = "Failed"
                             ep["progress"] = 0
 
@@ -3765,10 +3913,11 @@ class DramaDownloadManager:
             # Auto-Merge into Full Drama Movie (ទាញចប់មួយរឿងពេញតែម្ដង)
             if auto_merge_full and not self.stop_requested:
                 try:
-                    if not (full_movie_dest.exists() and full_movie_dest.stat().st_size > 5000000):
+                    if not has_valid_video_stream(full_movie_dest, min_bytes=5000000):
+                        full_movie_dest.unlink(missing_ok=True)
                         self.add_log("🎬 Assembling FULL DRAMA MOVIE (ផ្គុំគ្រប់ភាគជារឿងពេញ ១០០%)...")
                         merge_success = merge_drama_episodes_to_full_movie(drama_dest_dir, full_movie_dest)
-                        if merge_success and full_movie_dest.exists() and full_movie_dest.stat().st_size > 5000000:
+                        if merge_success and has_valid_video_stream(full_movie_dest, min_bytes=5000000):
                             fm_sz = full_movie_dest.stat().st_size / (1024 * 1024)
                             self.stats["full_movie_file"] = str(full_movie_dest.resolve()).replace("\\", "/")
                             self.stats["full_movie_name"] = full_movie_name
@@ -3914,7 +4063,7 @@ drama_downloader = DramaDownloadManager()
 
 
 def download_video_from_url(url: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
-    """Single URL download via yt-dlp."""
+    """Single URL download via yt-dlp enforcing video+audio muxed MP4 output."""
     if not url or not url.strip():
         raise ValueError("URL cannot be empty")
 
@@ -3922,35 +4071,47 @@ def download_video_from_url(url: str, output_dir: Optional[str] = None) -> Dict[
     target_dir.mkdir(parents=True, exist_ok=True)
 
     out_template = str(target_dir / "%(id)s.%(ext)s")
+    ffmpeg_bin = get_ffmpeg_path()
+    last_err: Optional[Exception] = None
 
-    ydl_opts = {
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        'outtmpl': out_template,
-        'ffmpeg_location': get_ffmpeg_path(),
-        'merge_output_format': 'mp4',
-        'noplaylist': True,
-        'quiet': True,
-        'no_warnings': True
-    }
+    for use_fb in (False, True):
+        ydl_opts = _build_yt_dlp_video_opts(
+            target_dir,
+            out_template,
+            ffmpeg_bin,
+            socket_timeout=30,
+            use_fallback_clients=use_fb,
+        )
+        ydl_opts['noplaylist'] = True
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                video_id = info.get('id', 'video')
+                title = info.get('title', 'Downloaded Video')
+                duration = info.get('duration', 0.0)
+                thumbnail = info.get('thumbnail', '')
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        video_id = info.get('id', 'video')
-        title = info.get('title', 'Downloaded Video')
-        duration = info.get('duration', 0.0)
-        thumbnail = info.get('thumbnail', '')
+                expected_file = target_dir / f"{video_id}.mp4"
+                if not expected_file.exists():
+                    candidates = [
+                        c for c in target_dir.glob(f"{video_id}.*")
+                        if c.is_file() and not any(x in c.name for x in [".part", ".ytdl", ".tmp"])
+                    ]
+                    if candidates:
+                        expected_file = candidates[0]
 
-        expected_file = target_dir / f"{video_id}.mp4"
-        if not expected_file.exists():
-            candidates = list(target_dir.glob(f"{video_id}.*"))
-            if candidates:
-                expected_file = candidates[0]
+                if has_valid_video_stream(expected_file, min_bytes=50000):
+                    return {
+                        "success": True,
+                        "video_file": str(expected_file),
+                        "title": title,
+                        "duration": float(duration or 0.0),
+                        "thumbnail": thumbnail,
+                        "source_url": url
+                    }
+                if expected_file.exists():
+                    expected_file.unlink(missing_ok=True)
+        except Exception as e:
+            last_err = e
 
-        return {
-            "success": True,
-            "video_file": str(expected_file),
-            "title": title,
-            "duration": float(duration),
-            "thumbnail": thumbnail,
-            "source_url": url
-        }
+    raise RuntimeError(f"Failed to download a valid video stream from URL: {last_err or 'no video track'}")

@@ -136,23 +136,30 @@ def get_ffmpeg_path() -> str:
 def load_audio_safely(file_path: str) -> AudioSegment:
     """
     Robust audio loader that decodes MP3/AAC/WAV/etc directly via FFmpeg binary at 48kHz stereo.
+    Retries with explicit '-f mp3' if FFmpeg mis-probes an ID3 MP3 stream (e.g. as vvc).
     """
-    cmd = [
-        get_ffmpeg_path(),
-        "-nostdin",
-        "-y",
-        "-i", str(file_path),
-        "-vn",
-        "-acodec", "pcm_s16le",
-        "-ar", "48000",
-        "-ac", "2",
-        "-f", "wav",
-        "-"
-    ]
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120, **get_silent_kwargs())
+    def _run_decode(extra_in_args: List[str]) -> subprocess.CompletedProcess:
+        cmd = [
+            get_ffmpeg_path(),
+            "-nostdin",
+            "-y",
+            *extra_in_args,
+            "-i", str(file_path),
+            "-vn",
+            "-acodec", "pcm_s16le",
+            "-ar", "48000",
+            "-ac", "2",
+            "-f", "wav",
+            "-"
+        ]
+        return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120, **get_silent_kwargs())
+
+    proc = _run_decode([])
+    if proc.returncode != 0 and str(file_path).lower().endswith(".mp3"):
+        proc = _run_decode(["-f", "mp3"])
     if proc.returncode != 0:
         raise RuntimeError(f"FFmpeg audio decode failed: {proc.stderr.decode('utf-8', errors='ignore')}")
-    
+
     return AudioSegment.from_wav(io.BytesIO(proc.stdout))
 
 
@@ -397,17 +404,63 @@ def time_stretch_audio_segment(seg: AudioSegment, speed: float) -> AudioSegment:
     return seg
 
 
+def _soft_limit_int16(samples_f32):
+    """Broadcast soft-knee limiter preventing harsh digital clipping above -1.2 dBFS."""
+    import numpy as np
+    knee = 28500.0
+    ceiling_room = 32767.0 - knee
+    abs_s = np.abs(samples_f32)
+    over = abs_s > knee
+    if np.any(over):
+        excess = (abs_s[over] - knee) / ceiling_room
+        limited = knee + ceiling_room * np.tanh(excess)
+        samples_f32 = samples_f32.copy()
+        samples_f32[over] = np.sign(samples_f32[over]) * limited
+    return np.clip(samples_f32, -32767.0, 32767.0).astype(np.int16)
+
+
+def _probe_bgm_makeup_gain(bgm_path: str) -> float:
+    """Measure isolated BGM track loudness and return safe makeup gain (1.0x - 3.0x) so BGM isn't overly faint."""
+    try:
+        cmd = [
+            get_ffmpeg_path(),
+            "-nostdin",
+            "-ss", "15",
+            "-t", "8",
+            "-i", str(bgm_path),
+            "-af", "volumedetect",
+            "-f", "null",
+            "-"
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", timeout=10, **get_silent_kwargs())
+        mean_db = None
+        max_db = -10.0
+        for line in (res.stderr or "").splitlines():
+            if "mean_volume:" in line:
+                mean_db = float(line.split("mean_volume:")[1].split("dB")[0].strip())
+            elif "max_volume:" in line:
+                max_db = float(line.split("max_volume:")[1].split("dB")[0].strip())
+        if mean_db is not None and mean_db < -24.0:
+            # Target around -21 dB mean bed, bounded safely below clipping (-2 dB max)
+            desired_gain = 10.0 ** (min(10.0, (-21.0 - mean_db)) / 20.0)
+            headroom_cap = 10.0 ** (max(0.0, (-2.0 - max_db)) / 20.0)
+            return max(1.0, min(3.0, desired_gain, headroom_cap))
+    except Exception:
+        pass
+    return 1.0
+
+
 def mix_dubbed_audio(
     original_audio_path: Optional[str],
     dialogue_items: List[Dict[str, Any]],
     output_mixed_path: str,
     total_duration_sec: Optional[float] = None,
-    ducking_volume_factor: float = 0.0,    # 0.0 = Absolute Zero Vocal Bleed (Chinese speech 100% silenced)
+    ducking_volume_factor: float = 0.15,   # Default 15% balanced cinema BGM bed
     speech_volume_boost_db: float = 3.5,   # Boost speech clarity by +3.5dB
     dubbing_mode: str = "smart_bgm"        # "smart_bgm", "pure_voice", "standard_ducking"
 ) -> str:
     """
-    Mix Khmer voice clips into the timeline with Smart BGM Audio Ducking and Zero Vocal Leakage.
+    Mix Khmer voice clips into the timeline with Smart BGM Audio Ducking, Soft Limiter, and Zero Vocal Leakage.
     Uses ultra-lightweight streaming processing (<50MB RAM, zero disk overflow)
     Guarantees audible, rich audio output with zero silent drops and zero Chinese vocal whispering.
     """
@@ -425,13 +478,15 @@ def mix_dubbed_audio(
         target_dur = get_media_duration(original_audio_path)
 
     # 2. Filter valid lines and compute exact lip-sync onset/offset
-    # Self-healing: If any dialogue item lacks audio, synthesize immediately via failover!
+    # Fast path skips redundant FFmpeg decode if TTS already verified success & valid file size
     valid_lines = []
     max_d_end = 0.0
+    from tts_engine import synthesize_via_google_khmer_api, is_valid_audible_audio
     for idx, item in enumerate(dialogue_items):
         af = item.get("audio_file")
-        from tts_engine import synthesize_via_google_khmer_api, is_valid_audible_audio
-        if not af or not Path(af).exists() or not is_valid_audible_audio(af):
+        af_path = Path(af) if af else None
+        needs_verify = not (af_path and af_path.exists() and af_path.stat().st_size >= 400 and item.get("success"))
+        if needs_verify and (not af_path or not af_path.exists() or not is_valid_audible_audio(af)):
             txt = (item.get("text_km") or item.get("text", "")).strip()
             if txt:
                 try:
@@ -441,10 +496,11 @@ def mix_dubbed_audio(
                     if fixed_audio and is_valid_audible_audio(fixed_audio):
                         item["audio_file"] = fixed_audio
                         af = fixed_audio
+                        af_path = Path(fixed_audio)
                 except Exception as rec_err:
                     print(f"On-the-fly audio recovery note: {rec_err}")
 
-        if af and Path(af).exists() and is_valid_audible_audio(af):
+        if af_path and af_path.exists() and af_path.stat().st_size >= 250:
             valid_lines.append((idx, item))
         d_end = float(item.get("end", item.get("orig_end", 0.0)))
         if d_end > max_d_end:
@@ -478,14 +534,12 @@ def mix_dubbed_audio(
             next_orig_s = float(next_item.get("orig_start", next_item.get("start", 0.0)))
             next_start_ms = max(0, int(next_orig_s * 1000))
             hard_limit_ms = max(300, next_start_ms - orig_start_ms - 40)
-            target_window_ms = min(mouth_dur_ms + 50, hard_limit_ms)
+            target_window_ms = min(mouth_dur_ms + 80, hard_limit_ms)
         else:
-            hard_limit_ms = mouth_dur_ms + 200
-            target_window_ms = mouth_dur_ms + 50
+            hard_limit_ms = mouth_dur_ms + 250
+            target_window_ms = mouth_dur_ms + 80
 
         # Professional Film ADR Lip-Sync Anticipation Lead:
-        # Visual mouth opening precedes acoustic speech energy by 100ms - 150ms.
-        # Advancing audio placement by 130ms guarantees speech starts immediately as lips move!
         lip_sync_advance_ms = 130
         min_start_bound = last_lead_end_ms + 30 if last_lead_end_ms > 0 else 0
         start_ms = max(min_start_bound, orig_start_ms - lip_sync_advance_ms)
@@ -494,9 +548,8 @@ def mix_dubbed_audio(
         item["start"] = round(start_ms / 1000.0, 2)
         item["end"] = round((start_ms + mouth_dur_ms) / 1000.0, 2)
 
-        # Pad speech intervals slightly wider to guarantee 100% muting of original vocal attacks/trails
-        pad_start = max(0, start_ms - 100)
-        pad_end = orig_end_ms + 250
+        pad_start = max(0, start_ms - 90)
+        pad_end = orig_end_ms + 220
         speech_intervals.append((pad_start, pad_end))
         prepared_lines.append({
             "idx": idx,
@@ -509,24 +562,11 @@ def mix_dubbed_audio(
             "audio_file": item["audio_file"]
         })
 
-    # Merge speech intervals for smooth S-curve ducking (hold across 2.2s conversational pauses)
-    speech_intervals.sort(key=lambda x: x[0])
-    merged_intervals = []
-    for start, end in speech_intervals:
-        if not merged_intervals:
-            merged_intervals.append([start, end])
-        else:
-            prev = merged_intervals[-1]
-            if start <= prev[1] + 2200:  # Smooth hold across 2.2s conversation pauses (Zero vocal bleed)
-                prev[1] = max(prev[1], end)
-            else:
-                merged_intervals.append([start, end])
-
-    # 4. Respect user's BGM Volume setting
+    # 4. Respect user's BGM Volume setting & compute smart BGM ducking profile
     try:
-        user_bgm_vol = float(ducking_volume_factor) if ducking_volume_factor is not None else 0.12
+        user_bgm_vol = float(ducking_volume_factor) if ducking_volume_factor is not None else 0.15
     except Exception:
-        user_bgm_vol = 0.12
+        user_bgm_vol = 0.15
     user_bgm_vol = max(0.0, min(1.0, user_bgm_vol))
 
     has_valid_bgm = (
@@ -536,11 +576,38 @@ def mix_dubbed_audio(
         and Path(original_audio_path).exists()
     )
 
-    bgm_nominal = user_bgm_vol if has_valid_bgm else 0.0
-    bgm_ducked = 0.0  # ZERO VOCAL BLEED: During speech intervals, duck original vocals strictly to 0.0!
+    is_isolated_bgm = bool(
+        has_valid_bgm and "bgm" in Path(str(original_audio_path)).stem.lower()
+    )
 
-    fade_in_frames = max(1, int(0.120 * target_fr))   # 120ms S-curve dip
-    fade_out_frames = max(1, int(0.250 * target_fr))  # 250ms S-curve return
+    if has_valid_bgm and is_isolated_bgm:
+        makeup_gain = _probe_bgm_makeup_gain(str(original_audio_path))
+        bgm_nominal = user_bgm_vol * makeup_gain
+        # Smooth cinema music bed under Khmer speech instead of dead silence
+        bgm_ducked = bgm_nominal * 0.32 if dubbing_mode == "smart_bgm" else bgm_nominal * 0.25
+        gap_hold_ms = 900
+        fade_in_frames = max(1, int(0.150 * target_fr))   # 150ms smooth S-curve dip
+        fade_out_frames = max(1, int(0.300 * target_fr))  # 300ms smooth S-curve swell
+    else:
+        bgm_nominal = user_bgm_vol if has_valid_bgm else 0.0
+        # Raw audio track still has foreign vocals: strictly mute during speech to prevent vocal bleed
+        bgm_ducked = 0.0
+        gap_hold_ms = 2000
+        fade_in_frames = max(1, int(0.120 * target_fr))
+        fade_out_frames = max(1, int(0.250 * target_fr))
+
+    # Merge speech intervals for smooth S-curve ducking
+    speech_intervals.sort(key=lambda x: x[0])
+    merged_intervals = []
+    for start, end in speech_intervals:
+        if not merged_intervals:
+            merged_intervals.append([start, end])
+        else:
+            prev = merged_intervals[-1]
+            if start <= prev[1] + gap_hold_ms:
+                prev[1] = max(prev[1], end)
+            else:
+                merged_intervals.append([start, end])
 
     # 5. Start streaming FFmpeg MP3 Encoder process (Direct to output file)
     enc_cmd = [
@@ -613,9 +680,13 @@ def mix_dubbed_audio(
 
                 try:
                     line_seg = load_audio_safely(pline["audio_file"])
+                    if len(line_seg) < 80 or line_seg.dBFS < -55.0:
+                        active_line_idx += 1
+                        continue
+
                     if boost_val > 0:
                         max_peak = line_seg.max_dBFS
-                        safe_gain = min(boost_val, max(0.0, -0.8 - max_peak)) if max_peak > -12.0 else boost_val
+                        safe_gain = min(boost_val, max(0.0, -0.5 - max_peak)) if max_peak > -14.0 else boost_val
                         if safe_gain > 0:
                             line_seg = line_seg + safe_gain
 
@@ -637,14 +708,14 @@ def mix_dubbed_audio(
                     tw_ms = pline["target_window_ms"]
                     if cur_dur_ms > tw_ms and tw_ms >= 250:
                         needed_speed = cur_dur_ms / max(200, tw_ms)
-                        # Adaptive time-stretch up to 1.45x ensures audio completes before actor closes mouth!
-                        speed_to_apply = min(1.45, max(1.02, needed_speed))
+                        # Adaptive time-stretch up to 1.65x ensures full sentences finish before actor closes mouth!
+                        speed_to_apply = min(1.65, max(1.02, needed_speed))
                         if speed_to_apply >= 1.04:
                             line_seg = time_stretch_audio_segment(line_seg, speed_to_apply)
 
                     hl_ms = pline["hard_limit_ms"]
                     if len(line_seg) > hl_ms:
-                        line_seg = line_seg[:hl_ms].fade_out(25)
+                        line_seg = line_seg[:hl_ms].fade_out(40)
 
                     if line_seg.frame_rate != target_fr or line_seg.channels != channels:
                         line_seg = line_seg.set_frame_rate(target_fr).set_channels(channels)
@@ -737,11 +808,11 @@ def mix_dubbed_audio(
                         ramp_up = bgm_ducked + (bgm_nominal - bgm_ducked) * 0.5 * (1.0 - np.cos(t))
                         gain_blk[loc_rise_s:loc_rise_e] = np.minimum(gain_blk[loc_rise_s:loc_rise_e], ramp_up)
 
-                gain_blk = np.clip(gain_blk, 0.0, 1.0)
+                gain_blk = np.clip(gain_blk, 0.0, 3.0)
                 ducked_bg = bg_samples * gain_blk[:, np.newaxis]
-                mixed_blk = np.clip(ducked_bg + chunk_speech.astype(np.float32), -32768, 32767).astype(np.int16)
+                mixed_blk = _soft_limit_int16(ducked_bg + chunk_speech.astype(np.float32))
             else:
-                mixed_blk = np.clip(chunk_speech, -32768, 32767).astype(np.int16)
+                mixed_blk = _soft_limit_int16(chunk_speech.astype(np.float32))
 
             enc_proc.stdin.write(mixed_blk.tobytes())
             cur_sample += n_frames

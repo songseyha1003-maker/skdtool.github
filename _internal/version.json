@@ -1,9 +1,10 @@
 {
-  "version": "2.0.5",
+  "version": "2.0.7",
   "app_name": "SN TOOL",
-  "release_date": "2026-11-11",
-  "title": "SN TOOL - Official Release v2.0.5 (Complete Genuine Downloader, Nisay AI & Catalog Upgrade)",
-  "release_notes": "• 🎯 100% Genuine Drama Downloader & Stream Resolution: Eliminated fake fallbacks and duplicate spoofing, enforced strict stream resolution, and accurately flagged unavailable episodes.\n• 🔄 Instant Random Discovery & Fresh Catalog Rotation: Refreshing the catalog now rotates fresh dramas dynamically across platforms.\n• 🧠 Nisay Translation Circuit Breaker & Fallback: Added automatic failover/circuit-breaker resilience plus expanded speaker persona detection for accurate male/female voice assignment.\n• 🛡️ License & UI Integrity Upgrades: Eliminated false-positive hardware lockouts, added dynamic days-left display on the license badge, and enabled manual Reinstall/Update modal access.\n• 🧹 Storage & Performance Optimization: Cleaned legacy caches and synchronized all runtime modules.",
+  "release_date": "2026-11-26",
+  "title": "SN TOOL - Official Release v2.0.7 (1080p Muxed Video Fix & Upgraded OTA Engine)",
+  "subtitle": "Upgraded 1080p Drama Downloader & 1080p+ HLS Preview, automatic scratch disk cleaner, and hardened SHA-256 OTA updater.",
+  "release_notes": "• 🎬 1080p Muxed Video+Audio Guarantee: Eliminates audio-only YouTube HLS downloads (itag=233) and renders crisp 1080p+ HLS video+audio in the in-app Preview player.\n• 🛡️ FFmpeg Video-Stream Verification: Verifies every episode and full drama file actually contains a valid video stream before marking Completed 100%.\n• 🧹 Automatic Disk Cleanup (disk_cleaner.py): Automatically removes temporary WAV/voice scratch files after dubbing so Drive D/C never fills up.\n• 🚀 Upgraded In-App OTA Updater: Fixed /api/update/ping restart sync (eliminating 96% stall), added SHA-256 archive verification & Zip-Slip protection.\n• 🔑 Full User Credential Preservation: Preserves both license.key and user AI provider API keys automatically during upgrades.",
   "download_url": "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip",
   "channel": "stable"
 }

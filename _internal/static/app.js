@@ -1841,8 +1841,20 @@ async function executeMultiCompress() {
 // --------------------------------------------------------------------------
 // Global Power Tools Output Folder Opener
 // --------------------------------------------------------------------------
+let _lastPowerFolderOpenedTime = 0;
+let _lastPowerFolderOpenedPath = "";
+
 async function openPowerOutputFolder(type = 'merge') {
+    const now = Date.now();
     const targetPath = lastPowerOutputPaths[type] || lastPowerOutputPaths.merge || 'data/exports';
+    const norm = String(targetPath || '').trim().toLowerCase().replace(/\\/g, '/');
+    if (norm && (now - _lastPowerFolderOpenedTime < 8000) && (norm === _lastPowerFolderOpenedPath)) {
+        console.log(`[OpenFolder] Debounced duplicate power folder open: ${norm}`);
+        return;
+    }
+    _lastPowerFolderOpenedTime = now;
+    _lastPowerFolderOpenedPath = norm;
+
     try {
         const res = await fetch('/api/system/open-folder', {
             method: 'POST',
@@ -4990,18 +5002,45 @@ function toggleSelectAllQueueEpisodes() {
 
 let dlHlsInstance = null;
 
+function _normalizePreviewPlaybackUrl(rawUrl) {
+    if (!rawUrl) return '';
+    if (rawUrl.startsWith('/media/') || rawUrl.startsWith('/api/')) {
+        return rawUrl;
+    }
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+        const low = rawUrl.toLowerCase();
+        const extParam = (low.includes('.m3u8') || low.includes('hls_playlist') || low.includes('youtube.com') || low.includes('youtu.be'))
+            ? '&ext=.m3u8'
+            : '';
+        return `/api/downloader/stream-proxy?url=${encodeURIComponent(rawUrl)}${extParam}`;
+    }
+    return rawUrl;
+}
+
 function loadVideoWithHls(video, url, posterUrl) {
     if (dlHlsInstance) {
         dlHlsInstance.destroy();
         dlHlsInstance = null;
     }
+    const playUrl = _normalizePreviewPlaybackUrl(url);
     if (posterUrl) video.poster = posterUrl;
-    if (url && (url.includes('.m3u8') || url.includes('/hls/')) && window.Hls && Hls.isSupported()) {
-        dlHlsInstance = new Hls({ enableWorker: true });
-        dlHlsInstance.loadSource(url);
+    if (playUrl && (playUrl.includes('.m3u8') || playUrl.includes('/hls/')) && window.Hls && Hls.isSupported()) {
+        dlHlsInstance = new Hls({ enableWorker: true, maxBufferLength: 30, maxMaxBufferLength: 60 });
+        dlHlsInstance.on(Hls.Events.ERROR, (event, data) => {
+            if (data && data.fatal) {
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && data.details === 'manifestParsingError') {
+                    // Upstream resolved to direct MP4 instead of HLS playlist: fallback gracefully to native <video>
+                    dlHlsInstance.destroy();
+                    dlHlsInstance = null;
+                    video.src = playUrl.replace('&ext=.m3u8', '').replace('ext=.m3u8&', '');
+                    video.play().catch(() => {});
+                }
+            }
+        });
+        dlHlsInstance.loadSource(playUrl);
         dlHlsInstance.attachMedia(video);
     } else {
-        video.src = url;
+        video.src = playUrl;
     }
 }
 
@@ -5284,8 +5323,20 @@ function updateDramaSavePathDisplay(customFolder = '') {
     if (qElem) qElem.textContent = winPath;
 }
 
+let _lastDramaFolderOpenedTime = 0;
+let _lastDramaFolderOpenedPath = "";
+
 async function openCurrentDramaFolder(specificFolder = '') {
+    const now = Date.now();
     const target = specificFolder || getComputedDramaFolder();
+    const norm = String(target || '').trim().toLowerCase().replace(/\\/g, '/');
+    if (norm && (now - _lastDramaFolderOpenedTime < 8000) && (norm === _lastDramaFolderOpenedPath)) {
+        console.log(`[OpenFolder] Debounced duplicate drama folder open: ${norm}`);
+        return;
+    }
+    _lastDramaFolderOpenedTime = now;
+    _lastDramaFolderOpenedPath = norm;
+
     showToast(`📂 Opening folder in File Explorer...`);
     try {
         const res = await fetch('/api/downloader/open-folder', {
@@ -10285,6 +10336,7 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
         let loggedDialogueIds = new Set();
         let sepProgressSim = 2;
         let sepTimerTicks = 0;
+        let isTaskCompletedHandled = false;
 
         appendLiveTerminalLine(`Dubbing engine dispatched in background. Task ID: ${activeDubbingTaskId}`, "[Video 1/1]", "info");
 
@@ -10357,8 +10409,12 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                 }
 
                 if (sData.status === "completed") {
-                    clearInterval(activeDubbingPollTimer);
-                    activeDubbingPollTimer = null;
+                    if (isTaskCompletedHandled) return;
+                    isTaskCompletedHandled = true;
+                    if (activeDubbingPollTimer) {
+                        clearInterval(activeDubbingPollTimer);
+                        activeDubbingPollTimer = null;
+                    }
                     activeDubbingTaskId = null;
                     currentDubbedProject = sData.project;
                     clearStagedFiles();
@@ -10422,8 +10478,12 @@ async function startAutoDubbingPipeline(file, customTitle = null) {
                     }
 
                 } else if (sData.status === "failed") {
-                    clearInterval(activeDubbingPollTimer);
-                    activeDubbingPollTimer = null;
+                    if (isTaskCompletedHandled) return;
+                    isTaskCompletedHandled = true;
+                    if (activeDubbingPollTimer) {
+                        clearInterval(activeDubbingPollTimer);
+                        activeDubbingPollTimer = null;
+                    }
                     activeDubbingTaskId = null;
 
                     const errTitle = sData.error || "Dubbing process interrupted";
@@ -10725,6 +10785,7 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
             let loggedDialogueIds = new Set();
             let sepProgressSim = 5;
             let sepTimerTicks = 0;
+            let isEpisodeHandled = false;
 
             const pollInterval = setInterval(async () => {
                 try {
@@ -10775,6 +10836,8 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                     }
 
                     if (sData.status === "completed") {
+                        if (isEpisodeHandled) return;
+                        isEpisodeHandled = true;
                         clearInterval(pollInterval);
                         completedProjects.push(sData.project);
                         currentDubbedProject = sData.project;
@@ -10799,6 +10862,8 @@ async function startStudioBatchDubbingPipeline(files, outputMode = 'separate') {
                         showToast(`EP ${epNum}/${totalBatchCount} dubbed successfully!`);
                         resolve(true);
                     } else if (sData.status === "failed") {
+                        if (isEpisodeHandled) return;
+                        isEpisodeHandled = true;
                         clearInterval(pollInterval);
                         const epErrTitle = sData.error || 'Episode dubbing failed';
                         const epErrStage = sData.error_stage || `Episode ${epNum}/${totalBatchCount}`;
@@ -10952,12 +11017,27 @@ function showDubbingSuccessNotification(data) {
     }
 }
 
+let _lastExportFolderOpenedTime = 0;
+let _lastExportFolderOpenedKey = "";
+
 async function openExportFolderDirect(targetPath) {
+    const now = Date.now();
     try {
         let pathToOpen = targetPath || currentCustomExportFolder || '';
         if (pathToOpen && typeof pathToOpen === 'string') {
             pathToOpen = sanitizeExportFolderPath(pathToOpen) || pathToOpen;
         }
+        // Folder-level debounce: extract directory to prevent file & directory double calls
+        const norm = String(pathToOpen || '').trim().replace(/\\/g, '/');
+        const folderKey = norm.replace(/\/[^/]+\.(mp4|mkv|mov|avi|ts|srt|json)$/i, '').toLowerCase();
+
+        if (folderKey && (now - _lastExportFolderOpenedTime < 8000) && (folderKey === _lastExportFolderOpenedKey)) {
+            console.log(`[OpenFolder] Debounced duplicate folder open: ${folderKey}`);
+            return;
+        }
+        _lastExportFolderOpenedTime = now;
+        _lastExportFolderOpenedKey = folderKey;
+
         const res = await fetch('/api/projects/open-folder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -11561,6 +11641,7 @@ async function checkForAppUpdates(manual = false) {
         if (progContainer) progContainer.style.display = 'none';
 
         const btnUpdate = document.getElementById('btn-do-update');
+        const btnCancel = document.getElementById('btn-cancel-update');
         const btnText = document.getElementById('btn-do-update-text');
         const badgeText = document.getElementById('update-badge-text');
         const subtitle = document.getElementById('update-subtitle');
@@ -11578,14 +11659,19 @@ async function checkForAppUpdates(manual = false) {
                     subtitle.textContent = `A new version (v${latVer}) is available with the latest neural engine upgrades and performance improvements.`;
                 }
             }
-            if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> <span id="btn-do-update-text">Update Now (v${latVer})</span>`;
+            if (btnCancel) btnCancel.textContent = "Remind Me Later";
+            if (btnUpdate) {
+                btnUpdate.style.display = 'inline-flex';
+                btnUpdate.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> <span id="btn-do-update-text">Update Now (v${latVer})</span>`;
+            }
             openModal('modal-update');
             if (manual) showToast(`New version available: v${latVer}`);
         } else {
-            // Already on latest official build: only pop up modal when manually requested so user can view notes or reinstall
-            if (badgeText) badgeText.textContent = "LATEST OFFICIAL BUILD";
-            if (subtitle) subtitle.textContent = `Official release notes and feature highlights for SN Tool Studio Pro (v${curVer}):`;
-            if (btnUpdate) btnUpdate.innerHTML = `<i class="fa-solid fa-rotate"></i> <span id="btn-do-update-text">Reinstall / Update (v${curVer})</span>`;
+            // Already on latest official build: confirm Up to Date and hide Update button so user isn't prompted to update again
+            if (badgeText) badgeText.textContent = "UP TO DATE • LATEST BUILD";
+            if (subtitle) subtitle.textContent = `កម្មវិធីរបស់អ្នកកំពុងប្រើប្រាស់ Version ថ្មីបំផុត (v${curVer}) រួចហើយ — មិនចាំបាច់ Update ម្ដងទៀតទេ។`;
+            if (btnCancel) btnCancel.textContent = "OK, Close";
+            if (btnUpdate) btnUpdate.style.display = 'none';
             if (manual) {
                 showToast(`SN Tool Studio Pro v${curVer} is up to date!`);
                 openModal('modal-update');
@@ -11616,58 +11702,77 @@ async function executeAppUpdate() {
 
     if (btnUpdate) btnUpdate.disabled = true;
     if (progContainer) progContainer.style.display = 'flex';
-    if (statusMsg) statusMsg.textContent = "Downloading update package from Google Drive Cloud...";
-    if (progressBar) progressBar.style.width = "35%";
-    if (progressPct) progressPct.textContent = "35%";
+    if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-cloud-arrow-down fa-bounce" style="color:#38bdf8;"></i> Connecting to Cloud CDN server...';
+    if (progressBar) progressBar.style.width = "5%";
+    if (progressPct) progressPct.textContent = "5%";
 
+    let pollProgressTimer = null;
     try {
-        // Step progress simulation while downloading
-        const simInterval = setInterval(() => {
-            if (progressBar) {
-                const currentW = parseInt(progressBar.style.width) || 35;
-                if (currentW < 85) {
-                    progressBar.style.width = (currentW + 12) + "%";
-                    if (progressPct) progressPct.textContent = (currentW + 12) + "%";
+        // Poll real server-side download progress every 400ms
+        pollProgressTimer = setInterval(async () => {
+            try {
+                const progResp = await fetch('/api/update/progress?_t=' + Date.now(), { cache: 'no-store' });
+                if (progResp.ok) {
+                    const pdata = await progResp.json();
+                    if (pdata && pdata.percent > 0) {
+                        const pct = Math.min(96, Math.max(5, pdata.percent));
+                        if (progressBar) progressBar.style.width = pct + "%";
+                        if (progressPct) progressPct.textContent = pct + "%";
+                        if (statusMsg && pdata.message) {
+                            statusMsg.innerHTML = '<i class="fa-solid fa-cloud-arrow-down fa-bounce" style="color:#38bdf8;"></i> ' + pdata.message;
+                        }
+                    }
                 }
+            } catch (e) {
+                // Ignore transient network errors during progress polling
             }
-        }, 600);
+        }, 400);
 
         const fallbackUrl = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/SN_TOOL_UPDATE.zip";
         const dlUrl = (_latestUpdateInfo && _latestUpdateInfo.download_url) ? _latestUpdateInfo.download_url : fallbackUrl;
+        const sha256 = (_latestUpdateInfo && _latestUpdateInfo.sha256) ? _latestUpdateInfo.sha256 : "";
         const res = await fetch('/api/update/apply', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                download_url: dlUrl
+                download_url: dlUrl,
+                sha256: sha256
             })
         });
-        clearInterval(simInterval);
+
+        if (pollProgressTimer) clearInterval(pollProgressTimer);
+
         const data = await res.json();
         if (data.success) {
-            const targetVer = (_latestUpdateInfo && _latestUpdateInfo.latest_version) ? _latestUpdateInfo.latest_version : '1.1.6';
-            if (progressBar) progressBar.style.width = "90%";
-            if (progressPct) progressPct.textContent = "90%";
+            const targetVer = (_latestUpdateInfo && _latestUpdateInfo.latest_version) ? _latestUpdateInfo.latest_version : '2.0.7';
+            const expectNewVer = Boolean(_latestUpdateInfo && _latestUpdateInfo.has_update);
+            if (progressBar) progressBar.style.width = "96%";
+            if (progressPct) progressPct.textContent = "96%";
             if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#10b981;"></i> Updating to v' + targetVer + '... Application is restarting automatically.';
             showToast("Update patch downloaded! Restarting to v" + targetVer + "...");
 
-            // Poll server until the newly updated version comes online
+            // Poll fast zero-latency /api/update/ping until extraction completes and newly updated version is online
             let pollAttempts = 0;
-            const maxPoll = 40;
+            const maxPoll = 45;
             setTimeout(() => {
                 const pollInterval = setInterval(async () => {
                     pollAttempts++;
                     try {
-                        const ping = await fetch('/api/update/check?_t=' + Date.now(), { cache: 'no-store' });
+                        const ping = await fetch('/api/update/ping?_t=' + Date.now(), { cache: 'no-store' });
                         if (ping.ok) {
                             const pdata = await ping.json();
-                            clearInterval(pollInterval);
-                            const finalVer = (pdata && pdata.current_version) ? pdata.current_version : targetVer;
-                            if (progressBar) progressBar.style.width = "100%";
-                            if (progressPct) progressPct.textContent = "100%";
-                            if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Update to v' + finalVer + ' complete! Refreshing...';
-                            setTimeout(() => {
-                                window.location.href = window.location.pathname + '?_v=' + Date.now();
-                            }, 1200);
+                            const verMatches = !expectNewVer || !pdata.version || pdata.version === targetVer;
+                            const isReady = pdata && pdata.status === 'ok' && !pdata.updating && verMatches;
+                            if (isReady) {
+                                clearInterval(pollInterval);
+                                const finalVer = (pdata && pdata.version) ? pdata.version : targetVer;
+                                if (progressBar) progressBar.style.width = "100%";
+                                if (progressPct) progressPct.textContent = "100%";
+                                if (statusMsg) statusMsg.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Update to v' + finalVer + ' complete! Refreshing...';
+                                setTimeout(() => {
+                                    window.location.href = window.location.pathname + '?_v=' + Date.now();
+                                }, 1000);
+                            }
                         }
                     } catch (netErr) {
                         if (pollAttempts >= maxPoll) {
@@ -11675,14 +11780,19 @@ async function executeAppUpdate() {
                             window.location.href = window.location.pathname + '?_v=' + Date.now();
                         }
                     }
-                }, 1500);
+                }, 1000);
             }, 3500);
         } else {
+            if (progressBar) progressBar.style.width = "0%";
+            if (progressPct) progressPct.textContent = "Failed";
             if (statusMsg) statusMsg.textContent = "Error: " + (data.error || "Update failed");
             if (btnUpdate) btnUpdate.disabled = false;
             showToast("Error: " + (data.error || "Update failed"));
         }
     } catch (err) {
+        if (pollProgressTimer) clearInterval(pollProgressTimer);
+        if (progressBar) progressBar.style.width = "0%";
+        if (progressPct) progressPct.textContent = "Failed";
         if (statusMsg) statusMsg.textContent = "Error: " + err.message;
         if (btnUpdate) btnUpdate.disabled = false;
         showToast("Update error: " + err.message);

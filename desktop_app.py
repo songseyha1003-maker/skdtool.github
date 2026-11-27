@@ -109,7 +109,7 @@ if getattr(sys, 'frozen', False):
             "server", "downloader", "translator", "pipeline", "stt_engine",
             "tts_engine", "audio_processor", "video_processor", "hongguo_service",
             "hongguo_db", "shortmax_service", "reelshort_service", "vocal_remover",
-            "license_engine", "update", "batch_engine", "series_memory",
+            "license_engine", "update", "disk_cleaner", "batch_engine", "series_memory",
             "recap_engine", "subtitle_styler", "translate_video",
             "nisay_transcribe", "nisay_translate"
         }

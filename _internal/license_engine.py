@@ -1441,11 +1441,18 @@ def get_revoked_keys() -> List[str]:
     return []
 
 
+def _append_cache_buster(url: str) -> str:
+    """Append timestamp cache-buster query param for raw CDN endpoints."""
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}_cb={int(time.time())}"
+
+
 def sync_online_keys() -> Dict[str, Any]:
     """
     Consolidate all valid keys (DEFAULT_MASTER_KEYS, custom keys, admin history)
     and export into data/license_keys_online.json, syncing to dist/SN_TOOL if present.
     """
+    base_dir = Path(__file__).resolve().parent
     all_keys = {}
 
     # 1. Add Default Master Keys (Always active, universal ANY HWID)
@@ -1500,9 +1507,9 @@ def sync_online_keys() -> Dict[str, Any]:
 
     # 6. Save to data/license_keys_online.json and distribution folders
     target_paths = [
-        Path("data/license_keys_online.json"),
-        Path("dist/SN_TOOL/data/license_keys_online.json"),
-        Path("dist/SN_TOOL/_internal/data/license_keys_online.json"),
+        base_dir / "data" / "license_keys_online.json",
+        base_dir / "dist" / "SN_TOOL" / "data" / "license_keys_online.json",
+        base_dir / "dist" / "SN_TOOL" / "_internal" / "data" / "license_keys_online.json",
     ]
     for tp in target_paths:
         try:
@@ -1515,10 +1522,10 @@ def sync_online_keys() -> Dict[str, Any]:
 
     # 7. Also sync revoked_keys.json across root, data/, and dist/
     revoked_paths = [
-        Path("data/revoked_keys.json"),
-        Path("revoked_keys.json"),
-        Path("dist/SN_TOOL/data/revoked_keys.json"),
-        Path("dist/SN_TOOL/_internal/data/revoked_keys.json"),
+        base_dir / "data" / "revoked_keys.json",
+        base_dir / "revoked_keys.json",
+        base_dir / "dist" / "SN_TOOL" / "data" / "revoked_keys.json",
+        base_dir / "dist" / "SN_TOOL" / "_internal" / "data" / "revoked_keys.json",
     ]
     rev_payload = {
         "revoked_keys": list(revoked),
@@ -1555,10 +1562,10 @@ def _cache_online_key_locally(cleaned_key: str, record: Dict[str, Any]):
         pass
 
 
-def check_key_online(cleaned_key: str, current_hwid: str) -> Tuple[bool, str, Dict[str, Any]]:
+def _lookup_online_key(cleaned_key: str, current_hwid: str) -> Tuple[bool, str, Dict[str, Any], str]:
     """
-    Check if a key is registered in online cloud registry (GitHub) or local online database.
-    Returns (is_valid, message, record_dict).
+    Look up a key in online cloud registry (GitHub) or local online database.
+    Returns (is_valid, message, record_dict, source).
     """
     cfg_file = resolve_file_path("license_config.json")
     online_url = "https://raw.githubusercontent.com/songseyha1003-maker/skdtool.github/main/data/license_keys_online.json"
@@ -1573,12 +1580,12 @@ def check_key_online(cleaned_key: str, current_hwid: str) -> Tuple[bool, str, Di
     record = None
     source = "offline_db"
 
-    # 1. Try remote Cloud / GitHub registry first (quick 2.5s timeout)
+    # 1. Try remote Cloud / GitHub registry first (quick 2.5s timeout, cache-busted)
     if online_url:
         try:
             import urllib.request
             req = urllib.request.Request(
-                online_url,
+                _append_cache_buster(online_url),
                 headers={"User-Agent": "SN_TOOL_License_Client", "Cache-Control": "no-cache"}
             )
             with urllib.request.urlopen(req, timeout=2.5) as resp:
@@ -1605,24 +1612,33 @@ def check_key_online(cleaned_key: str, current_hwid: str) -> Tuple[bool, str, Di
                 pass
 
     if not record:
-        return False, "", {}
+        return False, "", {}, source
 
     # Validate status
     if record.get("status") == "REVOKED":
-        return False, "❌ This License Key has been suspended/revoked by Admin", {}
+        return False, "❌ This License Key has been suspended/revoked by Admin", {}, source
 
     # Validate HWID binding
     bound_hwid = str(record.get("bound_hwid", "ANY")).strip().upper()
     if bound_hwid not in ("ANY", "*", "", "NONE") and bound_hwid != current_hwid:
-        return False, "❌ This License Key is locked to a different machine (HWID mismatch)", {}
+        return False, "❌ This License Key is locked to a different machine (HWID mismatch)", {}, source
 
-    # Validate Expiration
+    # Validate Expiration (return record too so already-activated devices sync reduced/expired dates)
     expiry_ts = record.get("expiry_timestamp", 0)
     if expiry_ts > 0 and time.time() > expiry_ts:
-        return False, f"⚠️ This License Key has expired ({record.get('expires_at')})", {}
+        return False, f"⚠️ This License Key has expired ({record.get('expires_at')})", record, source
 
     status_tag = "Online Cloud" if source == "online_cloud" else "Verified"
-    return True, f"✅ License Key {status_tag} is valid and active!", record
+    return True, f"✅ License Key {status_tag} is valid and active!", record, source
+
+
+def check_key_online(cleaned_key: str, current_hwid: str) -> Tuple[bool, str, Dict[str, Any]]:
+    """
+    Check if a key is registered in online cloud registry (GitHub) or local online database.
+    Returns (is_valid, message, record_dict).
+    """
+    is_valid, msg, record, _ = _lookup_online_key(cleaned_key, current_hwid)
+    return is_valid, msg, record
 
 
 def revoke_license_key(target_key: str, reason: str = "Banned by Admin") -> Tuple[bool, str]:
@@ -1870,38 +1886,19 @@ def delete_license_key_record(target_key: str) -> Tuple[bool, str]:
     return True, f"🗑️ Successfully deleted Key {cleaned}!"
 
 
-def extend_license_key(target_key: str, additional_days: int = 30, plan: Optional[str] = None) -> Tuple[bool, str, Dict[str, Any]]:
-    """
-    Remotely extend/renew an existing license key by adding days or setting to Lifetime.
-    Updates admin_key_history.json, custom_keys.json, and data/license_keys_online.json.
-    When the user opens the tool, check_current_device_license() automatically syncs the new date OTA!
-    """
-    cleaned = target_key.strip().upper()
-    if not cleaned:
-        return False, "Please select or enter a License Key to extend", {}
+_CLOUD_PUSH_LOCK = threading.Lock()
 
-    # Unban if revoked
-    revoked_list = get_revoked_keys()
-    if cleaned in revoked_list:
-        revoked_list.remove(cleaned)
-        try:
-            with open(REVOKED_KEYS_FILE, "w", encoding="utf-8") as f:
-                json.dump({"revoked_keys": revoked_list, "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
 
-    now = datetime.now()
-    now_ts = int(now.timestamp())
-
-    # Find existing record in history or custom keys
+def _load_key_record_sources(cleaned: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
+    """Load admin_key_history.json and custom_keys.json and locate target key record."""
     target_record = None
-    
-    # 1. Search in admin_key_history.json
-    history = []
+    history: List[Dict[str, Any]] = []
     if ADMIN_HISTORY_FILE.exists():
         try:
             with open(ADMIN_HISTORY_FILE, "r", encoding="utf-8") as f:
-                history = json.load(f)
+                loaded = json.load(f)
+                if isinstance(loaded, list):
+                    history = loaded
             for r in history:
                 if r.get("license_key", "").strip().upper() == cleaned:
                     target_record = r
@@ -1909,58 +1906,28 @@ def extend_license_key(target_key: str, additional_days: int = 30, plan: Optiona
         except Exception:
             history = []
 
-    # 2. Search in custom_keys.json
-    custom_dict = {}
+    custom_dict: Dict[str, Any] = {}
     if CUSTOM_KEYS_FILE.exists():
         try:
             with open(CUSTOM_KEYS_FILE, "r", encoding="utf-8") as f:
-                custom_dict = json.load(f)
-            if cleaned in custom_dict:
-                if not target_record:
-                    target_record = custom_dict[cleaned]
+                loaded_ck = json.load(f)
+                if isinstance(loaded_ck, dict):
+                    custom_dict = loaded_ck
+            if not target_record and cleaned in custom_dict:
+                target_record = custom_dict[cleaned]
         except Exception:
             custom_dict = {}
 
-    # If not found in either file, create a base record
-    if not target_record:
-        target_record = {
-            "license_key": cleaned,
-            "client_name": "Customer",
-            "plan": plan or "PRO",
-            "duration_days": additional_days,
-            "created_at": now.strftime("%Y-%m-%d %H:%M:%S"),
-            "bound_hwid": "ANY",
-            "status": "ACTIVE"
-        }
-        history.insert(0, target_record)
+    return target_record, history, custom_dict
 
-    # Calculate new expiry
-    if additional_days <= 0 or (plan and plan.upper() in ("LIFETIME", "LIFE")):
-        target_record["expires_at"] = "LIFETIME"
-        target_record["expiry_timestamp"] = 0
-        target_record["plan"] = plan or "PRO Lifetime"
-        target_record["status"] = "ACTIVE"
-    else:
-        # Calculate base timestamp
-        current_expiry_ts = target_record.get("expiry_timestamp", 0)
-        # If currently active and unexpired, extend from current expiry date!
-        if current_expiry_ts > now_ts:
-            base_ts = current_expiry_ts
-        else:
-            base_ts = now_ts
-        
-        new_ts = base_ts + (additional_days * 86400)
-        new_dt = datetime.fromtimestamp(new_ts)
-        target_record["expires_at"] = new_dt.strftime("%Y-%m-%d")
-        target_record["expiry_timestamp"] = new_ts
-        target_record["duration_days"] = int(target_record.get("duration_days", 0)) + additional_days
-        target_record["status"] = "ACTIVE"
-        if plan:
-            target_record["plan"] = plan
 
-    target_record["last_renewed"] = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    # Save to admin_key_history.json
+def _save_key_record_sources(
+    cleaned: str,
+    target_record: Dict[str, Any],
+    history: List[Dict[str, Any]],
+    custom_dict: Dict[str, Any],
+):
+    """Persist updated key record to history, custom_keys (if present), and online registry."""
     found_in_hist = False
     for i, r in enumerate(history):
         if r.get("license_key", "").strip().upper() == cleaned:
@@ -1976,8 +1943,7 @@ def extend_license_key(target_key: str, additional_days: int = 30, plan: Optiona
     except Exception:
         pass
 
-    # Save to custom_keys.json if present or if was custom
-    if cleaned in custom_dict or CUSTOM_KEYS_FILE.exists():
+    if cleaned in custom_dict:
         custom_dict[cleaned] = target_record
         try:
             with open(CUSTOM_KEYS_FILE, "w", encoding="utf-8") as f:
@@ -1985,36 +1951,242 @@ def extend_license_key(target_key: str, additional_days: int = 30, plan: Optiona
         except Exception:
             pass
 
-    # Synchronize all online keys and distribution files
     try:
         sync_online_keys()
     except Exception:
         pass
 
+
+def _resolve_current_expiry_date(target_record: Dict[str, Any]):
+    """Return current expiration date object, or None if Lifetime."""
+    expires_at = str(target_record.get("expires_at", "")).strip().upper()
+    expiry_ts = int(target_record.get("expiry_timestamp", 0) or 0)
+    if expires_at in ("LIFETIME", "0000", "NEVER", "") or expiry_ts == 0:
+        return None
+    if expiry_ts > 0:
+        return datetime.fromtimestamp(expiry_ts).date()
+    try:
+        return datetime.strptime(expires_at.split()[0], "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
+def _derive_plan_label(existing_plan: Optional[str], requested_plan: Optional[str], days_left: int) -> str:
+    """Compute a clean plan display label when adjusting a finite expiry."""
+    if requested_plan and requested_plan.strip().upper() not in ("", "LIFETIME", "LIFE"):
+        return requested_plan.strip()
+    cur = (existing_plan or "PRO").strip()
+    if cur.upper() in ("LIFETIME", "LIFE", "PRO LIFETIME") or cur.upper().startswith("PRO "):
+        return f"PRO {max(days_left, 0)}D" if days_left >= 0 else "EXPIRED"
+    return cur
+
+
+def update_license_expiry(
+    target_key: str,
+    mode: str = "add",
+    days: int = 30,
+    exact_date: Optional[str] = None,
+    plan: Optional[str] = None,
+) -> Tuple[bool, str, Dict[str, Any]]:
+    """
+    Remotely update a license key's expiration date (add, subtract, set_days, set_date, or lifetime).
+    Updates admin_key_history.json, custom_keys.json, and data/license_keys_online.json.
+    """
+    cleaned = str(target_key or "").strip().upper()
+    if not cleaned:
+        return False, "Please select or enter a License Key", {}
+
+    norm_mode = str(mode or "add").strip().lower()
+    if norm_mode not in ("add", "subtract", "set_days", "set_date", "lifetime"):
+        return False, f"Unsupported expiry adjustment mode: {mode}", {}
+
+    now = datetime.now()
+    now_ts = int(now.timestamp())
+    target_record, history, custom_dict = _load_key_record_sources(cleaned)
+
+    if not target_record:
+        target_record = {
+            "license_key": cleaned,
+            "client_name": "Customer",
+            "plan": plan or "PRO",
+            "duration_days": max(0, int(days or 0)),
+            "created_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "bound_hwid": "ANY",
+            "status": "ACTIVE"
+        }
+        history.insert(0, target_record)
+
+    # Unban automatically when extending or upgrading to Lifetime
+    if norm_mode in ("add", "lifetime"):
+        revoked_list = get_revoked_keys()
+        if cleaned in revoked_list:
+            revoked_list.remove(cleaned)
+            try:
+                with open(REVOKED_KEYS_FILE, "w", encoding="utf-8") as f:
+                    json.dump({"revoked_keys": revoked_list, "last_updated": now.strftime("%Y-%m-%d %H:%M:%S")}, f, indent=2, ensure_ascii=False)
+            except Exception:
+                pass
+        target_record["status"] = "ACTIVE"
+    elif target_record.get("status") != "REVOKED":
+        target_record["status"] = "ACTIVE"
+
+    if norm_mode == "lifetime" or (norm_mode == "add" and (int(days or 0) <= 0 or (plan and plan.strip().upper() in ("LIFETIME", "LIFE")))):
+        target_record["expires_at"] = "LIFETIME"
+        target_record["expiry_timestamp"] = 0
+        target_record["duration_days"] = 0
+        target_record["plan"] = plan or "PRO Lifetime"
+    else:
+        if norm_mode == "add":
+            add_days = int(days or 0)
+            curr_date = _resolve_current_expiry_date(target_record)
+            base_date = curr_date if (curr_date and curr_date > now.date()) else now.date()
+            new_date = base_date + timedelta(days=add_days)
+        elif norm_mode == "subtract":
+            sub_days = int(days or 0)
+            if sub_days <= 0:
+                return False, "Please enter a positive number of days to subtract", {}
+            curr_date = _resolve_current_expiry_date(target_record)
+            if curr_date is None:
+                return False, "Cannot subtract days from a LIFETIME key. Use 'Set Exact Days' or 'Pick Date' instead.", {}
+            new_date = curr_date - timedelta(days=sub_days)
+        elif norm_mode == "set_days":
+            set_n = int(days if days is not None else 0)
+            new_date = now.date() + timedelta(days=set_n)
+        else:  # set_date
+            raw_date = str(exact_date or "").strip()
+            if not raw_date:
+                return False, "Please pick a valid expiry date (YYYY-MM-DD)", {}
+            try:
+                new_date = datetime.strptime(raw_date.split()[0], "%Y-%m-%d").date()
+            except Exception:
+                return False, f"Invalid date format '{raw_date}'. Expected YYYY-MM-DD.", {}
+
+        new_dt = datetime(new_date.year, new_date.month, new_date.day, 23, 59, 59)
+        target_record["expires_at"] = new_date.strftime("%Y-%m-%d")
+        target_record["expiry_timestamp"] = int(new_dt.timestamp())
+        days_left = (new_date - now.date()).days
+        target_record["duration_days"] = max(0, days_left)
+        target_record["plan"] = _derive_plan_label(target_record.get("plan"), plan, days_left)
+
+    target_record["last_renewed"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    _save_key_record_sources(cleaned, target_record, history, custom_dict)
+
     enriched = calculate_key_live_status(target_record)
-    msg = f"🎉 License Key {cleaned} extended remotely successfully! New expiry date: {target_record.get('expires_at')}"
+    exp_display = target_record.get("expires_at")
+    if norm_mode == "subtract":
+        msg = f"✂️ Reduced days on {cleaned}! New expiry: {exp_display}"
+    elif norm_mode in ("set_days", "set_date"):
+        msg = f"📅 Updated expiry for {cleaned} to {exp_display}"
+    else:
+        msg = f"🎉 License Key {cleaned} extended remotely! New expiry date: {exp_display}"
     return True, msg, enriched
 
 
-def push_online_registry_async():
-    """Commit and push updated license_keys_online.json to GitHub repository in background."""
-    def _worker():
+def extend_license_key(target_key: str, additional_days: int = 30, plan: Optional[str] = None) -> Tuple[bool, str, Dict[str, Any]]:
+    """
+    Remotely extend/renew an existing license key by adding days or setting to Lifetime.
+    Updates admin_key_history.json, custom_keys.json, and data/license_keys_online.json.
+    """
+    is_lifetime = int(additional_days or 0) <= 0 or (plan and plan.strip().upper() in ("LIFETIME", "LIFE"))
+    return update_license_expiry(
+        target_key=target_key,
+        mode="lifetime" if is_lifetime else "add",
+        days=int(additional_days or 0),
+        plan=plan,
+    )
+
+
+def _find_cloud_registry_repo() -> Optional[Path]:
+    """Locate the local skdtool.github repository clone used for OTA license sync."""
+    engine_dir = Path(__file__).resolve().parent
+    for cand in (engine_dir, engine_dir.parent / "SN"):
+        if not (cand / ".git").exists():
+            continue
         try:
-            subprocess.run(
-                ["git", "add", "data/license_keys_online.json", "data/revoked_keys.json", "admin_key_history.json"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10
+            res = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                cwd=str(cand),
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
-            subprocess.run(
-                ["git", "commit", "-m", "remote-license: update online keys registry [OTA sync]"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10
-            )
-            subprocess.run(
-                ["git", "push", "origin", "main"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25
-            )
+            if res.returncode == 0 and "skdtool.github" in (res.stdout or "").lower():
+                return cand
         except Exception:
             pass
-    threading.Thread(target=_worker, daemon=True).start()
+    return None
+
+
+def push_online_registry(wait: bool = False) -> Tuple[bool, str]:
+    """
+    Sync data/license_keys_online.json and data/revoked_keys.json to skdtool.github and push.
+    When wait=False, runs in a background thread and returns immediately.
+    """
+    def _sync_and_push() -> Tuple[bool, str]:
+        import shutil
+        cloud_repo = _find_cloud_registry_repo()
+        if not cloud_repo:
+            return False, "Local skdtool.github repository not found next to SN_TOOL"
+
+        source_dir = Path(__file__).resolve().parent / "data"
+        rel_files = ["data/license_keys_online.json", "data/revoked_keys.json"]
+        with _CLOUD_PUSH_LOCK:
+            try:
+                (cloud_repo / "data").mkdir(parents=True, exist_ok=True)
+                for rel in rel_files:
+                    src = source_dir / Path(rel).name
+                    dst = cloud_repo / rel
+                    if src.exists() and src.resolve() != dst.resolve():
+                        shutil.copy2(src, dst)
+
+                subprocess.run(
+                    ["git", "add", *rel_files],
+                    cwd=str(cloud_repo),
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=True,
+                )
+                diff_res = subprocess.run(
+                    ["git", "diff", "--cached", "--quiet", "--", *rel_files],
+                    cwd=str(cloud_repo),
+                    timeout=10,
+                )
+                if diff_res.returncode == 0:
+                    return True, "Cloud registry already up to date"
+
+                subprocess.run(
+                    ["git", "commit", "-m", "remote-license: update online keys registry [OTA sync]"],
+                    cwd=str(cloud_repo),
+                    capture_output=True,
+                    text=True,
+                    timeout=12,
+                    check=True,
+                )
+                push_res = subprocess.run(
+                    ["git", "push", "origin", "main"],
+                    cwd=str(cloud_repo),
+                    capture_output=True,
+                    text=True,
+                    timeout=25,
+                )
+                if push_res.returncode != 0:
+                    err = (push_res.stderr or push_res.stdout or "git push failed").strip()
+                    return False, err[:200]
+                return True, "Synced & pushed license registry to skdtool.github"
+            except Exception as e:
+                return False, str(e)[:200]
+
+    if wait:
+        return _sync_and_push()
+
+    threading.Thread(target=_sync_and_push, daemon=True).start()
+    return True, "Cloud sync started in background"
+
+
+def push_online_registry_async():
+    """Commit and push updated license_keys_online.json to skdtool.github in background."""
+    push_online_registry(wait=False)
 
 
 def clear_all_admin_keys() -> Tuple[bool, str]:
@@ -2070,7 +2242,7 @@ def check_remote_revocation_online(cleaned_key: str, current_hwid: str) -> Optio
         if not remote_url:
             return None
         import urllib.request
-        req = urllib.request.Request(remote_url, headers={"User-Agent": "SN_Studio_License_Agent", "Cache-Control": "no-cache"})
+        req = urllib.request.Request(_append_cache_buster(remote_url), headers={"User-Agent": "SN_Studio_License_Agent", "Cache-Control": "no-cache"})
         with urllib.request.urlopen(req, timeout=1.5) as res:
             if res.status == 200:
                 data = json.loads(res.read().decode('utf-8'))
@@ -2335,7 +2507,7 @@ def send_cloud_heartbeat_async(license_key: str, hwid: Optional[str] = None, cli
         try:
             import urllib.request
             client_hwid = hwid or get_machine_hwid()
-            app_ver = "2.0.5"
+            app_ver = "2.0.6"
             try:
                 from update import get_local_version
                 app_ver = get_local_version()
@@ -2947,16 +3119,27 @@ def check_current_device_license() -> Dict[str, Any]:
                 "hwid": current_hwid
             }
 
-        # Check if Admin has remotely renewed / extended this license key in online registry
+        # Sync license expiry/status from authoritative Cloud Registry (handles extensions AND reductions)
         try:
-            online_ok, _, online_rec = check_key_online(license_key, current_hwid)
-            if online_ok and isinstance(online_rec, dict):
-                remote_exp_ts = online_rec.get("expiry_timestamp", 0)
-                remote_exp_str = online_rec.get("expires_at", "LIFETIME")
-                local_exp_ts = data.get("expiry_timestamp", 0)
+            online_ok, online_msg, online_rec, online_src = _lookup_online_key(license_key, current_hwid)
+            if not online_ok and online_msg and ("revoked" in online_msg.lower() or "suspended" in online_msg.lower() or "hwid" in online_msg.lower()):
+                return {
+                    "is_activated": False,
+                    "message": online_msg,
+                    "hwid": current_hwid
+                }
 
-                # If remote is Lifetime while local was limited, OR remote has a further expiry date:
-                if (remote_exp_str == "LIFETIME" and local_exp_ts > 0) or (remote_exp_ts > local_exp_ts):
+            if isinstance(online_rec, dict) and online_rec:
+                remote_exp_ts = int(online_rec.get("expiry_timestamp", 0) or 0)
+                remote_exp_str = str(online_rec.get("expires_at", "LIFETIME"))
+                local_exp_ts = int(data.get("expiry_timestamp", 0) or 0)
+                local_exp_str = str(data.get("expires_at", "LIFETIME"))
+
+                should_sync = (
+                    (online_src == "online_cloud" and (remote_exp_ts != local_exp_ts or remote_exp_str != local_exp_str))
+                    or (online_ok and ((remote_exp_str == "LIFETIME" and local_exp_ts > 0) or (remote_exp_ts > local_exp_ts)))
+                )
+                if should_sync:
                     data["expires_at"] = remote_exp_str
                     data["expiry_timestamp"] = remote_exp_ts
                     data["plan"] = online_rec.get("plan", data.get("plan", "PRO"))

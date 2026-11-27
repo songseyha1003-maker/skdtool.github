@@ -82,7 +82,10 @@ from downloader import (
     find_authentic_episode_video,
     merge_downloaded_drama_episodes,
     get_hongguo_episode_real_stream_url,
-    resolve_safe_save_location
+    resolve_safe_save_location,
+    has_valid_video_stream,
+    extract_youtube_direct_stream,
+    extract_youtube_hls_master_tracks
 )
 import hongguo_db
 import shortmax_service
@@ -783,12 +786,7 @@ def open_export_folder():
     if not target_dir:
         target_dir = EXPORTS_DIR.resolve()
 
-    if sys.platform == "win32":
-        try:
-            os.startfile(str(target_dir))
-            return jsonify({"success": True, "opened_path": str(target_dir)})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+    safe_open_explorer(target_dir, highlight_file=False)
     return jsonify({"success": True, "opened_path": str(target_dir)})
 
 
@@ -1222,7 +1220,7 @@ def license_status_endpoint():
         from update import get_local_version
         info["app_version"] = get_local_version()
     except Exception:
-        info["app_version"] = "2.0.5"
+        info["app_version"] = "2.0.6"
 
     cfg_path = get_data_file("license_config.json")
     if cfg_path.exists():
@@ -1311,18 +1309,44 @@ def update_check_endpoint():
 
 @app.route("/api/update/apply", methods=["POST"])
 def update_apply_endpoint():
-    """Apply update via direct resilient zip download."""
+    """Apply update via direct resilient zip download with SHA-256 integrity verification."""
     try:
         from update import apply_zip_download_update, check_for_updates, DEFAULT_UPDATE_ZIP_URL
         data = request.get_json(force=True, silent=True) or {}
         download_url = data.get("download_url", "")
-        if not download_url:
+        expected_sha256 = data.get("sha256", "")
+        if not download_url or not expected_sha256:
             chk = check_for_updates()
-            download_url = chk.get("download_url") or DEFAULT_UPDATE_ZIP_URL
-        res = apply_zip_download_update(download_url, APP_DIR)
+            if not download_url:
+                download_url = chk.get("download_url") or DEFAULT_UPDATE_ZIP_URL
+            if not expected_sha256:
+                expected_sha256 = chk.get("sha256", "")
+        res = apply_zip_download_update(download_url, APP_DIR, expected_sha256=expected_sha256)
         return jsonify(res)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/update/progress", methods=["GET"])
+def update_progress_endpoint():
+    """Get live download and installation progress of OTA update."""
+    try:
+        from update import get_update_progress
+        return jsonify(get_update_progress())
+    except Exception as e:
+        return jsonify({"status": "idle", "percent": 0, "message": str(e), "downloaded_mb": 0.0, "total_mb": 44.2})
+
+
+@app.route("/api/update/ping", methods=["GET"])
+def update_ping_endpoint():
+    """Fast zero-latency ping for OTA update restart polling without outbound network requests."""
+    from update import get_local_version
+    updating_flag = (APP_DIR / "data" / ".ota_installing").exists()
+    return jsonify({
+        "status": "ok",
+        "version": get_local_version(),
+        "updating": updating_flag
+    })
 
 
 
@@ -1463,7 +1487,7 @@ def downloader_preview_endpoint(drama_id):
     if is_same_drama and drama_downloader.episodes:
         for ep in drama_downloader.episodes:
             if ep.get("episode_number") == ep_num or ep.get("episode_num") == ep_num:
-                if ep.get("video_url") and ep.get("filepath") and Path(ep["filepath"]).exists():
+                if ep.get("video_url") and ep.get("filepath") and has_valid_video_stream(ep["filepath"], min_bytes=50000):
                     return jsonify({
                         "success": True,
                         "video_url": ep["video_url"],
@@ -1474,7 +1498,7 @@ def downloader_preview_endpoint(drama_id):
 
     # 2. Check if authentic video file exists in save location specifically for THIS drama
     auth_src = find_authentic_episode_video(drama, ep_num)
-    if auth_src and auth_src.exists():
+    if auth_src and has_valid_video_stream(auth_src, min_bytes=50000):
         rel_or_abs = str(auth_src.resolve()).replace("\\", "/")
         return jsonify({
             "success": True,
@@ -1490,7 +1514,7 @@ def downloader_preview_endpoint(drama_id):
         sp_id = shortmax_service._extract_shortmax_id(drama)
         if sp_id:
             pv_path = shortmax_service.get_or_create_preview_video(sp_id, ep_num)
-            if pv_path and pv_path.exists():
+            if pv_path and has_valid_video_stream(pv_path, min_bytes=50000):
                 rel_or_abs = str(pv_path.resolve()).replace("\\", "/")
                 return jsonify({
                     "success": True,
@@ -1505,7 +1529,7 @@ def downloader_preview_endpoint(drama_id):
     if is_reelshort:
         import reelshort_service
         pv_path = reelshort_service.get_or_create_preview_video(str(drama_id), ep_num)
-        if pv_path and pv_path.exists():
+        if pv_path and has_valid_video_stream(pv_path, min_bytes=50000):
             rel_or_abs = str(pv_path.resolve()).replace("\\", "/")
             return jsonify({
                 "success": True,
@@ -1577,13 +1601,18 @@ def downloader_preview_endpoint(drama_id):
 
         if s_url:
             import urllib.parse
+            def _to_proxy_url(raw_u: Any) -> str:
+                s = str(raw_u or "")
+                if not s.startswith("http"):
+                    return s
+                s_low = s.lower()
+                ext_q = "&ext=.m3u8" if any(k in s_low for k in (".m3u8", "hls_playlist", "youtube.com", "youtu.be")) else ""
+                return f"/api/downloader/stream-proxy?url={urllib.parse.quote(s)}{ext_q}"
+
             ep_title = target_ep_obj.get("title") if target_ep_obj else None
             is_remote = str(s_url).startswith("http")
-            stream_playback_url = f"/api/downloader/stream-proxy?url={urllib.parse.quote(str(s_url))}" if is_remote else s_url
-            proxied_streams = {
-                n: (f"/api/downloader/stream-proxy?url={urllib.parse.quote(str(u))}" if str(u).startswith("http") else u)
-                for n, u in resolved_stream_dict.items()
-            }
+            stream_playback_url = _to_proxy_url(s_url)
+            proxied_streams = {n: _to_proxy_url(u) for n, u in resolved_stream_dict.items()}
             return jsonify({
                 "success": True,
                 "video_url": stream_playback_url,
@@ -1606,43 +1635,93 @@ def downloader_preview_endpoint(drama_id):
     }), 404
 
 
+_YT_HLS_PREVIEW_CACHE: Dict[str, Dict[str, Any]] = {}
+_PROXY_HTTP_SESSION = None
+
+
+def _get_proxy_session():
+    global _PROXY_HTTP_SESSION
+    if _PROXY_HTTP_SESSION is None:
+        import requests
+        _PROXY_HTTP_SESSION = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(pool_connections=32, pool_maxsize=64, max_retries=1)
+        _PROXY_HTTP_SESSION.mount("https://", adapter)
+        _PROXY_HTTP_SESSION.mount("http://", adapter)
+    return _PROXY_HTTP_SESSION
+
+
 @app.route("/api/downloader/stream-proxy", methods=["GET"])
 def downloader_stream_proxy_endpoint():
     """
     High-performance CORS-free stream proxy for HLS (.m3u8) playlists and media segments.
-    Enables instant, zero-buffer preview for all drama CDN platforms (ReelShort, ShortMax, AnyReel, Hongguo).
+    Enables instant 1080p+ video+audio preview across all platforms (including YouTube HLS master muxing).
     """
     raw_url = request.args.get("url", "").strip()
     if not raw_url:
         return "Missing URL", 400
 
     import urllib.parse
-    import urllib.request
     from flask import Response, stream_with_context
 
-    clean_url = urllib.parse.unquote(raw_url)
+    clean_url = urllib.parse.unquote(raw_url) if raw_url.lower().startswith(("http%3a", "https%3a")) else raw_url
     if not clean_url.startswith("http"):
         return "Invalid URL scheme", 400
 
-    # Handle YouTube web links by resolving to direct media streams
+    # Handle YouTube web links: synthesize 1080p+ HLS master playlist (video + original audio) first,
+    # falling back to direct muxed MP4 if HLS isn't available.
     if "youtube.com" in clean_url or "youtu.be" in clean_url:
-        try:
-            import yt_dlp
-            ydl_opts = {'quiet': True, 'no_warnings': True, 'socket_timeout': 5}
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                yt_info = ydl.extract_info(clean_url, download=False)
-                formats = yt_info.get('formats', [])
-                hls_format = next((f for f in formats if f.get('protocol') in ('m3u8_native', 'm3u8') and f.get('url')), None)
-                best_format = hls_format or next((f for f in formats if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('url')), None)
-                if best_format and best_format.get('url'):
-                    clean_url = best_format['url']
-        except Exception as yt_e:
-            print(f"[Stream Proxy] YouTube direct stream warning: {yt_e}")
+        now_t = time.time()
+        cached_yt = _YT_HLS_PREVIEW_CACHE.get(clean_url)
+        if cached_yt and now_t < cached_yt.get("expires", 0):
+            if cached_yt.get("master_m3u8"):
+                resp = Response(cached_yt["master_m3u8"], mimetype="application/vnd.apple.mpegurl")
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                resp.headers["Access-Control-Allow-Headers"] = "*"
+                resp.headers["Cache-Control"] = "public, max-age=600"
+                return resp
+            elif cached_yt.get("direct_url"):
+                clean_url = cached_yt["direct_url"]
+        else:
+            try:
+                hls_tracks = extract_youtube_hls_master_tracks(clean_url)
+                if hls_tracks:
+                    vid_proxy = f"/api/downloader/stream-proxy?is_m3u8=1&ext=.m3u8&url={urllib.parse.quote(hls_tracks['video_url'], safe='')}"
+                    aud_proxy = f"/api/downloader/stream-proxy?is_m3u8=1&ext=.m3u8&url={urllib.parse.quote(hls_tracks['audio_url'], safe='')}"
+                    w = int(hls_tracks.get("width") or 1920)
+                    h = int(hls_tracks.get("height") or 1080)
+                    bw = int(hls_tracks.get("bandwidth") or 4800000)
+                    vc = hls_tracks.get("vcodec") or "avc1.640028"
+                    master_m3u8 = (
+                        "#EXTM3U\r\n"
+                        "#EXT-X-VERSION:3\r\n"
+                        "#EXT-X-INDEPENDENT-SEGMENTS\r\n"
+                        f'#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="yt_audio",NAME="Original",DEFAULT=YES,AUTOSELECT=YES,URI="{aud_proxy}"\r\n'
+                        f'#EXT-X-STREAM-INF:BANDWIDTH={bw},RESOLUTION={w}x{h},CODECS="{vc},mp4a.40.2",AUDIO="yt_audio"\r\n'
+                        f"{vid_proxy}\r\n"
+                    )
+                    _YT_HLS_PREVIEW_CACHE[clean_url] = {"master_m3u8": master_m3u8, "expires": now_t + 1800}
+                    resp = Response(master_m3u8, mimetype="application/vnd.apple.mpegurl")
+                    resp.headers["Access-Control-Allow-Origin"] = "*"
+                    resp.headers["Access-Control-Allow-Headers"] = "*"
+                    resp.headers["Cache-Control"] = "public, max-age=600"
+                    return resp
+
+                resolved_yt = extract_youtube_direct_stream(clean_url, require_muxed=True)
+                if resolved_yt:
+                    _YT_HLS_PREVIEW_CACHE[clean_url] = {"direct_url": resolved_yt, "expires": now_t + 1800}
+                    clean_url = resolved_yt
+                else:
+                    return jsonify({"error": "No playable video+audio stream found for YouTube preview"}), 502
+            except Exception as yt_e:
+                print(f"[Stream Proxy] YouTube direct stream warning: {yt_e}")
+                return jsonify({"error": str(yt_e)}), 502
 
     # Determine intelligent anti-hotlink referer & origin per CDN platform
     referer = "https://www.google.com/"
     origin = None
-    if "shorttv.live" in clean_url or "shortmax" in clean_url:
+    if "googlevideo.com" in clean_url.lower():
+        referer = "https://www.youtube.com/"
+    elif "shorttv.live" in clean_url or "shortmax" in clean_url:
         referer = "https://www.shorttv.live/"
         origin = "https://www.shorttv.live"
     elif "crazymaplestudios.com" in clean_url or "reelshort" in clean_url:
@@ -1672,36 +1751,49 @@ def downloader_stream_proxy_endpoint():
         headers["Range"] = range_header
 
     try:
+        sess = _get_proxy_session()
+        url_path_low = urllib.parse.urlparse(clean_url).path.lower()
+        is_playlist_hint = (
+            url_path_low.endswith(".m3u8") or
+            "/api/manifest/hls_playlist/" in url_path_low or
+            request.args.get("is_m3u8") == "1"
+        )
         remote_resp = None
         for attempt in range(2):
             try:
-                req = urllib.request.Request(clean_url, headers=headers)
-                remote_resp = urllib.request.urlopen(req, timeout=12.0)
+                remote_resp = sess.get(clean_url, headers=headers, stream=True, timeout=15)
+                remote_resp.raise_for_status()
                 break
             except Exception as net_err:
+                if remote_resp is not None:
+                    remote_resp.close()
                 if attempt == 1:
                     raise net_err
                 time.sleep(0.2)
 
         content_type = remote_resp.headers.get("Content-Type", "")
         is_m3u8 = (
-            ".m3u8" in clean_url.lower() or 
-            "mpegurl" in content_type.lower() or 
+            is_playlist_hint or
+            "mpegurl" in content_type.lower() or
             "application/x-mpegurl" in content_type.lower()
         )
 
         if is_m3u8:
-            raw_text = remote_resp.read().decode("utf-8", errors="ignore")
+            raw_text = remote_resp.text
+            remote_resp.close()
             rewritten_lines = []
             for line in raw_text.splitlines():
                 s = line.strip()
                 if s and not s.startswith("#"):
                     full_target = urllib.parse.urljoin(clean_url, s)
-                    proxy_chunk_url = f"/api/downloader/stream-proxy?url={urllib.parse.quote(full_target)}"
+                    ft_path_low = urllib.parse.urlparse(full_target).path.lower()
+                    sub_is_m3u8 = ft_path_low.endswith(".m3u8") or "/api/manifest/hls_playlist/" in ft_path_low
+                    sub_ext = "&is_m3u8=1&ext=.m3u8" if sub_is_m3u8 else ""
+                    proxy_chunk_url = f"/api/downloader/stream-proxy?url={urllib.parse.quote(full_target, safe='')}{sub_ext}"
                     rewritten_lines.append(proxy_chunk_url)
                 else:
                     rewritten_lines.append(line)
-            
+
             output_body = "\r\n".join(rewritten_lines)
             resp = Response(output_body, mimetype="application/vnd.apple.mpegurl")
             resp.headers["Access-Control-Allow-Origin"] = "*"
@@ -1711,17 +1803,18 @@ def downloader_stream_proxy_endpoint():
 
         # Direct segment or binary stream
         def generate():
-            while True:
-                chunk = remote_resp.read(64 * 1024)
-                if not chunk:
-                    break
-                yield chunk
+            try:
+                for chunk in remote_resp.iter_content(chunk_size=65536):
+                    if chunk:
+                        yield chunk
+            finally:
+                remote_resp.close()
 
-        resp = Response(stream_with_context(generate()), status=remote_resp.status)
+        resp = Response(stream_with_context(generate()), status=remote_resp.status_code)
         resp.headers["Access-Control-Allow-Origin"] = "*"
         resp.headers["Access-Control-Allow-Headers"] = "*"
         resp.headers["Content-Type"] = content_type or "video/MP2T"
-        
+
         for h in ("Content-Length", "Content-Range", "Accept-Ranges"):
             val = remote_resp.headers.get(h)
             if val:
@@ -1895,48 +1988,54 @@ def downloader_status_endpoint():
 
 
 
+_EXPLORER_LOCK = threading.Lock()
 _LAST_EXPLORER_OPEN_TIME = 0.0
 _LAST_EXPLORER_OPEN_PATH = ""
 
 def safe_open_explorer(target_path, highlight_file: bool = True) -> bool:
-    """Safely open Windows File Explorer with strict 3.5-second debounce cooldown to eliminate duplicate window spam."""
+    """Safely open Windows File Explorer with strict folder-level deduplication and thread lock to eliminate duplicate window spam."""
     global _LAST_EXPLORER_OPEN_TIME, _LAST_EXPLORER_OPEN_PATH
     import time
-    now = time.time()
-    try:
-        p = Path(target_path).resolve()
-    except Exception:
-        p = Path(target_path)
-    path_key = str(p).lower().replace("/", "\\")
-
-    # 3.5-second debounce window per folder/file path
-    if (now - _LAST_EXPLORER_OPEN_TIME < 3.5) and (_LAST_EXPLORER_OPEN_PATH == path_key):
-        return True
-
-    _LAST_EXPLORER_OPEN_TIME = now
-    _LAST_EXPLORER_OPEN_PATH = path_key
-
-    if sys.platform == "win32":
+    with _EXPLORER_LOCK:
+        now = time.time()
         try:
-            import subprocess
-            if highlight_file and p.exists() and p.is_file():
-                subprocess.Popen(f'explorer.exe /select,"{str(p)}"', shell=True)
-            elif p.is_dir():
-                os.startfile(str(p))
-            else:
-                p.mkdir(parents=True, exist_ok=True)
-                os.startfile(str(p))
-            return True
+            p = Path(target_path).resolve()
         except Exception:
-            return False
-    else:
-        try:
-            import subprocess
-            target_dir = p.parent if (p.exists() and p.is_file()) else p
-            subprocess.Popen(["xdg-open", str(target_dir)])
+            p = Path(target_path)
+
+        # Normalize to parent folder key so file-level and directory-level calls share the same debounce identity
+        folder_dir = p.parent if (p.exists() and p.is_file()) or p.suffix.lower() in ('.mp4', '.mkv', '.avi', '.mov', '.ts', '.srt', '.json') else p
+        folder_key = str(folder_dir).lower().replace("/", "\\").rstrip("\\")
+
+        # 8-second debounce window per folder to completely stop multiple window popup spam
+        if (now - _LAST_EXPLORER_OPEN_TIME < 8.0) and (_LAST_EXPLORER_OPEN_PATH == folder_key):
+            print(f"[SafeExplorer] Debounced duplicate explorer request for: {folder_key}")
             return True
-        except Exception:
-            return False
+
+        _LAST_EXPLORER_OPEN_TIME = now
+        _LAST_EXPLORER_OPEN_PATH = folder_key
+
+        if sys.platform == "win32":
+            try:
+                import subprocess
+                if highlight_file and p.exists() and p.is_file():
+                    subprocess.Popen(f'explorer.exe /select,"{str(p)}"', shell=True)
+                elif p.is_dir():
+                    os.startfile(str(p))
+                else:
+                    folder_dir.mkdir(parents=True, exist_ok=True)
+                    os.startfile(str(folder_dir))
+                return True
+            except Exception:
+                return False
+        else:
+            try:
+                import subprocess
+                target_dir = p.parent if (p.exists() and p.is_file()) else p
+                subprocess.Popen(["xdg-open", str(target_dir)])
+                return True
+            except Exception:
+                return False
 
 
 @app.route("/api/downloader/open-folder", methods=["POST", "GET"])
