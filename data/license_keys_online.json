@@ -56,8 +56,8 @@
     "signature": "578382",
     "status": "ACTIVE",
     "last_renewed": "2026-11-26 17:03:06",
-    "last_active": "2026-11-26 17:47:27",
-    "use_count": 15085,
+    "last_active": "2026-11-26 18:00:14",
+    "use_count": 15109,
     "last_active_hwid": "E53CEFB948DFC356"
   },
   "09935A76E7AE4525": {
@@ -71,7 +71,10 @@
     "bound_hwid": "ANY",
     "raw_payload": "CUSTOM:09935A76E7AE4525:Pon Akara",
     "signature": "CUSTOM_ADMIN",
-    "status": "ACTIVE"
+    "status": "ACTIVE",
+    "last_active": "2026-11-26 18:01:28",
+    "use_count": 20,
+    "last_active_hwid": "09935A76E7AE4525"
   },
   "SN-30D-5129-5580-C9CC-704A7D": {
     "license_key": "SN-30D-5129-5580-C9CC-704A7D",
@@ -88,18 +91,5 @@
     "last_active": "2026-11-11 08:18:06",
     "use_count": 308,
     "last_active_hwid": "C844A3A4B66AF891"
-  },
-  "SN-7D-510A-0DFD-E45D-6D42A8": {
-    "license_key": "SN-7D-510A-0DFD-E45D-6D42A8",
-    "client_name": "User",
-    "plan": "PRO",
-    "created_at": "2026-11-26 17:51:14",
-    "expires_at": "LIFETIME",
-    "expiry_timestamp": 0,
-    "bound_hwid": "09935A76E7AE4525",
-    "last_active": "2026-11-26 17:51:14",
-    "use_count": 1,
-    "last_active_hwid": "09935A76E7AE4525",
-    "status": "ACTIVE"
   }
 }
